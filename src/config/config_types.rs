@@ -1,0 +1,36 @@
+// src/config/types.rs
+//
+// Config types for the app
+
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct OscSendConfig {
+    pub target_addr: String,
+    pub target_port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RenderConfig {
+    pub texture_width: u32,
+    pub texture_height: u32,
+    pub texture_samples: u32,
+    pub arc_resolution: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SpeedConfig {
+    pub bpm: f32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AudienceWindowConfig {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PerformerWindowConfig {
+    pub width: u32,
+    pub height: u32,
+}

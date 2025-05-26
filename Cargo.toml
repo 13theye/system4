@@ -1,0 +1,23 @@
+[package]
+name = "system3"
+authors = ["13th Eye <jjhh@13theye.com>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+egui = "0.23"
+nannou = "0.19"
+nannou_osc = "0.19"
+nannou_egui = "0.19"
+nnpipe = { path = "../nnpipe"}
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+[lib]
+name = "system3"
+path = "src/lib.rs"
+
+[[bin]]
+name = "system3"
+path = "src/main.rs"
