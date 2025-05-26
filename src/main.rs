@@ -5,6 +5,7 @@
 //
 // src/main.rs
 
+use nannou::rand::rngs::ThreadRng;
 use nannou::{prelude::*, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::*;
@@ -31,6 +32,10 @@ struct Model {
     // Egui
     egui: Egui,
 
+    // Random
+    rng: ThreadRng,
+
+    // FPS display
     fps: FpsManager,
 
     debug: bool,
@@ -41,8 +46,8 @@ fn model(app: &App) -> Model {
     let config = Config::load().expect("\nSystem 3: FAILED TO LOAD CONFIG.TOML\n");
 
     // Main game data elements
-    let default_size = 2.0;
-    let default_color = rgba(0.9, 0.96, 1.0, 1.0);
+    let default_size = 10.0;
+    let default_color = rgba(0.9, 0.06, 0.06, 1.0);
     let particle_system = ParticleSystem::new(pt2(0.0, 0.0), default_size, default_color);
 
     // Create window
@@ -100,8 +105,16 @@ fn model(app: &App) -> Model {
     // Set up egui
     let egui = Egui::from_window(&performer_window);
 
+    // Set up rng
+    let rng = ThreadRng::default();
+
     // Create FPS manager
-    let fps = FpsManager::default();
+    let mut fps = FpsManager::default();
+    let performer_rect = app.window(performer_window_id).unwrap().rect();
+    fps.set_draw_position(pt2(
+        performer_rect.left() + 40.0,
+        performer_rect.top() - 10.0,
+    ));
 
     Model {
         particle_system,
@@ -114,6 +127,7 @@ fn model(app: &App) -> Model {
         performer_draw,
         rendering,
         egui,
+        rng,
         fps,
         debug: false,
     }
@@ -124,15 +138,60 @@ fn main() {
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
-    todo!();
+    model.draw.background().color(BLACK);
+
+    // Update FPS counter
+    model.fps.update(&model.performer_draw);
+
+    // Add particles
+    for _ in 0..10 {
+        model
+            .particle_system
+            .add_particle_with_motion(&mut model.rng);
+    }
+    model.particle_system.update();
+    model.particle_system.draw(&model.draw);
+
+    render_and_post(app, model);
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
-    todo!();
+    // Get the post-processed texture view
+    let _post_processed_view = model.rendering.get_post_processed_view();
+
+    // Update reshaper if needed (could be cached in Model)
+    model
+        .rendering
+        .draw_to_frame(&model.audience_reshaper, &frame);
+
+    // Handle FPS and origin display
+    if model.debug {
+        draw_debug(app, model);
+
+        // Then draw audience UI over it
+        let _ = model.audience_draw.to_frame(app, &frame);
+    }
 }
 
 fn performer_view(app: &App, model: &Model, frame: Frame) {
-    todo!();
+    // Get the raw scene texture view
+    let _scene_view = model.rendering.get_scene_view();
+
+    // Draw game content to the frame
+    model
+        .rendering
+        .draw_to_frame(&model.performer_reshaper, &frame);
+
+    // Draw egui UI
+    model.egui.draw_to_frame(&frame).unwrap();
+
+    // Handle FPS and origin display
+    if model.debug {
+        draw_debug(app, model);
+        model.fps.draw(&model.performer_draw);
+    }
+    // Then draw performer UI over it
+    let _ = model.performer_draw.to_frame(app, &frame);
 }
 
 // ******************************* Rendering and Capture *****************************
@@ -149,9 +208,17 @@ fn render_and_post(app: &App, model: &mut Model) {
 
 // ******************************* Input Capture *****************************
 
-fn key_pressed(app: &App, model: &mut Model, key: Key) {
+fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     // For now, all human boards are controlled by the same keyboard
     match key {
+        Key::P => {
+            // Toggle debug and FPS display
+            model.debug = !model.debug;
+            model.fps.toggle();
+        }
+        Key::S => {
+            todo!();
+        }
         _ => {}
     }
 }

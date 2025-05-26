@@ -9,6 +9,7 @@ pub struct FpsManager {
     fps: f32,
     fps_update_interval: f32,
     last_update: Instant,
+    last_fps_update: Instant,
     frame_count: usize,
     frame_time_accumulator: f32,
 
@@ -30,6 +31,7 @@ impl FpsManager {
             fps: 0.0,
             fps_update_interval: 0.3,
             last_update: Instant::now(),
+            last_fps_update: Instant::now(),
             frame_count: 0,
             frame_time_accumulator: 0.0,
             counting: false,
@@ -38,12 +40,21 @@ impl FpsManager {
         }
     }
 
+    pub fn toggle(&mut self) {
+        self.counting = !self.counting;
+        if self.counting {
+            self.initialize();
+        }
+    }
+
     // Start counting frames
-    pub fn initialize(&mut self) {
+    fn initialize(&mut self) {
         self.fps = 0.0;
         self.frame_count = 0;
         self.frame_time_accumulator = 0.0;
-        self.last_update = Instant::now();
+        let now = Instant::now();
+        self.last_update = now;
+        self.last_fps_update = now;
     }
 
     // Update the FPS
@@ -59,13 +70,17 @@ impl FpsManager {
 
     fn calculate_fps(&mut self) {
         let now = Instant::now();
-        let dt = now - self.last_update;
-        let elapsed = dt.as_secs_f32();
+        let dt_update = now - self.last_update;
+        let elapsed_since_last_update = dt_update.as_secs_f32();
+
+        let dt_fps = now - self.last_fps_update;
+        let elapsed_since_last_fps = dt_fps.as_secs_f32();
 
         self.frame_count += 1;
-        self.frame_time_accumulator += elapsed;
+        self.frame_time_accumulator += elapsed_since_last_update;
+        self.last_update = now;
 
-        if elapsed >= self.fps_update_interval {
+        if elapsed_since_last_fps >= self.fps_update_interval {
             if self.frame_count > 0 {
                 let avg_frame_time = self.frame_time_accumulator / self.frame_count as f32;
                 self.fps = if avg_frame_time > 0.0 {
@@ -78,7 +93,7 @@ impl FpsManager {
             // Reset accumulators
             self.frame_count = 0;
             self.frame_time_accumulator = 0.0;
-            self.last_update = Instant::now();
+            self.last_fps_update = now;
         }
     }
 

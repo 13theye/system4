@@ -21,8 +21,8 @@ arc_resolution = 25
 [audience_window]
 # The size of the audience window game render.
 # Currently scaling to 1/2 of texture resolution
-width = 1920
-height = 1080
+width = 3840
+height = 2160
 
 [performer_window]
 # The size of the performer window game render.
