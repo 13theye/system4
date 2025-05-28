@@ -6,125 +6,125 @@
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
-#[derive(Default)]
-pub struct Particle {
-    pub position: Point2,
-    pub velocity: Vec2,
-    pub acceleration: Vec2,
-    pub life_span: f32,
-    pub size: f32,
-    pub color: Rgba,
-}
-
-impl Particle {
-    pub fn new(position: Point2, size: f32, color: Rgba) -> Self {
-        Self {
-            acceleration: vec2(0.0, 0.0),
-            velocity: vec2(0.0, 0.0),
-            position,
-            life_span: 1000.0,
-            size,
-            color,
-        }
-    }
-
-    pub fn new_with_motion(
-        position: Point2,
-        size: f32,
-        color: Rgba,
-        acceleration: Vec2,
-        velocity: Vec2,
-    ) -> Self {
-        Self {
-            acceleration,
-            velocity,
-            position,
-            life_span: 1000.0,
-            size,
-            color,
-        }
-    }
-
-    fn update(&mut self) {
-        self.velocity += self.acceleration;
-        self.position += self.velocity;
-        self.life_span -= 2.0;
-        self.color.alpha *= 1.0;
-    }
-
-    fn draw(&self, draw: &Draw) {
-        draw.ellipse()
-            .xy(self.position)
-            .w_h(self.size, self.size)
-            .color(self.color)
-            .stroke(self.color)
-            .stroke_weight(2.0);
-    }
-
-    fn is_dead(&self) -> bool {
-        if self.life_span <= 0.0 {
-            return true;
-        }
-        false
-    }
-}
+use crate::{forces::ForceField, particle::Particle};
 
 pub struct ParticleSystem {
     pub particles: Vec<Particle>,
+    pub forces: ForceField,
+
+    // Origin and bounds
     origin: Point2,
-    default_size: f32,
-    default_color: Rgba,
+    bounds_size: Vec2,
+    pub bounds_rect: Rect,
+    default_particle_size: f32,
+    default_particle_color: Rgba,
 }
 
 impl ParticleSystem {
-    pub fn new(origin: Point2, default_size: f32, default_color: Rgba) -> Self {
+    pub fn new(
+        origin: Point2,
+        width: f32,
+        height: f32,
+        default_particle_size: f32,
+        default_particle_color: Rgba,
+    ) -> Self {
+        let bounds_size = Vec2::new(width, height);
+        let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
+        let grid_cols = 96;
+        let grid_rows = 54;
+
         Self {
             particles: Vec::new(),
+            forces: ForceField::new(origin, bounds_size, grid_cols, grid_rows),
             origin,
-            default_size,
-            default_color,
+            bounds_size,
+            bounds_rect,
+            default_particle_size,
+            default_particle_color,
         }
     }
 
-    pub fn add_particle(&mut self) {
-        self.particles.push(Particle::new(
-            self.origin,
-            self.default_size,
-            self.default_color,
-        ));
-    }
+    pub fn update(&mut self, draw: &Draw) {
+        if self.forces.wind.debug {
+            self.forces.wind.draw(draw);
+        }
 
-    pub fn add_particle_with_motion(&mut self, rng: &mut ThreadRng) {
-        let acceleration = vec2(rng.gen_range(-0.01..0.01), rng.gen_range(-0.01..0.01));
-        let velocity = vec2(rng.gen_range(-0.01..0.01), rng.gen_range(-0.01..0.01));
-        let r = rng.gen_range(0.0..1.0);
-        let g = rng.gen_range(0.0..1.0);
-        let b = rng.gen_range(0.0..1.0);
-        let color = rgba(r, g, b, 1.0);
-        self.particles.push(Particle::new_with_motion(
-            vec2(
-                rng.gen_range(-1000.0..1000.0),
-                rng.gen_range(-1000.0..1000.0),
-            ),
-            self.default_size,
-            color,
-            acceleration,
-            velocity,
-        ));
-    }
-
-    pub fn update(&mut self) {
         for i in (0..self.particles.len()).rev() {
+            self.forces.apply(&mut self.particles[i]);
+
             self.particles[i].update();
+            if self.particles[i].is_offscreen(self.bounds_rect) {
+                self.particles[i].kill();
+            }
             if self.particles[i].is_dead() {
                 self.particles.remove(i);
             }
         }
     }
 
+    pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
+        self.bounds_size = Vec2::new(width, height);
+        self.bounds_rect = self.make_bounds_rect();
+    }
+
+    fn make_bounds_rect(&self) -> Rect {
+        Rect::from_x_y_w_h(
+            self.origin.x,
+            self.origin.y,
+            self.bounds_size.x,
+            self.bounds_size.y,
+        )
+    }
+
+    pub fn add_particle(&mut self, position: Vec2) {
+        self.particles.push(Particle::new(
+            position,
+            self.default_particle_size,
+            self.default_particle_color,
+        ));
+    }
+
+    pub fn add_particle_with_velocity(&mut self, position: Vec2, velocity: Vec2) {
+        let acceleration = vec2(0.0, 0.0);
+        self.particles.push(Particle::new_with_motion(
+            position,
+            self.default_particle_size,
+            self.default_particle_color,
+            acceleration,
+            velocity,
+        ));
+    }
+
+    pub fn add_particle_with_random_motion(&mut self, rng: &mut ThreadRng) {
+        let lo = -2.0;
+        let hi = 2.0;
+        let acceleration = vec2(rng.gen_range(lo..hi), rng.gen_range(lo..hi));
+        let velocity = vec2(rng.gen_range(lo..hi), rng.gen_range(lo..hi));
+        self.particles.push(Particle::new_with_motion(
+            vec2(
+                rng.gen_range(self.bounds_rect.left()..self.bounds_rect.right()),
+                rng.gen_range(self.bounds_rect.bottom()..self.bounds_rect.top()),
+            ),
+            self.default_particle_size,
+            self.default_particle_color,
+            acceleration,
+            velocity,
+        ));
+    }
+
     pub fn draw(&self, draw: &Draw) {
+        self.draw_origin(draw);
         for particle in self.particles.iter() {
             particle.draw(draw);
         }
+    }
+
+    pub fn draw_origin(&self, draw: &Draw) {
+        draw.ellipse()
+            .xy(self.origin)
+            .w_h(10.0, 10.0)
+            .color(PURPLE)
+            .stroke(PURPLE)
+            .stroke_weight(2.0);
     }
 }

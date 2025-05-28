@@ -5,7 +5,7 @@
 //
 // src/main.rs
 
-use nannou::rand::rngs::ThreadRng;
+use nannou::rand::{rngs::ThreadRng, Rng};
 use nannou::{prelude::*, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::*;
@@ -46,9 +46,19 @@ fn model(app: &App) -> Model {
     let config = Config::load().expect("\nSystem 3: FAILED TO LOAD CONFIG.TOML\n");
 
     // Main game data elements
-    let default_size = 10.0;
-    let default_color = rgba(0.9, 0.06, 0.06, 1.0);
-    let particle_system = ParticleSystem::new(pt2(0.0, 0.0), default_size, default_color);
+    let default_size = 6.0;
+    let default_color = rgba(0.7, 0.7, 0.7, 1.0);
+    let window_size = vec2(
+        config.rendering.texture_width as f32,
+        config.rendering.texture_height as f32,
+    );
+    let particle_system = ParticleSystem::new(
+        pt2(0.0, 0.0),
+        window_size.x,
+        window_size.y,
+        default_size,
+        default_color,
+    );
 
     // Create window
     let audience_window_id = app
@@ -96,9 +106,8 @@ fn model(app: &App) -> Model {
     );
 
     // Create reshapers for both windows
-    let audience_reshaper = rendering.create_reshaper_for_post_processed(device, &audience_window);
-    let performer_reshaper =
-        rendering.create_reshaper_for_post_processed(device, &performer_window);
+    let audience_reshaper = rendering.create_reshaper_for_raw_scene(device, &audience_window);
+    let performer_reshaper = rendering.create_reshaper_for_raw_scene(device, &performer_window);
     let audience_draw = nannou::Draw::new();
     let performer_draw = nannou::Draw::new();
 
@@ -143,13 +152,54 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update FPS counter
     model.fps.update(&model.performer_draw);
 
-    // Add particles
+    let rect = model.particle_system.bounds_rect;
+
     for _ in 0..10 {
+        let y = model.rng.gen_range(-1200.0..1200.0);
+        if y > -350.0 && y < 350.0 {
+            continue;
+        }
+        let position: Vec2 = if y > 0.0 {
+            vec2(rect.left() - 10.0, y)
+        } else {
+            vec2(rect.right() + 10.0, y)
+        };
+        let velocity = if y > 0.0 {
+            vec2(15.0, 0.0)
+        } else {
+            vec2(-15.0, 0.0)
+        };
+
         model
             .particle_system
-            .add_particle_with_motion(&mut model.rng);
+            .add_particle_with_velocity(position, velocity);
     }
-    model.particle_system.update();
+
+    for _ in 0..18 {
+        let x = model.rng.gen_range(-1900.0..1900.0);
+        if x > -350.0 && x < 350.0 {
+            continue;
+        }
+        let position: Vec2 = if x > 0.0 {
+            vec2(x, rect.top() - 10.0)
+        } else {
+            vec2(x, rect.bottom() - 10.0)
+        };
+        let velocity = if x > 0.0 {
+            vec2(0.0, -15.0)
+        } else {
+            vec2(0.0, 15.0)
+        };
+
+        model
+            .particle_system
+            .add_particle_with_velocity(position, velocity);
+    }
+
+    // Update particles
+    model.particle_system.update(&model.draw);
+
+    // Draw particles
     model.particle_system.draw(&model.draw);
 
     render_and_post(app, model);
@@ -157,7 +207,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
     // Get the post-processed texture view
-    let _post_processed_view = model.rendering.get_post_processed_view();
+    let _scene_view = model.rendering.get_scene_view();
 
     // Update reshaper if needed (could be cached in Model)
     model
@@ -203,7 +253,7 @@ fn render_and_post(app: &App, model: &mut Model) {
 
     // Render the game to texture and post-process
     model.rendering.render_scene(device, queue, &model.draw);
-    model.rendering.post_process(device, queue);
+    //model.rendering.post_process(device, queue);
 }
 
 // ******************************* Input Capture *****************************
@@ -216,8 +266,39 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             model.debug = !model.debug;
             model.fps.toggle();
         }
-        Key::S => {
-            todo!();
+        Key::C => {
+            model.particle_system.forces.wind.make_circular_field(
+                pt2(0.0, 0.0),
+                2000.0,
+                3000.0,
+                10.0,
+                0.0,
+            );
+
+            model
+                .particle_system
+                .forces
+                .add_gravity_source(vec2(0.0, 0.0), 10000.0);
+        }
+        Key::Space => {
+            let rect = model.particle_system.bounds_rect;
+            for _ in 0..10 {
+                let y = model.rng.gen_range(-1000.0..1000.0);
+                let position: Vec2 = if y > 0.0 {
+                    vec2(rect.left() - 10.0, y)
+                } else {
+                    vec2(rect.right() + 10.0, y)
+                };
+                let velocity = if y > 0.0 {
+                    vec2(15.0, 0.0)
+                } else {
+                    vec2(-15.0, 0.0)
+                };
+
+                model
+                    .particle_system
+                    .add_particle_with_velocity(position, velocity);
+            }
         }
         _ => {}
     }
