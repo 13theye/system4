@@ -21,10 +21,10 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            life_span: 500.0,
+            life_span: 2000.0,
             size,
             color,
-            mass: 10.0,
+            mass: 22.0,
         }
     }
 
@@ -39,10 +39,10 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            life_span: 1000.0,
+            life_span: 2000.0,
             size,
             color,
-            mass: 10.0,
+            mass: 11.0,
         }
     }
 

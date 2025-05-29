@@ -17,65 +17,29 @@ pub struct Wind {
 
 impl Force for Wind {
     fn apply(&self, particle: &mut Particle) {
-        let directional_strength = 1.0;
-        let speed_adjustment_strength = 3.0;
-        let stationary_force = 3.0;
+        // Calculate the x and y components of particle's current velocity
+        let particle_vx = particle.velocity.x;
+        let particle_vy = particle.velocity.y;
 
-        // Calculate target velocity from wind
-        let target_velocity = self.direction * self.strength;
+        // Calculate the x and y components of wind's target velocity
+        let wind_vx = self.direction.x * self.strength;
+        let wind_vy = self.direction.y * self.strength;
 
-        // If particle has no velocity, apply full wind force
-        if particle.velocity.length() < 0.001 {
-            let drag_force = target_velocity * stationary_force;
+        // Calculate the difference in each component
+        let diff_x = wind_vx - particle_vx;
+        let diff_y = wind_vy - particle_vy;
 
-            /*
-            let turbulence_force = vec2(
-                (nannou::rand::random::<f32>() - 0.5) * self.turbulence,
-                (nannou::rand::random::<f32>() - 0.5) * self.turbulence,
-            );
-            */
-            let total_force = drag_force; // + turbulence_force;
-            particle.acceleration += total_force / particle.mass;
-            return;
-        }
+        // Calculate inertial resistance based on current momentum
+        let current_speed = particle.velocity.length();
+        let momentum_magnitude = particle.mass * current_speed;
 
-        // Calculate directional alignment (how much particle direction differs from wind)
-        let particle_direction = particle.velocity.normalize();
-        let wind_direction = self.direction;
-        let direction_alignment = particle_direction.dot(wind_direction); // -1 to 1
+        // Inertial resistance: particles with higher momentum resist changes more
+        let inertia_coefficient = 0.1; // Adjust this to control resistance strength
+        let inertia_factor = 1.0 / (1.0 + momentum_magnitude * inertia_coefficient);
 
-        // Calculate speed difference
-        let particle_speed = particle.velocity.length();
-        let wind_speed = self.strength;
-        let speed_difference = wind_speed - particle_speed;
-
-        // Apply directional force - stronger when directions differ
-        let directional_factor = 1.0 - direction_alignment.abs(); // 0 when aligned, 1 when opposite
-        let directional_force =
-            wind_direction * directional_factor * self.strength * directional_strength;
-
-        // Apply speed adjustment force - in wind direction when speeding up, opposite when slowing down
-        let speed_factor = (speed_difference / wind_speed).clamp(-1.0, 1.0);
-        let speed_force = if speed_difference > 0.0 {
-            // Need to speed up - apply force in wind direction
-            wind_direction * speed_factor * self.strength * speed_adjustment_strength
-        } else {
-            // Need to slow down - apply force opposite to particle direction
-            -particle_direction * speed_factor.abs() * self.strength * speed_adjustment_strength
-        };
-
-        // Combine forces
-        let drag_force = directional_force + speed_force;
-
-        /* Apply turbulence
-        let turbulence_force = vec2(
-            (nannou::rand::random::<f32>() - 0.5) * self.turbulence,
-            (nannou::rand::random::<f32>() - 0.5) * self.turbulence,
-        );
-         */
-
-        let total_force = drag_force; // + turbulence_force;
-        particle.acceleration += total_force / particle.mass;
+        // Apply the force with inertial resistance
+        let force = vec2(diff_x, diff_y) * inertia_factor;
+        particle.acceleration += force / particle.mass;
     }
 }
 
@@ -187,6 +151,9 @@ impl WindField {
         strength: f32,
         turbulence: f32,
     ) {
+        // Add a parameter to control the bias toward center
+        let center_bias = 0.8; // 0.0 = purely tangential, 1.0 = purely radial inward
+
         // Iterate through all grid cells
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
@@ -202,21 +169,23 @@ impl WindField {
                 let outer_radius = radius + width / 2.0;
 
                 if distance_to_center >= inner_radius && distance_to_center <= outer_radius {
-                    // Calculate tangential direction (perpendicular to radius)
+                    // Calculate radius vector (from center to cell)
                     let radius_vector = cell.origin - center;
 
                     // Create tangential vector by rotating radius vector 90 degrees
                     // For counter-clockwise rotation: (x, y) -> (-y, x)
-                    // For clockwise rotation: (x, y) -> (y, -x)
                     let tangential_direction = vec2(radius_vector.y, -radius_vector.x).normalize();
-                    /*
-                                       // Apply falloff based on distance from ideal radius
-                                       let distance_from_ideal = (distance_to_center - radius).abs();
-                                       let falloff = 1.0 - (distance_from_ideal / (width / 2.0)).min(1.0);
-                                       let adjusted_strength = strength * falloff;
-                    */
+
+                    // Create radial inward direction (toward center)
+                    let radial_inward_direction = -radius_vector.normalize();
+
+                    // Blend tangential and radial directions based on center_bias
+                    let blended_direction = (tangential_direction * (1.0 - center_bias)
+                        + radial_inward_direction * center_bias)
+                        .normalize();
+
                     // Create the wind force for this cell
-                    let wind = Wind::new_with(tangential_direction, strength, turbulence);
+                    let wind = Wind::new_with(blended_direction, strength, turbulence);
                     cell.wind = Some(wind);
                 }
             }
@@ -357,12 +326,13 @@ impl WindField {
                     .stroke_color(rgba(0.0, 0.0, 1.0, 0.3))
                     .stroke_weight(1.0)
                     .no_fill();
-
+                /*
                 let coord = format!("{},{}", col, row);
                 draw.text(&coord)
                     .x_y(cell.origin.x, cell.origin.y)
                     .font_size(10)
                     .color(rgba(0.0, 0.5, 1.0, 0.8));
+                 */
             }
         }
     }

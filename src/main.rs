@@ -154,9 +154,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     let rect = model.particle_system.bounds_rect;
 
-    for _ in 0..10 {
+    for _ in 0..20 {
         let y = model.rng.gen_range(-1200.0..1200.0);
-        if y > -350.0 && y < 350.0 {
+        if y > -50.0 && y < 50.0 {
             continue;
         }
         let position: Vec2 = if y > 0.0 {
@@ -165,16 +165,16 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             vec2(rect.right() + 10.0, y)
         };
         let velocity = if y > 0.0 {
-            vec2(15.0, 0.0)
+            vec2(10.0, 0.0)
         } else {
-            vec2(-15.0, 0.0)
+            vec2(-10.0, 0.0)
         };
 
         model
             .particle_system
             .add_particle_with_velocity(position, velocity);
     }
-
+    /*
     for _ in 0..18 {
         let x = model.rng.gen_range(-1900.0..1900.0);
         if x > -350.0 && x < 350.0 {
@@ -186,15 +186,18 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             vec2(x, rect.bottom() - 10.0)
         };
         let velocity = if x > 0.0 {
-            vec2(0.0, -15.0)
+            vec2(0.0, -5.0)
         } else {
-            vec2(0.0, 15.0)
+            vec2(0.0, 5.0)
         };
+
 
         model
             .particle_system
             .add_particle_with_velocity(position, velocity);
+
     }
+    */
 
     // Update particles
     model.particle_system.update(&model.draw);
@@ -269,16 +272,17 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         Key::C => {
             model.particle_system.forces.wind.make_circular_field(
                 pt2(0.0, 0.0),
-                2000.0,
-                3000.0,
-                10.0,
+                500.0,
+                900.0,
+                20.0,
                 0.0,
             );
-
+            /*
             model
                 .particle_system
                 .forces
                 .add_gravity_source(vec2(0.0, 0.0), 10000.0);
+             */
         }
         Key::Space => {
             let rect = model.particle_system.bounds_rect;
@@ -290,9 +294,9 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
                     vec2(rect.right() + 10.0, y)
                 };
                 let velocity = if y > 0.0 {
-                    vec2(15.0, 0.0)
+                    vec2(20.0, 0.0)
                 } else {
-                    vec2(-15.0, 0.0)
+                    vec2(-20.0, 0.0)
                 };
 
                 model
