@@ -34,3 +34,9 @@ pub struct PerformerWindowConfig {
     pub width: u32,
     pub height: u32,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ControlWindowConfig {
+    pub width: u32,
+    pub height: u32,
+}

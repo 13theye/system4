@@ -6,11 +6,11 @@
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
-use crate::{forces::ForceField, particle::Particle};
+use crate::{forces::ForceFields, particle::Particle};
 
 pub struct ParticleSystem {
     pub particles: Vec<Particle>,
-    pub forces: ForceField,
+    pub forces: ForceFields,
 
     // Origin and bounds
     origin: Point2,
@@ -35,7 +35,7 @@ impl ParticleSystem {
 
         Self {
             particles: Vec::new(),
-            forces: ForceField::new(origin, bounds_size, grid_cols, grid_rows),
+            forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
             origin,
             bounds_size,
             bounds_rect,
@@ -45,8 +45,8 @@ impl ParticleSystem {
     }
 
     pub fn update(&mut self, draw: &Draw) {
-        if self.forces.wind.debug {
-            self.forces.wind.draw(draw);
+        if self.forces.wind_field.debug {
+            self.forces.wind_field.draw(draw);
         }
 
         for i in (0..self.particles.len()).rev() {

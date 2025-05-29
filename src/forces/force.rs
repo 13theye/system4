@@ -1,5 +1,4 @@
-use crate::particle::Particle;
-
-pub trait Force {
-    fn apply(&self, particle: &mut Particle);
+pub enum Force {
+    Wind,
+    Gravity,
 }

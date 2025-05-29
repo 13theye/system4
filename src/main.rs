@@ -18,6 +18,7 @@ struct Model {
     // Windows' texture reshapers
     audience_window_id: WindowId,
     performer_window_id: WindowId,
+    control_window_id: WindowId,
     audience_reshaper: TextureReshaper,
     performer_reshaper: TextureReshaper,
 
@@ -25,6 +26,7 @@ struct Model {
     draw: nannou::Draw,           // for drawing to the main texture
     audience_draw: nannou::Draw,  // for drawing UI elements to audience_window only
     performer_draw: nannou::Draw, // for drawing UI elements to performer_window only
+    control_draw: nannou::Draw,   // for drawing UI elements to ui_window only
 
     // Rendering engine
     rendering: Nnpipe,
@@ -72,7 +74,7 @@ fn model(app: &App) -> Model {
 
     let performer_window_id = app
         .new_window()
-        .title("System_3 Performer Control v0.1.0")
+        .title("System_3 Performance Monitor v0.1.0")
         .size(
             config.performer_window.width,
             config.performer_window.height,
@@ -84,12 +86,25 @@ fn model(app: &App) -> Model {
         .build()
         .unwrap();
 
+    let control_window_id = app
+        .new_window()
+        .title("System_3 Performer Control v0.1.0")
+        .size(config.control_window.width, config.control_window.height)
+        .msaa_samples(1)
+        .view(control_view)
+        .build()
+        .unwrap();
+
     let Some(audience_window) = app.window(audience_window_id) else {
         eprintln!("Audience window not found. Exiting app.");
         std::process::exit(1);
     };
     let Some(performer_window) = app.window(performer_window_id) else {
         eprintln!("Performer window not found. Exiting app.");
+        std::process::exit(1);
+    };
+    let Some(control_window) = app.window(control_window_id) else {
+        eprintln!("Control window not found. Exiting app.");
         std::process::exit(1);
     };
 
@@ -110,9 +125,10 @@ fn model(app: &App) -> Model {
     let performer_reshaper = rendering.create_reshaper_for_raw_scene(device, &performer_window);
     let audience_draw = nannou::Draw::new();
     let performer_draw = nannou::Draw::new();
+    let control_draw = nannou::Draw::new();
 
     // Set up egui
-    let egui = Egui::from_window(&performer_window);
+    let egui = Egui::from_window(&control_window);
 
     // Set up rng
     let rng = ThreadRng::default();
@@ -129,11 +145,13 @@ fn model(app: &App) -> Model {
         particle_system,
         audience_window_id,
         performer_window_id,
+        control_window_id,
         audience_reshaper,
         performer_reshaper,
         draw,
         audience_draw,
         performer_draw,
+        control_draw,
         rendering,
         egui,
         rng,
@@ -247,6 +265,8 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
     let _ = model.performer_draw.to_frame(app, &frame);
 }
 
+fn control_view(app: &App, model: &Model, frame: Frame) {}
+
 // ******************************* Rendering and Capture *****************************
 fn render_and_post(app: &App, model: &mut Model) {
     // Get the window device and queue
@@ -270,13 +290,14 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             model.fps.toggle();
         }
         Key::C => {
+            /*
             model.particle_system.forces.wind.make_circular_field(
                 pt2(0.0, 0.0),
                 500.0,
                 900.0,
                 20.0,
-                0.0,
             );
+             */
             /*
             model
                 .particle_system

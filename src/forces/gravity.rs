@@ -5,7 +5,7 @@
 
 use nannou::prelude::*;
 
-use crate::{forces::Force, particle::Particle};
+use crate::particle::Particle;
 
 #[derive(Clone, Default)]
 pub struct Gravity {
@@ -13,8 +13,12 @@ pub struct Gravity {
     mass: f32,
 }
 
-impl Force for Gravity {
-    fn apply(&self, particle: &mut Particle) {
+impl Gravity {
+    pub fn new(origin: Vec2, mass: f32) -> Self {
+        Self { origin, mass }
+    }
+
+    pub fn apply(&self, particle: &mut Particle) {
         let direction = self.origin - particle.position;
         let distance = direction.length();
 
@@ -26,11 +30,5 @@ impl Force for Gravity {
         let force_direction = direction.normalize();
         let force = force_direction * force_magnitude;
         particle.acceleration += force;
-    }
-}
-
-impl Gravity {
-    pub fn new(origin: Vec2, mass: f32) -> Self {
-        Self { origin, mass }
     }
 }

@@ -9,6 +9,7 @@ use std::fs;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub audience_window: AudienceWindowConfig,
+    pub control_window: ControlWindowConfig,
     pub osc_send: OscSendConfig,
     pub performer_window: PerformerWindowConfig,
     pub rendering: RenderConfig,

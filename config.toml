@@ -27,6 +27,11 @@ height = 2160
 [performer_window]
 # The size of the performer window game render.
 # This size works well for Macbooks
+width = 1097
+height = 617
+
+[control_window]
+# The size of the control window UI.
 width = 1440
-height = 810
+height = 270
 
