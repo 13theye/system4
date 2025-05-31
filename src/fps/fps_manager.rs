@@ -14,6 +14,7 @@ pub struct FpsManager {
     frame_time_accumulator: f32,
 
     counting: bool,
+    should_draw: bool,
 
     // The place where the FPS will be drawn
     draw_position: Option<Point2>,
@@ -21,12 +22,12 @@ pub struct FpsManager {
 
 impl Default for FpsManager {
     fn default() -> Self {
-        Self::new()
+        Self::new_with(false, false)
     }
 }
 
 impl FpsManager {
-    pub fn new() -> Self {
+    pub fn new_with(counting: bool, should_draw: bool) -> Self {
         Self {
             fps: 0.0,
             fps_update_interval: 0.3,
@@ -34,7 +35,8 @@ impl FpsManager {
             last_fps_update: Instant::now(),
             frame_count: 0,
             frame_time_accumulator: 0.0,
-            counting: false,
+            counting,
+            should_draw,
 
             draw_position: None,
         }
@@ -57,17 +59,29 @@ impl FpsManager {
         self.last_fps_update = now;
     }
 
-    // Update the FPS
-    pub fn update(&mut self, draw: &Draw) {
+    // Update the FPS, without drawing
+    pub fn update(&mut self) {
+        if !self.counting {
+            return;
+        }
+
+        self.calculate_fps();
+    }
+
+    // Update the FPS and draw if should_draw is true
+    pub fn update_and_draw(&mut self, draw: &Draw) {
         // Don't update if not counting
         if !self.counting {
             return;
         }
 
         self.calculate_fps();
-        self.draw(draw);
+        if self.should_draw {
+            self.draw(draw);
+        }
     }
 
+    // FPS math
     fn calculate_fps(&mut self) {
         let now = Instant::now();
         let dt_update = now - self.last_update;
@@ -97,6 +111,7 @@ impl FpsManager {
         }
     }
 
+    // get the current FPS
     pub fn fps(&self) -> f32 {
         self.fps
     }

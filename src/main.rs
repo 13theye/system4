@@ -10,7 +10,7 @@ use nannou::{prelude::*, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::*;
 
-use system3::{config::*, fps::FpsManager, particle::ParticleSystem};
+use system3::{config::*, forces::WindCircle, fps::FpsManager, particle::ParticleSystem};
 
 struct Model {
     particle_system: ParticleSystem,
@@ -40,7 +40,12 @@ struct Model {
     // FPS display
     fps: FpsManager,
 
-    debug: bool,
+    // UI state
+    selected_circle_id: Option<usize>,
+
+    // Debug stuff
+    show_bounds: bool,
+    show_forces: bool,
 }
 
 fn model(app: &App) -> Model {
@@ -81,8 +86,6 @@ fn model(app: &App) -> Model {
         )
         .msaa_samples(1)
         .view(performer_view)
-        .key_pressed(key_pressed)
-        .raw_event(raw_window_event)
         .build()
         .unwrap();
 
@@ -91,6 +94,8 @@ fn model(app: &App) -> Model {
         .title("System_3 Performer Control v0.1.0")
         .size(config.control_window.width, config.control_window.height)
         .msaa_samples(1)
+        .key_pressed(key_pressed)
+        .raw_event(raw_window_event)
         .view(control_view)
         .build()
         .unwrap();
@@ -103,6 +108,7 @@ fn model(app: &App) -> Model {
         eprintln!("Performer window not found. Exiting app.");
         std::process::exit(1);
     };
+
     let Some(control_window) = app.window(control_window_id) else {
         eprintln!("Control window not found. Exiting app.");
         std::process::exit(1);
@@ -134,7 +140,7 @@ fn model(app: &App) -> Model {
     let rng = ThreadRng::default();
 
     // Create FPS manager
-    let mut fps = FpsManager::default();
+    let mut fps = FpsManager::new_with(true, false);
     let performer_rect = app.window(performer_window_id).unwrap().rect();
     fps.set_draw_position(pt2(
         performer_rect.left() + 40.0,
@@ -156,7 +162,9 @@ fn model(app: &App) -> Model {
         egui,
         rng,
         fps,
-        debug: false,
+        selected_circle_id: None,
+        show_bounds: false,
+        show_forces: false,
     }
 }
 
@@ -168,7 +176,10 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.draw.background().color(BLACK);
 
     // Update FPS counter
-    model.fps.update(&model.performer_draw);
+    model.fps.update();
+
+    // Update control UI
+    update_control_ui(app, model);
 
     let rect = model.particle_system.bounds_rect;
 
@@ -218,7 +229,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     */
 
     // Update particles
-    model.particle_system.update(&model.draw);
+    model.particle_system.update(model.show_forces);
 
     // Draw particles
     model.particle_system.draw(&model.draw);
@@ -235,11 +246,11 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         .rendering
         .draw_to_frame(&model.audience_reshaper, &frame);
 
-    // Handle FPS and origin display
-    if model.debug {
-        draw_debug(app, model);
+    // Show screen bounds if enabled
+    if model.show_bounds {
+        draw_bounds(app, model);
 
-        // Then draw audience UI over it
+        // Then draw over the texture
         let _ = model.audience_draw.to_frame(app, &frame);
     }
 }
@@ -253,19 +264,34 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
         .rendering
         .draw_to_frame(&model.performer_reshaper, &frame);
 
-    // Draw egui UI
-    model.egui.draw_to_frame(&frame).unwrap();
+    // Show force vectors if enabled
+    if model.show_forces {
+        let performer_rect = app.window(model.performer_window_id).unwrap().rect();
 
-    // Handle FPS and origin display
-    if model.debug {
-        draw_debug(app, model);
-        model.fps.draw(&model.performer_draw);
+        // Create a scaled draw context that matches texture coordinates
+        let texture_size = vec2(model.rendering.width as f32, model.rendering.height as f32);
+
+        // Calculate scale factor from texture to window
+        let scale_x = performer_rect.w() / texture_size.x;
+        let scale_y = performer_rect.h() / texture_size.y;
+
+        // Apply transform to match texture coordinates
+        model
+            .particle_system
+            .draw_forces(&model.performer_draw, scale_x, scale_y);
     }
-    // Then draw performer UI over it
+
+    // Then draw over the texture
     let _ = model.performer_draw.to_frame(app, &frame);
 }
 
-fn control_view(app: &App, model: &Model, frame: Frame) {}
+fn control_view(app: &App, model: &Model, frame: Frame) {
+    // Draw background first
+    model.control_draw.background().color(BLACK);
+    let _ = model.control_draw.to_frame(app, &frame);
+    // Then draw egui UI on top
+    model.egui.draw_to_frame(&frame).unwrap();
+}
 
 // ******************************* Rendering and Capture *****************************
 fn render_and_post(app: &App, model: &mut Model) {
@@ -286,18 +312,13 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     match key {
         Key::P => {
             // Toggle debug and FPS display
-            model.debug = !model.debug;
-            model.fps.toggle();
+            model.show_bounds = !model.show_bounds;
         }
         Key::C => {
-            /*
-            model.particle_system.forces.wind.make_circular_field(
-                pt2(0.0, 0.0),
-                500.0,
-                900.0,
-                20.0,
-            );
-             */
+            let circle = WindCircle::new(1, pt2(0.0, 0.0), 500.0, 900.0, 20.0, 0.8);
+
+            model.particle_system.forces.add_wind_circle(circle);
+
             /*
             model
                 .particle_system
@@ -333,9 +354,281 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
     model.egui.handle_raw_event(event);
 }
 
+// ************************ Control UI display  *************************************
+
+fn update_control_ui(app: &App, model: &mut Model) {
+    let Some(control_window) = app.window(model.control_window_id) else {
+        eprintln!("Control window not found. Exiting app.");
+        std::process::exit(1);
+    };
+    let rect = control_window.rect();
+    let height = rect.h() - 5.0;
+    let width = rect.w() - 5.0;
+
+    let ctx = model.egui.begin_frame();
+
+    // Set text style settings
+    let style = (*ctx.style()).clone();
+    ctx.set_style(adjust_style_from(style));
+
+    let mut show_forces_changed = false;
+
+    egui::Window::new("Control Panel")
+        .fixed_pos(egui::pos2(0.0, 0.0))
+        .default_size(egui::vec2(width, height))
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .frame(egui::Frame {
+            fill: egui::Color32::from_rgba_unmultiplied(0, 0, 0, 0), // Dark background
+            stroke: egui::Stroke::new(0.0, egui::Color32::from_rgb(10, 10, 10)), // Subtle border
+            inner_margin: egui::style::Margin::symmetric(10.0, 10.0), // Padding
+            outer_margin: egui::style::Margin::same(0.0),            // No margin
+            rounding: egui::Rounding::same(1.0),                     // Slightly rounded corners
+            shadow: egui::epaint::Shadow::NONE,
+        })
+        .show(&ctx, |ui| {
+            ui.horizontal(|ui| {
+                // Vertical 1: Instructions and status info
+                ui.vertical(|ui| {
+                    ui.set_min_size(egui::vec2(200.0, height));
+                    // Status info
+                    ui.label(format!(
+                        "Particles: {}",
+                        model.particle_system.particles.len()
+                    ));
+                    // FPS
+                    ui.label(format!("FPS: {:.1}", model.fps.fps()));
+                    ui.add_space(15.0);
+
+                    show_forces_changed =
+                        ui.checkbox(&mut model.show_forces, "Show Forces").changed();
+                    ui.add_space(30.0);
+
+                    // Instructions section
+                    ui.label("Space: add particles");
+                    ui.label("P: Toggle debug mode");
+                });
+
+                // Wind Circle Settings - use horizontal layout for two vertical sections
+
+                // Vertical 2: Heading and dropdown
+                ui.vertical(|ui| {
+                    ui.set_min_width(150.0);
+                    ui.heading("Wind Circle Settings");
+                    ui.add_space(5.0);
+
+                    let settings = model.particle_system.forces.get_circle_params();
+                    if settings.is_empty() {
+                        ui.label("No wind circles found");
+                        ui.label("C: Create wind circle");
+                    } else {
+                        // Handle circle selection - set default if none selected
+                        if model.selected_circle_id.is_none()
+                            || !settings.contains_key(&model.selected_circle_id.unwrap())
+                        {
+                            model.selected_circle_id = settings.keys().next().copied();
+                        }
+
+                        if let Some(selected_id) = model.selected_circle_id {
+                            // Dropdown to select circle
+                            egui::ComboBox::from_label("Select Circle")
+                                .selected_text(format!("Circle {}", selected_id))
+                                .show_ui(ui, |ui| {
+                                    for (id, _) in settings.iter() {
+                                        ui.selectable_value(
+                                            &mut model.selected_circle_id,
+                                            Some(*id),
+                                            format!("Circle {}", id),
+                                        );
+                                    }
+                                });
+                        }
+                    }
+
+                    ui.set_min_width(300.0);
+                    ui.add_space(10.0);
+
+                    if let Some(selected_id) = model.selected_circle_id {
+                        // Get current parameter values by cloning them
+                        let current_params = model
+                            .particle_system
+                            .forces
+                            .get_circle_params()
+                            .get(&selected_id)
+                            .cloned();
+
+                        if let Some(params) = current_params {
+                            // Radius slider
+                            let mut radius = params.radius;
+                            if ui
+                                .add(egui::Slider::new(&mut radius, 0.0..=1100.0).text("Radius"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.radius(radius));
+                                }
+                            }
+
+                            // Width slider
+                            let mut width = params.width;
+                            if ui
+                                .add(egui::Slider::new(&mut width, 0.0..=2000.0).text("Width"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.width(width));
+                                }
+                            }
+
+                            // Strength slider
+                            let mut strength = params.strength;
+                            if ui
+                                .add(egui::Slider::new(&mut strength, 0.0..=50.0).text("Strength"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.strength(strength));
+                                }
+                            }
+
+                            // Center bias slider
+                            let mut center_bias = params.center_bias;
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut center_bias, 0.0..=1.0)
+                                        .text("Center Bias"),
+                                )
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.center_bias(center_bias));
+                                }
+                            }
+
+                            ui.add_space(5.0);
+                            ui.label("Center Position:");
+
+                            // Center X slider
+                            let mut center_x = params.center.x;
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut center_x, -2000.0..=2000.0)
+                                        .text("Center X"),
+                                )
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| {
+                                        p.center(vec2(center_x, p.center.y))
+                                    });
+                                }
+                            }
+
+                            // Center Y slider
+                            let mut center_y = params.center.y;
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut center_y, -1100.0..=1100.0)
+                                        .text("Center Y"),
+                                )
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| {
+                                        p.center(vec2(p.center.x, center_y))
+                                    });
+                                }
+                            }
+                        } else {
+                            ui.label("No parameters available");
+                        }
+                    } else {
+                        ui.label("No circle selected");
+                    }
+                });
+            });
+        });
+
+    if show_forces_changed {
+        model.particle_system.forces.force_update_all();
+    }
+}
+
+fn adjust_style_from(style: egui::Style) -> egui::Style {
+    let mut style = style;
+    // Set font sizes for different text styles
+    style.text_styles = [
+        (
+            egui::TextStyle::Heading,
+            egui::FontId::new(15.0, egui::FontFamily::Monospace),
+        ),
+        (
+            egui::TextStyle::Body,
+            egui::FontId::new(13.0, egui::FontFamily::Monospace),
+        ),
+        (
+            egui::TextStyle::Button,
+            egui::FontId::new(13.0, egui::FontFamily::Monospace),
+        ),
+        (
+            egui::TextStyle::Small,
+            egui::FontId::new(11.0, egui::FontFamily::Monospace),
+        ),
+    ]
+    .into_iter()
+    .collect();
+
+    // Increase spacing for better usability
+    style.spacing.item_spacing = egui::vec2(10.0, 5.0);
+    style.spacing.button_padding = egui::vec2(8.0, 2.0);
+    style.spacing.slider_width = 150.0; // Make sliders wider
+
+    // Set colors
+    let mut visuals = style.visuals.clone();
+    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(120, 120, 120); // Active button color
+    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(70, 70, 70); // Hover color
+    visuals.window_fill = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 0); // Window background
+    visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(10, 10, 10));
+
+    style.visuals = visuals;
+
+    style
+}
+
 // ************************ Debug display  *************************************
 
-fn draw_debug(app: &App, model: &Model) {
+fn draw_bounds(app: &App, model: &Model) {
     let draw = &model.audience_draw;
     let rect = app.window(model.audience_window_id).unwrap().rect();
 

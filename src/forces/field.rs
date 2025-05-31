@@ -3,10 +3,13 @@
 // Force field for field-based forces
 
 use nannou::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
-    forces::{Gravity, WindCircle, WindField},
+    forces::{
+        wind::{WindCircle, WindCircleParams, WindField},
+        Gravity,
+    },
     particle::Particle,
 };
 
@@ -16,7 +19,7 @@ pub struct ForceFields {
     pub gravity_field: Vec<Gravity>,
 
     // Force objects
-    pub wind_circles: HashMap<usize, WindCircle>,
+    pub wind_circles: BTreeMap<usize, WindCircle>,
     pub gravity_sources: Vec<Gravity>,
 
     // Origin in the World Coordinate Space
@@ -41,7 +44,7 @@ impl ForceFields {
         Self {
             wind_field: WindField::new(origin, bounds_size, grid_cols, grid_rows),
             gravity_field: Vec::new(),
-            wind_circles: HashMap::new(),
+            wind_circles: BTreeMap::new(),
             gravity_sources: Vec::new(),
             origin,
             bounds_size,
@@ -51,10 +54,14 @@ impl ForceFields {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, show_forces: bool) {
         for circle in self.wind_circles.values_mut() {
-            circle.update(&mut self.wind_field);
+            circle.update(&mut self.wind_field, show_forces);
         }
+    }
+
+    pub fn force_update_all(&mut self) {
+        self.wind_field.force_update_all();
     }
 
     pub fn apply(&mut self, particle: &mut Particle) {
@@ -67,13 +74,25 @@ impl ForceFields {
         }
     }
 
+    pub fn recalculate_once(&mut self) {
+        self.update(true);
+    }
+
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
+        println!("Added wind circle {}", circle.id);
         self.wind_circles.insert(circle.id, circle);
     }
 
     pub fn add_gravity_source(&mut self, origin: Vec2, mass: f32) {
         let gravity = Gravity::new(origin, mass);
         self.gravity_field.push(gravity);
+    }
+
+    pub fn get_circle_params(&self) -> BTreeMap<usize, WindCircleParams> {
+        self.wind_circles
+            .iter()
+            .map(|(id, circle)| (*id, circle.with_params_read(|params| params.clone())))
+            .collect()
     }
 }
 

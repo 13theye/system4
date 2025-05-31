@@ -44,10 +44,8 @@ impl ParticleSystem {
         }
     }
 
-    pub fn update(&mut self, draw: &Draw) {
-        if self.forces.wind_field.debug {
-            self.forces.wind_field.draw(draw);
-        }
+    pub fn update(&mut self, show_forces: bool) {
+        self.forces.update(show_forces);
 
         for i in (0..self.particles.len()).rev() {
             self.forces.apply(&mut self.particles[i]);
@@ -113,18 +111,20 @@ impl ParticleSystem {
     }
 
     pub fn draw(&self, draw: &Draw) {
-        self.draw_origin(draw);
         for particle in self.particles.iter() {
             particle.draw(draw);
         }
+    }
+
+    pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        self.draw_origin(draw);
+        self.forces.wind_field.draw(draw, scale_x, scale_y);
     }
 
     pub fn draw_origin(&self, draw: &Draw) {
         draw.ellipse()
             .xy(self.origin)
             .w_h(10.0, 10.0)
-            .color(PURPLE)
-            .stroke(PURPLE)
-            .stroke_weight(2.0);
+            .color(rgba(1.0, 0.0, 1.0, 0.2));
     }
 }

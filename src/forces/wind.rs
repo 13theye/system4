@@ -4,9 +4,10 @@
 
 use crate::{forces::CellIdx, particle::Particle};
 use nannou::prelude::*;
-use std::collections::HashMap;
-
-const DEBUG: bool = false;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Wind {
@@ -64,7 +65,6 @@ impl Wind {
     }
 }
 
-#[derive(Clone)]
 pub struct WindCell {
     winds: HashMap<usize, Wind>,
     combined_wind: Option<Wind>,
@@ -131,7 +131,6 @@ impl WindCell {
     }
 }
 
-#[derive(Clone, Default)]
 pub struct WindField {
     // Grid of winds in x,y order. (0,0) is top left.
     cells: Vec<Vec<WindCell>>,
@@ -142,9 +141,6 @@ pub struct WindField {
     grid_cols: usize,
     grid_rows: usize,
     cell_size: Vec2,
-
-    // Debug
-    pub debug: bool,
 }
 
 // The WindField is a grid of WindCells.
@@ -186,7 +182,6 @@ impl WindField {
             grid_cols,
             grid_rows,
             cell_size,
-            debug: DEBUG,
         }
     }
 
@@ -195,6 +190,16 @@ impl WindField {
             return;
         };
         wind.apply(particle);
+    }
+
+    pub fn force_update_all(&mut self) {
+        for col in 0..self.grid_cols {
+            for row in 0..self.grid_rows {
+                if let Some(cell) = self.get_mut_cell(col, row) {
+                    let _ = cell.get_combined_wind();
+                }
+            }
+        }
     }
 
     /******************* Grid accessors *******************/
@@ -245,10 +250,13 @@ impl WindField {
 
     /******************* Draw for Debug *******************/
 
-    pub fn draw(&self, draw: &Draw) {
-        self.draw_origin(draw);
-        self.draw_grid(draw);
+    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        self.draw_origin(draw, scale_x, scale_y);
+        self.draw_grid(draw, scale_x, scale_y);
+        self.draw_vectors(draw, scale_x, scale_y);
+    }
 
+    fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         // Draw wind vectors from each cell's origin
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
@@ -258,14 +266,14 @@ impl WindField {
                 };
 
                 // Draw wind vector from cell origin
-                let vector_scale = 30.0; // Increased scale for better visibility
+                let vector_scale = 5.0; // Increased scale for better visibility
                 let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
 
                 // Draw the main vector line
                 draw.line()
-                    .start(cell.origin)
-                    .end(vector_end)
-                    .color(rgba(0.0, 0.8, 1.0, 0.5)) // Bright yellow for better visibility
+                    .start(cell.origin * vec2(scale_x, scale_y))
+                    .end(vector_end * vec2(scale_x, scale_y))
+                    .color(rgba(0.0, 0.8, 1.0, 0.2)) // Bright yellow for better visibility
                     .stroke_weight(1.0);
 
                 // Draw arrowhead
@@ -276,29 +284,22 @@ impl WindField {
                 // Draw arrow triangle
                 draw.tri()
                     .points(
-                        vector_end,
-                        arrow_back + perpendicular,
-                        arrow_back - perpendicular,
+                        vector_end * vec2(scale_x, scale_y),
+                        (arrow_back + perpendicular) * vec2(scale_x, scale_y),
+                        (arrow_back - perpendicular) * vec2(scale_x, scale_y),
                     )
-                    .color(rgba(1.0, 0.0, 0.0, 0.9)); // Red arrowhead
+                    .color(rgba(1.0, 0.0, 0.0, 0.3)); // Red arrowhead
             }
         }
     }
 
-    pub fn draw_grid(&self, draw: &Draw) {
+    pub fn draw_grid(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         let rect = Rect::from_x_y_w_h(
-            self.origin.x,
-            self.origin.y,
-            self.bounds_size.x,
-            self.bounds_size.y,
+            self.origin.x * scale_x,
+            self.origin.y * scale_y,
+            self.bounds_size.x * scale_x,
+            self.bounds_size.y * scale_y,
         );
-
-        draw.rect()
-            .xy(self.origin)
-            .w_h(rect.w(), rect.h())
-            .stroke_color(rgba(0.0, 0.0, 1.0, 1.0))
-            .stroke_weight(1.0)
-            .no_fill();
 
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
@@ -306,9 +307,9 @@ impl WindField {
                     return;
                 };
                 draw.rect()
-                    .xy(cell.origin)
-                    .w_h(self.cell_size.x, self.cell_size.y)
-                    .stroke_color(rgba(0.0, 0.0, 1.0, 0.3))
+                    .xy(cell.origin * vec2(scale_x, scale_y))
+                    .w_h(self.cell_size.x * scale_x, self.cell_size.y * scale_y)
+                    .stroke_color(rgba(0.3, 0.3, 0.3, 0.3))
                     .stroke_weight(1.0)
                     .no_fill();
                 /*
@@ -322,13 +323,11 @@ impl WindField {
         }
     }
 
-    fn draw_origin(&self, draw: &Draw) {
+    fn draw_origin(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         draw.ellipse()
-            .xy(self.origin)
-            .w_h(20.0, 20.0)
-            .color(GREEN)
-            .stroke(GREEN)
-            .stroke_weight(2.0);
+            .xy(self.origin * vec2(scale_x, scale_y))
+            .w_h(20.0 * scale_x, 20.0 * scale_y)
+            .color(rgba(0.0, 1.0, 0.0, 0.2));
     }
 }
 
@@ -338,15 +337,7 @@ impl WindField {
 pub struct WindCircle {
     pub id: usize,
     cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
-
-    // Wind properties
-    center: Vec2, // center of the circle in the ParticleSystem space
-    radius: f32,
-    width: f32,       // width of the wind band (for hollow circles)
-    strength: f32,    // strength of the wind
-    center_bias: f32, // 0.0 = purely tangential, 1.0 = purely radial inward
-
-    needs_recalculation: bool, // if settings changed, we need to recalculate the cells
+    params: Arc<RwLock<WindCircleParams>>, // Params of the circle
 }
 
 // A WindCircle is a circular area of wind that is applied to the WindField.
@@ -365,41 +356,55 @@ impl WindCircle {
         strength: f32,
         center_bias: f32,
     ) -> Self {
-        Self {
-            id,
-            cell_idxs: Vec::new(),
+        let config = WindCircleParams {
             center,
             radius,
             width,
             strength,
             center_bias,
-            needs_recalculation: false,
+            needs_recalculation: true,
+        };
+        Self {
+            id,
+            cell_idxs: Vec::new(),
+            params: Arc::new(RwLock::new(config)),
         }
     }
 
-    pub fn update(&mut self, field: &mut WindField) {
+    pub fn update(&mut self, field: &mut WindField, show_forces: bool) {
         if self.has_changes() {
-            self.remove_from_field(field);
-            self.cell_idxs = self.apply_to_field(field);
+            println!("Force recalculation");
+            self.remove_from_field(field, show_forces);
+            self.cell_idxs = self.apply_to_field(field, show_forces);
             self.clear_changes();
         }
     }
 
     // Remove the circle's wind from the field
-    pub fn remove_from_field(&mut self, field: &mut WindField) {
+    pub fn remove_from_field(&mut self, field: &mut WindField, show_forces: bool) {
         for cell_idx in self.cell_idxs.iter() {
             let Some(cell) = field.get_mut_cell(cell_idx.x, cell_idx.y) else {
                 continue;
             };
             cell.remove_wind(self.id);
+
+            if show_forces {
+                let _ = cell.get_combined_wind();
+            }
         }
         self.cell_idxs.clear();
     }
 
     // Apply the circle's wind to the field, return the cells that were affected
-    pub fn apply_to_field(&self, field: &mut WindField) -> Vec<CellIdx> {
+    pub fn apply_to_field(&self, field: &mut WindField, show_forces: bool) -> Vec<CellIdx> {
+        // Get a copy of the config
+        let params = self.params.read().unwrap_or_else(|poisoned| {
+            eprintln!("Warning: RwLock was poisoned. Recovering...");
+            poisoned.into_inner() // You still get access to the data
+        });
+
         // Calculate bounding box
-        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field);
+        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &params);
 
         let mut affected_cells = Vec::new();
 
@@ -408,10 +413,16 @@ impl WindCircle {
                 let Some(cell) = field.get_mut_cell(col, row) else {
                     continue;
                 };
-                let Some(wind) = self.calculate_wind_for_cell(cell) else {
+                let Some(wind) = self.calculate_wind_for_cell(cell, &params) else {
                     continue;
                 };
                 cell.add_wind(self.id, wind);
+
+                // In debug mode, pre-calculate combined wind so we can draw the field
+                if show_forces {
+                    let _ = cell.get_combined_wind();
+                }
+
                 affected_cells.push(CellIdx { x: col, y: row });
             }
         }
@@ -420,13 +431,17 @@ impl WindCircle {
     }
 
     // Get the bounding box containing all cells that are affected by the circle
-    fn calculate_bounding_box(&self, field: &WindField) -> (usize, usize, usize, usize) {
+    fn calculate_bounding_box(
+        &self,
+        field: &WindField,
+        params: &WindCircleParams,
+    ) -> (usize, usize, usize, usize) {
         // Calculate the outer radius for bounding box
-        let outer_radius = self.radius + self.width / 2.0;
+        let outer_radius = params.radius + params.width / 2.0;
 
         // Calculate bounding box in grid coordinates
-        let center_x_in_grid = (self.center.x + field.bounds_size.x / 2.0) / field.cell_size.x;
-        let center_y_in_grid = (-self.center.y + field.bounds_size.y / 2.0) / field.cell_size.y;
+        let center_x_in_grid = (params.center.x + field.bounds_size.x / 2.0) / field.cell_size.x;
+        let center_y_in_grid = (-params.center.y + field.bounds_size.y / 2.0) / field.cell_size.y;
 
         let radius_in_cells_x = outer_radius / field.cell_size.x;
         let radius_in_cells_y = outer_radius / field.cell_size.y;
@@ -443,22 +458,22 @@ impl WindCircle {
         (min_col, max_col, min_row, max_row)
     }
 
-    fn calculate_wind_for_cell(&self, cell: &WindCell) -> Option<Wind> {
-        let distance_to_center = (cell.origin - self.center).length();
-        let inner_radius = self.radius - self.width / 2.0;
-        let outer_radius = self.radius + self.width / 2.0;
+    fn calculate_wind_for_cell(&self, cell: &WindCell, params: &WindCircleParams) -> Option<Wind> {
+        let distance_to_center = (cell.origin - params.center).length();
+        let inner_radius = params.radius - params.width / 2.0;
+        let outer_radius = params.radius + params.width / 2.0;
 
         if distance_to_center >= inner_radius && distance_to_center <= outer_radius {
             // Wind generation logic specific to circular fields
-            let radius_vector = cell.origin - self.center;
+            let radius_vector = cell.origin - params.center;
             let tangential_direction = vec2(radius_vector.y, -radius_vector.x).normalize();
             let radial_inward_direction = -radius_vector.normalize();
 
-            let blended_direction = (tangential_direction * (1.0 - self.center_bias)
-                + radial_inward_direction * self.center_bias)
+            let blended_direction = (tangential_direction * (1.0 - params.center_bias)
+                + radial_inward_direction * params.center_bias)
                 .normalize();
 
-            Some(Wind::new_with(blended_direction, self.strength))
+            Some(Wind::new_with(blended_direction, params.strength))
         } else {
             None
         }
@@ -466,6 +481,46 @@ impl WindCircle {
 
     /******************* Methods to change circle properties *******************/
 
+    pub fn has_changes(&self) -> bool {
+        self.with_params_read(|params| params.needs_recalculation)
+    }
+
+    pub fn clear_changes(&mut self) {
+        self.with_params_write(|params| params.needs_recalculation = false);
+    }
+
+    pub fn params_arc(&self) -> Arc<RwLock<WindCircleParams>> {
+        self.params.clone()
+    }
+
+    pub fn with_params_read<R>(&self, f: impl FnOnce(&WindCircleParams) -> R) -> R {
+        let params = self.params.read().unwrap_or_else(|poisoned| {
+            eprintln!("Warning: RwLock was poisoned. Recovering...");
+            poisoned.into_inner() // You still get access to the data
+        });
+        f(&params)
+    }
+
+    pub fn with_params_write<R>(&self, f: impl FnOnce(&mut WindCircleParams) -> R) -> R {
+        let mut params = self.params.write().unwrap_or_else(|poisoned| {
+            eprintln!("Warning: RwLock was poisoned. Recovering...");
+            poisoned.into_inner() // You still get access to the data
+        });
+        f(&mut params)
+    }
+}
+
+#[derive(Clone)]
+pub struct WindCircleParams {
+    pub center: Vec2, // center of the circle in the ParticleSystem space
+    pub radius: f32,
+    pub width: f32,                // width of the wind band (for hollow circles)
+    pub strength: f32,             // strength of the wind
+    pub center_bias: f32,          // 0.0 = purely tangential, 1.0 = purely radial inward
+    pub needs_recalculation: bool, // if settings changed, we need to recalculate the cells
+}
+
+impl WindCircleParams {
     pub fn center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
@@ -499,13 +554,5 @@ impl WindCircle {
             self.center_bias = center_bias;
             self.needs_recalculation = true;
         }
-    }
-
-    pub fn has_changes(&self) -> bool {
-        self.needs_recalculation
-    }
-
-    pub fn clear_changes(&mut self) {
-        self.needs_recalculation = false;
     }
 }
