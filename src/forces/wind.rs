@@ -269,38 +269,16 @@ impl WindField {
                 let vector_scale = 5.0; // Increased scale for better visibility
                 let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
 
-                // Draw the main vector line
-                draw.line()
+                draw.arrow()
                     .start(cell.origin * vec2(scale_x, scale_y))
                     .end(vector_end * vec2(scale_x, scale_y))
-                    .color(rgba(0.0, 0.8, 1.0, 0.2)) // Bright yellow for better visibility
+                    .color(rgba(0.0, 0.8, 1.0, 0.2))
                     .stroke_weight(1.0);
-
-                // Draw arrowhead
-                let arrow_size = 6.0;
-                let arrow_back = vector_end - wind.direction * arrow_size;
-                let perpendicular = vec2(-wind.direction.y, wind.direction.x) * arrow_size * 0.5;
-
-                // Draw arrow triangle
-                draw.tri()
-                    .points(
-                        vector_end * vec2(scale_x, scale_y),
-                        (arrow_back + perpendicular) * vec2(scale_x, scale_y),
-                        (arrow_back - perpendicular) * vec2(scale_x, scale_y),
-                    )
-                    .color(rgba(1.0, 0.0, 0.0, 0.3)); // Red arrowhead
             }
         }
     }
 
     pub fn draw_grid(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        let rect = Rect::from_x_y_w_h(
-            self.origin.x * scale_x,
-            self.origin.y * scale_y,
-            self.bounds_size.x * scale_x,
-            self.bounds_size.y * scale_y,
-        );
-
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
                 let Some(cell) = self.get_cell(col, row) else {

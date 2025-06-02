@@ -54,7 +54,7 @@ fn model(app: &App) -> Model {
 
     // Main game data elements
     let default_size = 6.0;
-    let default_color = rgba(0.7, 0.7, 0.7, 1.0);
+    let default_color = rgba(0.73, 0.73, 0.73, 1.0);
     let window_size = vec2(
         config.rendering.texture_width as f32,
         config.rendering.texture_height as f32,
@@ -127,8 +127,9 @@ fn model(app: &App) -> Model {
     );
 
     // Create reshapers for both windows
-    let audience_reshaper = rendering.create_reshaper_for_raw_scene(device, &audience_window);
-    let performer_reshaper = rendering.create_reshaper_for_raw_scene(device, &performer_window);
+    let audience_reshaper = rendering.create_reshaper_for_post_processed(device, &audience_window);
+    let performer_reshaper =
+        rendering.create_reshaper_for_post_processed(device, &performer_window);
     let audience_draw = nannou::Draw::new();
     let performer_draw = nannou::Draw::new();
     let control_draw = nannou::Draw::new();
@@ -302,7 +303,7 @@ fn render_and_post(app: &App, model: &mut Model) {
 
     // Render the game to texture and post-process
     model.rendering.render_scene(device, queue, &model.draw);
-    //model.rendering.post_process(device, queue);
+    model.rendering.post_process(device, queue);
 }
 
 // ******************************* Input Capture *****************************

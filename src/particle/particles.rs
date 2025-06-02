@@ -65,9 +65,11 @@ impl Particle {
     }
 
     pub fn draw(&self, draw: &Draw) {
-        draw.ellipse()
+        draw.line()
             .xy(self.position)
-            .w_h(self.size, self.size)
+            .start(self.position + vec2(self.size / 2.0, 0.0))
+            .end(self.position + vec2(0.0, self.size / 2.0))
+            .stroke_weight(self.size)
             .color(self.color);
     }
 
