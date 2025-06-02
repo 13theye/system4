@@ -373,7 +373,6 @@ impl WindCircle {
 
     pub fn update(&mut self, field: &mut WindField, show_forces: bool) {
         if self.has_changes() {
-            println!("Force recalculation");
             self.remove_from_field(field, show_forces);
             self.cell_idxs = self.apply_to_field(field, show_forces);
             self.clear_changes();

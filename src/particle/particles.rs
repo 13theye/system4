@@ -4,12 +4,13 @@
 
 use nannou::prelude::*;
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct Particle {
     pub position: Point2,
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
+    pub is_alive: bool,
     pub size: f32,
     pub mass: f32,
     pub color: Rgba,
@@ -22,6 +23,7 @@ impl Particle {
             velocity: vec2(0.0, 0.0),
             position,
             life_span: 1000.0,
+            is_alive: true,
             size,
             color,
             mass: 22.0,
@@ -40,6 +42,7 @@ impl Particle {
             velocity,
             position,
             life_span: 1000.0,
+            is_alive: true,
             size,
             color,
             mass: 11.0,
@@ -57,6 +60,10 @@ impl Particle {
         self.color.alpha = 1.0;
     }
 
+    pub fn get_position(&self) -> Point2 {
+        self.position
+    }
+
     pub fn draw(&self, draw: &Draw) {
         draw.ellipse()
             .xy(self.position)
@@ -65,7 +72,7 @@ impl Particle {
     }
 
     pub fn is_offscreen(&self, bounds_rect: Rect) -> bool {
-        let buffer = 100.0;
+        let buffer = 200.0;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer
             || self.position.y < bounds_rect.bottom() - buffer
@@ -74,12 +81,42 @@ impl Particle {
 
     pub fn kill(&mut self) {
         self.life_span = 0.0;
+        self.is_alive = false;
     }
 
     pub fn is_dead(&self) -> bool {
-        if self.life_span <= 0.0 {
+        if self.life_span <= 0.0 || !self.is_alive {
             return true;
         }
         false
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.is_alive
+    }
+
+    /********************* Accessors *********************/
+    pub fn set_position(&mut self, position: Point2) {
+        self.position = position;
+    }
+
+    pub fn set_velocity(&mut self, velocity: Vec2) {
+        self.velocity = velocity;
+    }
+
+    pub fn set_acceleration(&mut self, acceleration: Vec2) {
+        self.acceleration = acceleration;
+    }
+
+    pub fn set_life_span(&mut self, life_span: f32) {
+        self.life_span = life_span;
+    }
+
+    pub fn set_size(&mut self, size: f32) {
+        self.size = size;
+    }
+
+    pub fn set_color(&mut self, color: Rgba) {
+        self.color = color;
     }
 }

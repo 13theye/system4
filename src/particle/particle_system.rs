@@ -9,7 +9,10 @@ use nannou::rand::{rngs::ThreadRng, Rng};
 use crate::{forces::ForceFields, particle::Particle};
 
 pub struct ParticleSystem {
+    // Particles
     pub particles: Vec<Particle>,
+
+    // forces
     pub forces: ForceFields,
 
     // Origin and bounds
@@ -47,17 +50,23 @@ impl ParticleSystem {
     pub fn update(&mut self, show_forces: bool) {
         self.forces.update(show_forces);
 
-        for i in (0..self.particles.len()).rev() {
-            self.forces.apply(&mut self.particles[i]);
+        let mut write_inx = 0;
+        for read_inx in 0..self.particles.len() {
+            let particle = &mut self.particles[read_inx];
+            self.forces.apply(particle);
+            particle.update();
 
-            self.particles[i].update();
-            if self.particles[i].is_offscreen(self.bounds_rect) {
-                self.particles[i].kill();
+            if particle.is_offscreen(self.bounds_rect) {
+                particle.kill();
             }
-            if self.particles[i].is_dead() {
-                self.particles.remove(i);
+            if !particle.is_dead() {
+                if write_inx != read_inx {
+                    self.particles[write_inx] = self.particles[read_inx];
+                }
+                write_inx += 1;
             }
         }
+        self.particles.truncate(write_inx);
     }
 
     pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
@@ -84,6 +93,7 @@ impl ParticleSystem {
 
     pub fn add_particle_with_velocity(&mut self, position: Vec2, velocity: Vec2) {
         let acceleration = vec2(0.0, 0.0);
+
         self.particles.push(Particle::new_with_motion(
             position,
             self.default_particle_size,
