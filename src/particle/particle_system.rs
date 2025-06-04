@@ -6,7 +6,7 @@
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
-use crate::{forces::ForceFields, particle::Particle};
+use crate::{forces::ForceFields, particle::Particle, view::Mask};
 
 pub struct ParticleSystem {
     // Particles
@@ -14,6 +14,9 @@ pub struct ParticleSystem {
 
     // forces
     pub forces: ForceFields,
+
+    // mask
+    pub mask: Mask,
 
     // Origin and bounds
     origin: Point2,
@@ -36,10 +39,13 @@ impl ParticleSystem {
         let grid_cols = 96;
         let grid_rows = 54;
 
+        let mask = Mask::full_screen();
+
         Self {
             particles: Vec::new(),
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
             origin,
+            mask,
             bounds_size,
             bounds_rect,
             default_particle_size,
@@ -122,7 +128,9 @@ impl ParticleSystem {
 
     pub fn draw(&self, draw: &Draw) {
         for particle in self.particles.iter() {
-            particle.draw(draw);
+            if self.mask.contains(particle.position()) {
+                particle.draw(draw);
+            }
         }
     }
 

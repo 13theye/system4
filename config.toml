@@ -7,7 +7,7 @@ target_addr = "127.0.0.1"
 target_port = 8000
 
 [speed]
-# beats per minute (float)
+# initial beats per minute (float)
 bpm = 120.0
 
 [rendering]

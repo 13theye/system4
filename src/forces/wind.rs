@@ -186,7 +186,7 @@ impl WindField {
     }
 
     pub fn apply(&mut self, particle: &mut Particle) {
-        let Some(wind) = self.get_wind_at_pos(particle.position) else {
+        let Some(wind) = self.get_wind_at_pos(particle.position()) else {
             return;
         };
         wind.apply(particle);
@@ -235,17 +235,23 @@ impl WindField {
 
     // Take a center-origin position and convert it to a index with 0,0 at top left
     fn position_to_idx(&self, pos: Vec2) -> Option<(usize, usize)> {
-        let x1 = pos.x + self.bounds_size.x / 2.0;
-        let y1 = -pos.y + self.bounds_size.y / 2.0;
-
-        let i = (x1 / self.cell_size.x).floor() as isize;
-        let j = (y1 / self.cell_size.y).floor() as isize;
+        let transformed = self.world_to_grid_coords(pos);
+        let i = transformed.x.floor() as isize;
+        let j = transformed.y.floor() as isize;
 
         if i >= 0 && j >= 0 && (i as usize) < self.grid_cols && (j as usize) < self.grid_rows {
             Some((i as usize, j as usize))
         } else {
             None // Out of bounds
         }
+    }
+
+    // Helper method to transform world coordinates to grid coordinates (floating point)
+    fn world_to_grid_coords(&self, pos: Vec2) -> Vec2 {
+        let x1 = pos.x + self.bounds_size.x / 2.0;
+        let y1 = -pos.y + self.bounds_size.y / 2.0;
+
+        vec2(x1 / self.cell_size.x, y1 / self.cell_size.y)
     }
 
     /******************* Draw for Debug *******************/
@@ -416,19 +422,22 @@ impl WindCircle {
         // Calculate the outer radius for bounding box
         let outer_radius = params.radius + params.width / 2.0;
 
-        // Calculate bounding box in grid coordinates
-        let center_x_in_grid = (params.center.x + field.bounds_size.x / 2.0) / field.cell_size.x;
-        let center_y_in_grid = (-params.center.y + field.bounds_size.y / 2.0) / field.cell_size.y;
+        // Use the same coordinate transformation as position_to_idx for consistency
+        let center_pos_transformed = field.world_to_grid_coords(params.center);
 
         let radius_in_cells_x = outer_radius / field.cell_size.x;
         let radius_in_cells_y = outer_radius / field.cell_size.y;
 
-        let min_col = (center_x_in_grid - radius_in_cells_x).floor().max(0.0) as usize;
-        let max_col = (center_x_in_grid + radius_in_cells_x)
+        let min_col = (center_pos_transformed.x - radius_in_cells_x)
+            .floor()
+            .max(0.0) as usize;
+        let max_col = (center_pos_transformed.x + radius_in_cells_x)
             .ceil()
             .min(field.grid_cols as f32) as usize;
-        let min_row = (center_y_in_grid - radius_in_cells_y).floor().max(0.0) as usize;
-        let max_row = (center_y_in_grid + radius_in_cells_y)
+        let min_row = (center_pos_transformed.y - radius_in_cells_y)
+            .floor()
+            .max(0.0) as usize;
+        let max_row = (center_pos_transformed.y + radius_in_cells_y)
             .ceil()
             .min(field.grid_rows as f32) as usize;
 

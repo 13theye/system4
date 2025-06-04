@@ -19,7 +19,7 @@ impl Gravity {
     }
 
     pub fn apply(&self, particle: &mut Particle) {
-        let direction = self.origin - particle.position;
+        let direction = self.origin - particle.position();
         let distance = direction.length();
 
         // Swallow particles that are too close

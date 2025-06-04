@@ -4,9 +4,11 @@
 
 use nannou::prelude::*;
 
+const PARTICLE_MASS: f32 = 5.0;
+
 #[derive(Clone, Copy, Default)]
 pub struct Particle {
-    pub position: Point2,
+    position: Point2,
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
@@ -26,7 +28,7 @@ impl Particle {
             is_alive: true,
             size,
             color,
-            mass: 22.0,
+            mass: PARTICLE_MASS,
         }
     }
 
@@ -45,7 +47,7 @@ impl Particle {
             is_alive: true,
             size,
             color,
-            mass: 11.0,
+            mass: PARTICLE_MASS,
         }
     }
 
@@ -60,7 +62,7 @@ impl Particle {
         self.color.alpha = 1.0;
     }
 
-    pub fn get_position(&self) -> Point2 {
+    pub fn position(&self) -> Point2 {
         self.position
     }
 
@@ -74,7 +76,7 @@ impl Particle {
     }
 
     pub fn is_offscreen(&self, bounds_rect: Rect) -> bool {
-        let buffer = 200.0;
+        let buffer = 1000.0;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer
             || self.position.y < bounds_rect.bottom() - buffer
