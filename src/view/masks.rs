@@ -15,8 +15,8 @@ pub struct Mask {
 
 impl Mask {
     pub fn make_drone_1() -> Self {
-        let origin = vec2(-605.0, 0.0);
-        let size = vec2(500.0, 1000.0);
+        let origin = vec2(-1920.0, 0.0);
+        let size = vec2(3840.0, 1000.0);
         let rect = Rect::from_x_y_w_h(origin.x, origin.y, size.x, size.y);
         Self { origin, size, rect }
     }

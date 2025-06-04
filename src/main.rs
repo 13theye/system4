@@ -53,18 +53,24 @@ fn model(app: &App) -> Model {
     let config = Config::load().expect("\nSystem 3: FAILED TO LOAD CONFIG.TOML\n");
 
     // Main game data elements
-    let default_size = 6.0;
-    let default_color = rgba(0.73, 0.73, 0.73, 1.0);
-    let window_size = vec2(
+    let default_size = 8.0;
+    //let default_color = rgba(0.73, 0.73, 0.73, 1.0);
+    let default_color = rgba(1.0, 0.28, 0.28, 1.0);
+
+    let render_size = vec2(
         config.rendering.texture_width as f32,
         config.rendering.texture_height as f32,
     );
+
     let particle_system = ParticleSystem::new(
         pt2(0.0, 0.0),
-        window_size.x,
-        window_size.y,
+        render_size.x,
+        render_size.y,
         default_size,
         default_color,
+        config.particles.limit,
+        // I dont know why but DPI scale is needed to place particles correctly in draw.
+        config.rendering.dpi_scale,
     );
 
     // Create window
@@ -113,6 +119,16 @@ fn model(app: &App) -> Model {
         eprintln!("Control window not found. Exiting app.");
         std::process::exit(1);
     };
+
+    println!(
+        "Audience window scale: {:?}",
+        audience_window.scale_factor()
+    );
+    println!(
+        "Performer window scale: {:?}",
+        performer_window.scale_factor()
+    );
+    println!("Control window scale: {:?}", control_window.scale_factor());
 
     // Set up render texture
     // the device isn't tied to window, but it's nannou's way of getting the handle.
@@ -185,49 +201,96 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let rect = model.particle_system.bounds_rect;
 
     for _ in 0..20 {
-        let y = model.rng.gen_range(-1200.0..1200.0);
+        let y = model.rng.gen_range(-1080.0..1080.0);
+        /*
         if y > -50.0 && y < 50.0 {
             continue;
         }
+         */
         let position: Vec2 = if y > 0.0 {
             vec2(rect.left() - 10.0, y)
         } else {
             vec2(rect.right() + 10.0, y)
         };
         let velocity = if y > 0.0 {
-            vec2(10.0, 0.0)
+            vec2(15.0, 0.0)
         } else {
-            vec2(-10.0, 0.0)
+            vec2(-15.0, 0.0)
         };
 
         model
             .particle_system
             .add_particle_with_velocity(position, velocity);
     }
-    /*
-    for _ in 0..18 {
-        let x = model.rng.gen_range(-1900.0..1900.0);
-        if x > -350.0 && x < 350.0 {
+
+    for _ in 0..35 {
+        let y = model.rng.gen_range(-1080.0..1080.0);
+        /*
+        if y > -50.0 && y < 50.0 {
             continue;
         }
+        */
+        let position: Vec2 = if y > 0.0 {
+            vec2(rect.right() + 10.0, y)
+        } else {
+            vec2(rect.left() - 10.0, y)
+        };
+        let velocity = if y > 0.0 {
+            vec2(-15.0, 0.0)
+        } else {
+            vec2(15.0, 0.0)
+        };
+
+        model
+            .particle_system
+            .add_particle_with_velocity(position, velocity);
+    }
+
+    for _ in 0..35 {
+        let x = model.rng.gen_range(-1920.0..1920.0);
+        /*
+        if x > -50.0 && x < 50.0 {
+            continue;
+        }
+         */
         let position: Vec2 = if x > 0.0 {
-            vec2(x, rect.top() - 10.0)
+            vec2(x, rect.top() + 10.0)
         } else {
             vec2(x, rect.bottom() - 10.0)
         };
         let velocity = if x > 0.0 {
-            vec2(0.0, -5.0)
+            vec2(0.0, -15.0)
         } else {
-            vec2(0.0, 5.0)
+            vec2(0.0, 15.0)
         };
-
 
         model
             .particle_system
             .add_particle_with_velocity(position, velocity);
-
     }
-    */
+
+    for _ in 0..20 {
+        let x = model.rng.gen_range(-1920.0..1920.0);
+        /*
+        if x > -50.0 && x < 50.0 {
+            continue;
+        }
+        */
+        let position: Vec2 = if x > 0.0 {
+            vec2(x, rect.bottom() - 10.0)
+        } else {
+            vec2(x, rect.top() + 10.0)
+        };
+        let velocity = if x > 0.0 {
+            vec2(0.0, 15.0)
+        } else {
+            vec2(0.0, -15.0)
+        };
+
+        model
+            .particle_system
+            .add_particle_with_velocity(position, velocity);
+    }
 
     // Update particles
     model.particle_system.update(model.show_forces);
@@ -316,7 +379,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             model.show_bounds = !model.show_bounds;
         }
         Key::C => {
-            let circle = WindCircle::new(1, pt2(0.0, 0.0), 500.0, 900.0, 20.0, 0.8);
+            let circle = WindCircle::new(1, pt2(-400.0, 0.0), 500.0, 900.0, 20.0, 0.8);
 
             model.particle_system.forces.add_wind_circle(circle);
 
@@ -326,26 +389,6 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
                 .forces
                 .add_gravity_source(vec2(0.0, 0.0), 10000.0);
              */
-        }
-        Key::Space => {
-            let rect = model.particle_system.bounds_rect;
-            for _ in 0..10 {
-                let y = model.rng.gen_range(-1000.0..1000.0);
-                let position: Vec2 = if y > 0.0 {
-                    vec2(rect.left() - 10.0, y)
-                } else {
-                    vec2(rect.right() + 10.0, y)
-                };
-                let velocity = if y > 0.0 {
-                    vec2(20.0, 0.0)
-                } else {
-                    vec2(-20.0, 0.0)
-                };
-
-                model
-                    .particle_system
-                    .add_particle_with_velocity(position, velocity);
-            }
         }
         _ => {}
     }
@@ -495,7 +538,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Strength slider
                             let mut strength = params.strength;
                             if ui
-                                .add(egui::Slider::new(&mut strength, 0.0..=50.0).text("Strength"))
+                                .add(egui::Slider::new(&mut strength, 0.0..=200.0).text("Strength"))
                                 .changed()
                             {
                                 if let Some(circle) = model

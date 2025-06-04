@@ -16,6 +16,12 @@ pub struct RenderConfig {
     pub texture_height: u32,
     pub texture_samples: u32,
     pub arc_resolution: u32,
+    pub dpi_scale: f32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ParticleConfig {
+    pub limit: u32,
 }
 
 #[derive(Debug, Deserialize)]

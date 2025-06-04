@@ -4,7 +4,7 @@
 
 use nannou::prelude::*;
 
-const PARTICLE_MASS: f32 = 5.0;
+const PARTICLE_MASS: f32 = 11.0;
 
 #[derive(Clone, Copy, Default)]
 pub struct Particle {
@@ -12,6 +12,7 @@ pub struct Particle {
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
+    age_per_tick: f32,
     pub is_alive: bool,
     pub size: f32,
     pub mass: f32,
@@ -24,7 +25,8 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            life_span: 1000.0,
+            life_span: 1200.0,
+            age_per_tick: 1.0,
             is_alive: true,
             size,
             color,
@@ -43,7 +45,8 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            life_span: 1000.0,
+            life_span: 1200.0,
+            age_per_tick: 1.0,
             is_alive: true,
             size,
             color,
@@ -58,20 +61,27 @@ impl Particle {
         // Reset acceleration for next frame (forces will be reapplied)
         self.acceleration = vec2(0.0, 0.0);
 
-        self.life_span -= 1.0;
-        self.color.alpha = 1.0;
+        self.life_span -= self.age_per_tick;
+
+        if self.life_span < 200.0 {
+            self.color.alpha = self.life_span / 200.0;
+        } else {
+            self.color.alpha = 1.0;
+        }
     }
 
     pub fn position(&self) -> Point2 {
         self.position
     }
 
-    pub fn draw(&self, draw: &Draw) {
+    pub fn draw(&self, draw: &Draw, dpi_scale: f32) {
+        let scaled_position = self.position / dpi_scale;
+        let scaled_size = self.size / dpi_scale;
         draw.line()
-            .xy(self.position)
-            .start(self.position + vec2(self.size / 2.0, 0.0))
-            .end(self.position + vec2(0.0, self.size / 2.0))
-            .stroke_weight(self.size)
+            .xy(scaled_position)
+            .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
+            .end(scaled_position + vec2(0.0, scaled_size / 2.0))
+            .stroke_weight(scaled_size)
             .color(self.color);
     }
 
@@ -86,6 +96,10 @@ impl Particle {
     pub fn kill(&mut self) {
         self.life_span = 0.0;
         self.is_alive = false;
+    }
+
+    pub fn set_age_per_tick(&mut self, age_per_tick: f32) {
+        self.age_per_tick = age_per_tick;
     }
 
     pub fn is_dead(&self) -> bool {

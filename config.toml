@@ -13,6 +13,7 @@ bpm = 120.0
 [rendering]
 texture_width = 3840
 texture_height = 2160
+dpi_scale = 2.0
 
 # Please don't change these
 texture_samples = 1
@@ -20,7 +21,6 @@ arc_resolution = 25
 
 [audience_window]
 # The size of the audience window game render.
-# Currently scaling to 1/2 of texture resolution
 width = 3840
 height = 2160
 
@@ -34,4 +34,10 @@ height = 617
 # The size of the control window UI.
 width = 1440
 height = 270
+
+[particles]
+# The limit of particles. (Int)
+limit = 30000
+
+
 

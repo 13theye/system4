@@ -11,6 +11,7 @@ use crate::{forces::ForceFields, particle::Particle, view::Mask};
 pub struct ParticleSystem {
     // Particles
     pub particles: Vec<Particle>,
+    particle_limit: usize,
 
     // forces
     pub forces: ForceFields,
@@ -24,6 +25,9 @@ pub struct ParticleSystem {
     pub bounds_rect: Rect,
     default_particle_size: f32,
     default_particle_color: Rgba,
+
+    // DPI scale
+    dpi_scale: f32,
 }
 
 impl ParticleSystem {
@@ -33,6 +37,8 @@ impl ParticleSystem {
         height: f32,
         default_particle_size: f32,
         default_particle_color: Rgba,
+        particle_limit: u32,
+        dpi_scale: f32,
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
@@ -50,6 +56,8 @@ impl ParticleSystem {
             bounds_rect,
             default_particle_size,
             default_particle_color,
+            particle_limit: particle_limit as usize,
+            dpi_scale,
         }
     }
 
@@ -73,6 +81,9 @@ impl ParticleSystem {
             }
         }
         self.particles.truncate(write_inx);
+        if self.particles.len() > self.particle_limit {
+            self.cull_excess_particles();
+        }
     }
 
     pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
@@ -126,23 +137,32 @@ impl ParticleSystem {
         ));
     }
 
+    fn cull_excess_particles(&mut self) {
+        for i in 0..self.particles.len() - self.particle_limit {
+            self.particles[i].set_age_per_tick(10.0);
+        }
+    }
+
     pub fn draw(&self, draw: &Draw) {
         for particle in self.particles.iter() {
             if self.mask.contains(particle.position()) {
-                particle.draw(draw);
+                particle.draw(draw, self.dpi_scale);
             }
         }
     }
 
     pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        self.draw_origin(draw);
+        self.draw_origin(draw, scale_x, scale_y);
         self.forces.wind_field.draw(draw, scale_x, scale_y);
+        for circle in self.forces.wind_circles.values() {
+            circle.draw_center(draw, scale_x, scale_y);
+        }
     }
 
-    pub fn draw_origin(&self, draw: &Draw) {
+    pub fn draw_origin(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         draw.ellipse()
-            .xy(self.origin)
-            .w_h(10.0, 10.0)
+            .xy(self.origin * vec2(scale_x, scale_y))
+            .w_h(10.0 * scale_x, 10.0 * scale_y)
             .color(rgba(1.0, 0.0, 1.0, 0.2));
     }
 }
