@@ -4,7 +4,6 @@
 
 use crate::{forces::CellIdx, particle::Particle};
 use nannou::prelude::*;
-use rayon::prelude::*;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -421,6 +420,7 @@ impl WindCircle {
 
         let mut affected_cells = Vec::new();
 
+        // Update cells serially
         for col in min_col..max_col {
             for row in min_row..max_row {
                 let Some(cell) = field.get_mut_cell(col, row) else {
@@ -482,12 +482,28 @@ impl WindCircle {
         if distance_to_center >= inner_radius && distance_to_center <= outer_radius {
             // Wind generation logic specific to circular fields
             let radius_vector = cell.origin - params.center;
+            let radius_dir = radius_vector.normalize();
+            let tangent_dir = vec2(radius_dir.y, -radius_dir.x); // tangential, 90° CCW from radial
+
+            // Rotate the tangent vector by bias * 90 degrees
+            let angle = params.center_bias * -std::f32::consts::FRAC_PI_2; // π/2 = 90°
+
+            let sin_a = angle.sin();
+            let cos_a = angle.cos();
+
+            // Rotate tangent_dir by 'angle'
+            let blended_direction = vec2(
+                tangent_dir.x * cos_a - tangent_dir.y * sin_a,
+                tangent_dir.x * sin_a + tangent_dir.y * cos_a,
+            );
+            /*
             let tangential_direction = vec2(radius_vector.y, -radius_vector.x).normalize();
             let radial_inward_direction = -radius_vector.normalize();
 
             let blended_direction = (tangential_direction * (1.0 - params.center_bias)
                 + radial_inward_direction * params.center_bias)
                 .normalize();
+             */
 
             Some(Wind::new_with(blended_direction, params.strength))
         } else {

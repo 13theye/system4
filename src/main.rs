@@ -19,7 +19,8 @@ use system3::{
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
-const DEFAULT_PARTICLE_COLOR: (f32, f32, f32) = (1.0, 0.28, 0.28);
+const RED_DEFAULT_PARTICLE_COLOR: (f32, f32, f32) = (1.0, 0.28, 0.28);
+const DEFAULT_PARTICLE_COLOR: (f32, f32, f32) = (0.73, 0.73, 0.74);
 
 struct Model {
     particle_system: ParticleSystem,
@@ -334,7 +335,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         Key::C => {
             model
                 .osc_loop
-                .send_make_drone(1, 1.0, 1000, 50.0, 0.0, 1.0, 1.0);
+                .send_make_drone(1, 1.0, 1.0, 50.0, 0.0, 1.0, 1.0);
             /*
             model
                 .particle_system
@@ -507,7 +508,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             let mut center_bias = params.center_bias;
                             if ui
                                 .add(
-                                    egui::Slider::new(&mut center_bias, 0.0..=1.0)
+                                    egui::Slider::new(&mut center_bias, 0.0..=2.0)
                                         .text("Center Bias"),
                                 )
                                 .changed()
@@ -672,8 +673,20 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                     trail,
                 );
             }
+            OscCommand::ParticlesDeviation { id, val } => {
+                set_deviation(model, id, val);
+            }
+            OscCommand::ParticlesNumParticles { id, val } => {
+                set_num_particles(model, id, val);
+            }
             OscCommand::EraseDrone { id } => {
                 println!("EraseDrone: id={}", id);
+            }
+            OscCommand::ParticlesAlpha { id, val } => {
+                set_alpha(model, id, val);
+            }
+            OscCommand::ParticlesForce { id, val } => {
+                set_force(model, id, val);
             }
             _ => {}
         }
@@ -685,7 +698,7 @@ fn make_drone(
     model: &mut Model,
     id: i32,
     alpha: f32,
-    num_particles: i32,
+    num_particles: f32,
     force: f32,
     deviation: f32,
     shake: f32,
@@ -703,4 +716,23 @@ fn make_drone(
     model
         .particle_system
         .make_drone_with(circle, alpha, num_particles, shake, trail);
+}
+
+fn set_alpha(model: &mut Model, _id: i32, alpha: f32) {
+    model.particle_system.set_alpha(alpha);
+}
+
+fn set_deviation(model: &mut Model, id: i32, deviation: f32) {
+    model.particle_system.set_deviation(id as usize, deviation);
+}
+
+fn set_force(model: &mut Model, id: i32, force: f32) {
+    let strength = force * 200.0; // 200 is the max strength of the wind circle
+    model.particle_system.set_strength(id as usize, strength);
+}
+
+fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
+    model
+        .particle_system
+        .set_num_particles(id, num_particles / 2000.0);
 }

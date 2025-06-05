@@ -34,7 +34,7 @@ pub struct ParticleSystem {
 
     // OSC params
     pub alpha: f32,         // scale the alpha of the particles
-    pub num_particles: i32, // normalized proportion of particle_limit
+    pub num_particles: f32, // normalized proportion of particle_limit
     pub shake: f32,         // scale the shake of the particles
     pub trail: f32,         // scale the trail of the particles
 
@@ -54,8 +54,8 @@ impl ParticleSystem {
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
-        let grid_cols = 3840;
-        let grid_rows = 2160;
+        let grid_cols = (width / 30.0) as usize;
+        let grid_rows = (height / 30.0) as usize;
 
         let mask = Mask::make_drone_1(1);
 
@@ -73,7 +73,7 @@ impl ParticleSystem {
             default_particle_color,
 
             alpha: 0.0,
-            num_particles: 1000,
+            num_particles: 0.0,
             shake: 0.0,
             trail: 0.0,
 
@@ -86,7 +86,7 @@ impl ParticleSystem {
         &mut self,
         circle: WindCircle,
         alpha: f32,
-        num_particles: i32,
+        num_particles: f32,
         shake: f32,
         trail: f32,
     ) {
@@ -133,8 +133,10 @@ impl ParticleSystem {
         let rect = self.bounds_rect;
         let spawn_speed = self.spawn_speed;
 
+        let spawn_rate_sides = (20.0 * self.num_particles) as usize;
+
         // Spawn particles from the left
-        for _ in 0..20 {
+        for _ in 0..spawn_rate_sides {
             let y = rng.gen_range(-1080.0..1080.0);
             /*
             if y > -50.0 && y < 50.0 {
@@ -156,7 +158,7 @@ impl ParticleSystem {
         }
 
         // Spawn particles from the right
-        for _ in 0..35 {
+        for _ in 0..spawn_rate_sides {
             let y = rng.gen_range(-1080.0..1080.0);
             /*
             if y > -50.0 && y < 50.0 {
@@ -265,7 +267,8 @@ impl ParticleSystem {
     }
 
     fn cull_excess_particles(&mut self) {
-        for i in 0..self.particles.len() - self.particle_limit {
+        let num_particles = self.particles.len();
+        for i in 0..num_particles - self.particle_limit.clamp(0, num_particles) {
             self.particles[i].set_age_per_tick(10.0);
         }
     }
@@ -275,6 +278,22 @@ impl ParticleSystem {
     pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
         self.bounds_size = Vec2::new(width, height);
         self.bounds_rect = self.make_bounds_rect();
+    }
+
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.alpha = alpha;
+    }
+
+    pub fn set_deviation(&mut self, id: usize, deviation: f32) {
+        self.forces.update_wind_circle_center_bias(id, deviation);
+    }
+
+    pub fn set_strength(&mut self, id: usize, strength: f32) {
+        self.forces.update_wind_circle_strength(id, strength);
+    }
+
+    pub fn set_num_particles(&mut self, _id: i32, num_particles: f32) {
+        self.num_particles = num_particles;
     }
 
     fn make_bounds_rect(&self) -> Rect {

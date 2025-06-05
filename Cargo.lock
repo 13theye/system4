@@ -2177,7 +2177,6 @@ dependencies = [
  "nannou_egui",
  "nannou_osc",
  "nnpipe",
- "rayon",
  "serde",
  "serde_json",
  "toml 0.8.22",

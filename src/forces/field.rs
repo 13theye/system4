@@ -94,6 +94,28 @@ impl ForceFields {
             .map(|(id, circle)| (*id, circle.with_params_read(|params| params.clone())))
             .collect()
     }
+
+    /******************* OSC command compatibility methods ********************* */
+
+    pub fn update_wind_circle_center_bias(&mut self, id: usize, bias: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.with_params_write(|p| {
+                p.center_bias(bias);
+            });
+        } else {
+            println!("Wind circle {} not found", id);
+        }
+    }
+
+    pub fn update_wind_circle_strength(&mut self, id: usize, strength: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.with_params_write(|p| {
+                p.strength(strength);
+            });
+        } else {
+            println!("Wind circle {} not found", id);
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
