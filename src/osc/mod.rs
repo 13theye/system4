@@ -1,2 +1,2 @@
-pub mod osc_module;
-pub use osc_module::{OscCommand, OscSender};
+pub mod osc_control;
+pub use osc_control::{OscCommand, OscController, OscSender};

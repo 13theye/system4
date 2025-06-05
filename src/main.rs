@@ -5,17 +5,34 @@
 //
 // src/main.rs
 
-use nannou::rand::{rngs::ThreadRng, Rng};
+use nannou::rand::rngs::ThreadRng;
 use nannou::{prelude::*, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::*;
 
-use system3::{config::*, forces::WindCircle, fps::FpsManager, particle::ParticleSystem};
+use system3::{
+    config::*,
+    forces::WindCircle,
+    fps::FpsManager,
+    osc::{OscCommand, OscController, OscSender},
+    particle::ParticleSystem,
+};
+
+const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
+const DEFAULT_PARTICLE_COLOR: (f32, f32, f32) = (1.0, 0.28, 0.28);
 
 struct Model {
     particle_system: ParticleSystem,
+    particle_limit: u32,
+
+    // OSC
+    osc: OscController,
+    osc_send: OscSender,
+    osc_loop: OscSender,
 
     // Windows' texture reshapers
+    render_size: Vec2,
+    render_rect: Rect,
     audience_window_id: WindowId,
     performer_window_id: WindowId,
     control_window_id: WindowId,
@@ -30,6 +47,7 @@ struct Model {
 
     // Rendering engine
     rendering: Nnpipe,
+    dpi_scale: f32,
 
     // Egui
     egui: Egui,
@@ -53,24 +71,39 @@ fn model(app: &App) -> Model {
     let config = Config::load().expect("\nSystem 3: FAILED TO LOAD CONFIG.TOML\n");
 
     // Main game data elements
-    let default_size = 8.0;
-    //let default_color = rgba(0.73, 0.73, 0.73, 1.0);
-    let default_color = rgba(1.0, 0.28, 0.28, 1.0);
+    let particle_limit = config.particles.limit;
 
     let render_size = vec2(
         config.rendering.texture_width as f32,
         config.rendering.texture_height as f32,
     );
 
+    let render_rect = Rect::from_x_y_w_h(0.0, 0.0, render_size.x, render_size.y);
+
+    let osc = OscController::new(config.osc_receive.receive_port).unwrap();
+    let osc_send = OscSender::new(&config.osc_send).unwrap();
+
+    let osc_loop_config = OscSendConfig {
+        target_addr: config.osc_loop.target_addr,
+        target_port: config.osc_loop.target_port,
+    };
+    let osc_loop = OscSender::new(&osc_loop_config).unwrap();
+
+    // I dont know why but DPI scale is needed to place particles correctly in draw.
+    let dpi_scale = config.rendering.dpi_scale;
+
     let particle_system = ParticleSystem::new(
         pt2(0.0, 0.0),
         render_size.x,
         render_size.y,
-        default_size,
-        default_color,
-        config.particles.limit,
-        // I dont know why but DPI scale is needed to place particles correctly in draw.
-        config.rendering.dpi_scale,
+        DEFAULT_PARTICLE_SIZE,
+        rgb(
+            DEFAULT_PARTICLE_COLOR.0,
+            DEFAULT_PARTICLE_COLOR.1,
+            DEFAULT_PARTICLE_COLOR.2,
+        ),
+        particle_limit,
+        dpi_scale,
     );
 
     // Create window
@@ -166,6 +199,13 @@ fn model(app: &App) -> Model {
 
     Model {
         particle_system,
+        particle_limit,
+        osc,
+        osc_send,
+        osc_loop,
+        render_size,
+        render_rect,
+        dpi_scale,
         audience_window_id,
         performer_window_id,
         control_window_id,
@@ -198,102 +238,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update control UI
     update_control_ui(app, model);
 
-    let rect = model.particle_system.bounds_rect;
-
-    for _ in 0..20 {
-        let y = model.rng.gen_range(-1080.0..1080.0);
-        /*
-        if y > -50.0 && y < 50.0 {
-            continue;
-        }
-         */
-        let position: Vec2 = if y > 0.0 {
-            vec2(rect.left() - 10.0, y)
-        } else {
-            vec2(rect.right() + 10.0, y)
-        };
-        let velocity = if y > 0.0 {
-            vec2(15.0, 0.0)
-        } else {
-            vec2(-15.0, 0.0)
-        };
-
-        model
-            .particle_system
-            .add_particle_with_velocity(position, velocity);
-    }
-
-    for _ in 0..35 {
-        let y = model.rng.gen_range(-1080.0..1080.0);
-        /*
-        if y > -50.0 && y < 50.0 {
-            continue;
-        }
-        */
-        let position: Vec2 = if y > 0.0 {
-            vec2(rect.right() + 10.0, y)
-        } else {
-            vec2(rect.left() - 10.0, y)
-        };
-        let velocity = if y > 0.0 {
-            vec2(-15.0, 0.0)
-        } else {
-            vec2(15.0, 0.0)
-        };
-
-        model
-            .particle_system
-            .add_particle_with_velocity(position, velocity);
-    }
-
-    for _ in 0..35 {
-        let x = model.rng.gen_range(-1920.0..1920.0);
-        /*
-        if x > -50.0 && x < 50.0 {
-            continue;
-        }
-         */
-        let position: Vec2 = if x > 0.0 {
-            vec2(x, rect.top() + 10.0)
-        } else {
-            vec2(x, rect.bottom() - 10.0)
-        };
-        let velocity = if x > 0.0 {
-            vec2(0.0, -15.0)
-        } else {
-            vec2(0.0, 15.0)
-        };
-
-        model
-            .particle_system
-            .add_particle_with_velocity(position, velocity);
-    }
-
-    for _ in 0..20 {
-        let x = model.rng.gen_range(-1920.0..1920.0);
-        /*
-        if x > -50.0 && x < 50.0 {
-            continue;
-        }
-        */
-        let position: Vec2 = if x > 0.0 {
-            vec2(x, rect.bottom() - 10.0)
-        } else {
-            vec2(x, rect.top() + 10.0)
-        };
-        let velocity = if x > 0.0 {
-            vec2(0.0, 15.0)
-        } else {
-            vec2(0.0, -15.0)
-        };
-
-        model
-            .particle_system
-            .add_particle_with_velocity(position, velocity);
-    }
+    // Process OSC commands
+    model.osc.process_messages();
+    let commands = model.osc.take_commands();
+    process_osc(model, commands);
 
     // Update particles
-    model.particle_system.update(model.show_forces);
+    model
+        .particle_system
+        .update(&mut model.rng, model.show_forces);
 
     // Draw particles
     model.particle_system.draw(&model.draw);
@@ -379,10 +332,9 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             model.show_bounds = !model.show_bounds;
         }
         Key::C => {
-            let circle = WindCircle::new(1, pt2(-400.0, 0.0), 500.0, 900.0, 20.0, 0.8);
-
-            model.particle_system.forces.add_wind_circle(circle);
-
+            model
+                .osc_loop
+                .send_make_drone(1, 1.0, 1000, 50.0, 0.0, 1.0, 1.0);
             /*
             model
                 .particle_system
@@ -693,4 +645,62 @@ fn draw_bounds(app: &App, model: &Model) {
         .stroke(rgba(0.5, 1.0, 0.5, 0.5)) // Green outline
         .stroke_weight(2.0)
         .no_fill();
+}
+
+// ************************ OSC   *************************************
+
+fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
+    for command in commands {
+        match command {
+            OscCommand::MakeDrone {
+                id,
+                alpha,
+                num_particles,
+                force,
+                deviation,
+                shake,
+                trail,
+            } => {
+                make_drone(
+                    model,
+                    id,
+                    alpha,
+                    num_particles,
+                    force,
+                    deviation,
+                    shake,
+                    trail,
+                );
+            }
+            OscCommand::EraseDrone { id } => {
+                println!("EraseDrone: id={}", id);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn make_drone(
+    model: &mut Model,
+    id: i32,
+    alpha: f32,
+    num_particles: i32,
+    force: f32,
+    deviation: f32,
+    shake: f32,
+    trail: f32,
+) {
+    let center = match id {
+        1 => pt2(-1280.0, 200.0),
+        4 => pt2(1280.0, 200.0),
+        _ => pt2(0.0, 0.0),
+    };
+    let (radius, width) = (500.0, 700.0);
+    let center_bias = deviation;
+    let circle = WindCircle::new(id as usize, center, radius, width, force, center_bias);
+
+    model
+        .particle_system
+        .make_drone_with(circle, alpha, num_particles, shake, trail);
 }

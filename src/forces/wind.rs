@@ -4,6 +4,7 @@
 
 use crate::{forces::CellIdx, particle::Particle};
 use nannou::prelude::*;
+use rayon::prelude::*;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -255,7 +256,7 @@ impl WindField {
         vec2(x1 / self.cell_size.x, y1 / self.cell_size.y)
     }
 
-    /******************* Draw for Debug *******************/
+    /******************* Draw for Performer *******************/
 
     pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
@@ -285,6 +286,7 @@ impl WindField {
         }
     }
 
+    // Draw a grid of lines that represent the cells -- fast but less accurate
     pub fn draw_grid(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         let cols = self.grid_cols;
         let rows = self.grid_rows;
@@ -318,7 +320,8 @@ impl WindField {
         }
     }
 
-    pub fn draw_grid_old(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+    // Draw a grid of rectangles that represent the cells -- slow but more accurate
+    pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
                 let Some(cell) = self.get_cell(col, row) else {

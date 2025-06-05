@@ -11,6 +11,17 @@ pub struct OscSendConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct OscLoopConfig {
+    pub target_addr: String,
+    pub target_port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OscReceiveConfig {
+    pub receive_port: u16,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RenderConfig {
     pub texture_width: u32,
     pub texture_height: u32,

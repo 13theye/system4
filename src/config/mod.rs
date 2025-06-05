@@ -3,5 +3,6 @@ pub mod config_types;
 
 pub use config_load::Config;
 pub use config_types::{
-    AudienceWindowConfig, OscSendConfig, PerformerWindowConfig, RenderConfig, SpeedConfig,
+    AudienceWindowConfig, OscLoopConfig, OscReceiveConfig, OscSendConfig, PerformerWindowConfig,
+    RenderConfig, SpeedConfig,
 };

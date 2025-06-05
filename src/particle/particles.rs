@@ -12,6 +12,7 @@ pub struct Particle {
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
+
     age_per_tick: f32,
     pub is_alive: bool,
     pub size: f32,

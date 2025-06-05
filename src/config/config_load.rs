@@ -11,6 +11,8 @@ pub struct Config {
     pub audience_window: AudienceWindowConfig,
     pub control_window: ControlWindowConfig,
     pub osc_send: OscSendConfig,
+    pub osc_loop: OscLoopConfig,
+    pub osc_receive: OscReceiveConfig,
     pub particles: ParticleConfig,
     pub performer_window: PerformerWindowConfig,
     pub rendering: RenderConfig,

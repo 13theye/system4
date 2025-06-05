@@ -80,7 +80,7 @@ impl ForceFields {
 
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
         println!("Added wind circle {}", circle.id);
-        self.wind_circles.insert(circle.id, circle);
+        self.wind_circles.entry(circle.id).or_insert(circle);
     }
 
     pub fn add_gravity_source(&mut self, origin: Vec2, mass: f32) {
