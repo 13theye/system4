@@ -8,6 +8,7 @@ const PARTICLE_MASS: f32 = 11.0;
 
 #[derive(Clone, Copy, Default)]
 pub struct Particle {
+    pub parent_id: usize, // the emitter that spawned this particle
     position: Point2,
     pub velocity: Vec2,
     pub acceleration: Vec2,
@@ -21,8 +22,9 @@ pub struct Particle {
 }
 
 impl Particle {
-    pub fn new(position: Point2, size: f32, color: Rgba) -> Self {
+    pub fn new(parent_id: usize, position: Point2, size: f32, color: Rgba) -> Self {
         Self {
+            parent_id,
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
@@ -36,6 +38,7 @@ impl Particle {
     }
 
     pub fn new_with_motion(
+        parent_id: usize,
         position: Point2,
         size: f32,
         color: Rgba,
@@ -43,6 +46,7 @@ impl Particle {
         velocity: Vec2,
     ) -> Self {
         Self {
+            parent_id,
             acceleration,
             velocity,
             position,

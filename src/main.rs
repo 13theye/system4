@@ -491,7 +491,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Strength slider
                             let mut strength = params.strength;
                             if ui
-                                .add(egui::Slider::new(&mut strength, 0.0..=200.0).text("Strength"))
+                                .add(egui::Slider::new(&mut strength, 0.0..=30.0).text("Strength"))
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -716,10 +716,12 @@ fn make_drone(
     model
         .particle_system
         .make_drone_with(circle, alpha, num_particles, shake, trail);
+
+    model.osc_send.send_drone_on_off(id, 1);
 }
 
-fn set_alpha(model: &mut Model, _id: i32, alpha: f32) {
-    model.particle_system.set_alpha(alpha);
+fn set_alpha(model: &mut Model, id: i32, alpha: f32) {
+    model.particle_system.set_circle_volume(id, alpha);
 }
 
 fn set_deviation(model: &mut Model, id: i32, deviation: f32) {
@@ -727,7 +729,7 @@ fn set_deviation(model: &mut Model, id: i32, deviation: f32) {
 }
 
 fn set_force(model: &mut Model, id: i32, force: f32) {
-    let strength = force * 200.0; // 200 is the max strength of the wind circle
+    let strength = force * 30.0; // 30 is the max strength of the wind circle
     model.particle_system.set_strength(id as usize, strength);
 }
 

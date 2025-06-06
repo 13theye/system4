@@ -116,6 +116,17 @@ impl ForceFields {
             println!("Wind circle {} not found", id);
         }
     }
+
+    pub fn set_circle_dims(&mut self, id: usize, radius: f32, width: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.with_params_write(|p| {
+                p.radius(radius);
+                p.width(width);
+            });
+        } else {
+            println!("Wind circle {} not found", id);
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

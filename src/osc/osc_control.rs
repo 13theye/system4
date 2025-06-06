@@ -98,6 +98,7 @@ impl OscSender {
         })
     }
 
+    // Callback message when drone initialization is done
     pub fn send_drone_on_off(&self, player_id: i32, val: i32) {
         let addr = "/sys2/droneOnOff".to_string();
         let args = vec![osc::Type::Int(player_id), osc::Type::Int(val)];
