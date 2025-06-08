@@ -33,13 +33,16 @@ impl TerminalSystem {
         self.terminals.get_mut(&voice)
     }
 
-    pub fn update(&mut self, draw: &Draw) -> Option<(Voice, bool)> {
+    pub fn update(&mut self, draw: &Draw) -> Vec<(Voice, bool)> {
+        let mut finish_signals = Vec::new();
+
         for (voice, terminal) in self.terminals.iter_mut() {
             if let Some(finish_signal) = terminal.update(draw) {
-                return Some((*voice, finish_signal));
+                finish_signals.push((*voice, finish_signal));
             }
         }
-        None
+
+        finish_signals
     }
 
     pub fn add_text_line(&mut self, voice: Voice, text: String, does_fade: bool) {

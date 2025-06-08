@@ -156,10 +156,6 @@ impl ParticleSystem {
         // Cull excess particles
         let limit = (self.particle_limit as f32 * self.particle_num_factor) as usize;
         if self.particles.len() > limit {
-            println!("Particles: {}", self.particles.len());
-            println!("Max Particle limit: {}", self.particle_limit);
-            println!("Particle num factor: {}", self.particle_num_factor);
-            println!("Current particle limit: {}", limit);
             self.cull_excess_particles(limit);
         }
 
@@ -246,7 +242,6 @@ impl ParticleSystem {
     }
 
     pub fn set_num_particles(&mut self, voice: Voice, num_particles: f32) {
-        self.particle_num_factor = num_particles;
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice == voice {
                 emitter.spawn_rate_factor = num_particles;

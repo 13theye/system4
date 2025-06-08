@@ -12,6 +12,7 @@ pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     pub parent_voice: Voice,   // the voice that this particle belongs to
     position: Point2,
+    feedback_positions: Vec<Point2>,
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
@@ -37,7 +38,8 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            life_span: 1200.0,
+            feedback_positions: Vec::with_capacity(10),
+            life_span: 1000.0,
             age_per_tick: 1.0,
             is_alive: true,
             size,

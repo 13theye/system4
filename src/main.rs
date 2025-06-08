@@ -287,7 +287,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.particle_system.draw(&model.draw);
 
     // Update terminals
-    if let Some((voice, finish_signal)) = model.terminal_system.update(&model.draw) {
+    let finish_signals = model.terminal_system.update(&model.draw);
+    for (voice, finish_signal) in finish_signals {
         if finish_signal {
             let id = voice.to_i32();
             model.osc_send.send_drone_on_off(id, 1);
@@ -924,6 +925,11 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                 set_gravity(model, id, val);
             }
             OscCommand::ParticlesNumParticles { id, val } => {
+                let mut val = val;
+                if id == 4 {
+                    val += 0.5;
+                    println!("Num particles: {}", val);
+                }
                 set_num_particles(model, id, val);
             }
             OscCommand::EraseDrone { id } => {
@@ -1064,7 +1070,7 @@ fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
 
 impl Drop for Model {
     fn drop(&mut self) {
-        println!("App terminating, sending kill drone signals...");
+        println!("\n\nApp terminating, sending kill drone signals...");
         erase_drone(self, 1);
         erase_drone(self, 4);
         std::thread::sleep(std::time::Duration::from_secs(1));
