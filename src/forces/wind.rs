@@ -2,7 +2,7 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, particle::Particle};
+use crate::{forces::CellIdx, particle::Particle, view::Voice};
 use nannou::prelude::*;
 use std::{
     collections::HashMap,
@@ -349,6 +349,7 @@ impl WindField {
 #[derive(Clone)]
 pub struct WindCircle {
     pub id: usize,
+    pub parent_voice: Voice,
     cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
     params: Arc<RwLock<WindCircleParams>>, // Params of the circle
 }
@@ -363,6 +364,7 @@ pub struct WindCircle {
 impl WindCircle {
     pub fn new(
         id: usize,
+        parent_voice: Voice,
         center: Vec2,
         radius: f32,
         width: f32,
@@ -379,6 +381,7 @@ impl WindCircle {
         };
         Self {
             id,
+            parent_voice,
             cell_idxs: Vec::new(),
             params: Arc::new(RwLock::new(config)),
         }

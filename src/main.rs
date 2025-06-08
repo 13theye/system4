@@ -18,6 +18,7 @@ use system3::{
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
     terminals::{TerminalParams, TerminalSystem},
+    view::Voice,
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
@@ -57,6 +58,9 @@ struct Model {
     rendering: Nnpipe,
     dpi_scale: f32,
     font: Font,
+
+    // Simple ID counter
+    id_counter: usize,
 
     // Egui
     egui: Egui,
@@ -230,6 +234,7 @@ fn model(app: &App) -> Model {
         render_rect,
         dpi_scale,
         font,
+        id_counter: 0,
         audience_window_id,
         performer_window_id,
         control_window_id,
@@ -719,7 +724,7 @@ fn make_drone(
     gravity: i32,
     trail: i32,
 ) {
-    let player_id = id as usize;
+    let voice = Voice::from_i32(id);
     let center = match id {
         1 => pt2(-1280.0, 200.0),
         4 => pt2(1280.0, 200.0),
@@ -729,13 +734,21 @@ fn make_drone(
     let center_bias = (gravity as f32) / 100.0;
     let strength = ((force as f32) / 100.0) + 10.0;
 
-    let circle = WindCircle::new(player_id, center, radius, width, strength, center_bias);
+    let circle = WindCircle::new(
+        model.generate_id(),
+        voice,
+        center,
+        radius,
+        width,
+        strength,
+        center_bias,
+    );
 
     // Create the drone / circle
     let mask_rect =
         model
             .particle_system
-            .make_drone_with(player_id, circle, alpha, num_particles, trail);
+            .make_drone_with(voice, circle, alpha, num_particles, trail);
 
     let num_lines = TERMINAL_NUM_LINES;
     let line_margin = TERMINAL_LINE_MARGIN;
@@ -775,9 +788,9 @@ fn make_drone(
     let Some(terminal) =
         model
             .terminal_system
-            .add_new_terminal(player_id, terminal_params, model.dpi_scale)
+            .add_new_terminal(voice, terminal_params, model.dpi_scale)
     else {
-        println!("Failed to add terminal for player {}", player_id);
+        println!("Failed to add terminal for player {}", voice);
         return;
     };
 
@@ -804,4 +817,11 @@ fn set_force(model: &mut Model, id: i32, force: f32) {
 
 fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
     model.particle_system.set_num_particles(id, num_particles);
+}
+
+impl Model {
+    fn generate_id(&mut self) -> usize {
+        self.id_counter += 1;
+        self.id_counter
+    }
 }
