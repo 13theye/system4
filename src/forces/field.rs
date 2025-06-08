@@ -88,11 +88,17 @@ impl ForceFields {
         self.gravity_field.push(gravity);
     }
 
-    pub fn get_circle_params(&self) -> BTreeMap<usize, WindCircleParams> {
+    pub fn get_circle_params_all(&self) -> BTreeMap<usize, WindCircleParams> {
         self.wind_circles
             .iter()
             .map(|(id, circle)| (*id, circle.with_params_read(|params| params.clone())))
             .collect()
+    }
+
+    pub fn get_circle_params(&self, id: usize) -> Option<WindCircleParams> {
+        self.wind_circles
+            .get(&id)
+            .map(|circle| circle.with_params_read(|params| params.clone()))
     }
 
     /******************* OSC command compatibility methods ********************* */

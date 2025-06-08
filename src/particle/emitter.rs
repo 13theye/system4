@@ -13,6 +13,8 @@ pub struct Emitter {
     pub end: Vec2,
     pub direction: EmitDirection,
     pub max_spawn_rate: f32,
+    pub spawn_rate_factor: f32,
+    pub is_spawning: bool,
 }
 
 pub enum EmitDirection {
@@ -30,6 +32,7 @@ impl Emitter {
         end: Vec2,
         direction: EmitDirection,
         max_spawn_rate: f32,
+        spawn_rate_factor: f32,
     ) -> Self {
         Self {
             id,
@@ -38,21 +41,16 @@ impl Emitter {
             end,
             direction,
             max_spawn_rate,
+            spawn_rate_factor,
+            is_spawning: false,
         }
     }
 
     // Generate a Vec of particles based on the emitter's parameters
-    pub fn emit(
-        &self,
-        rate_factor: f32,
-        speed: f32,
-        size: f32,
-        color: Rgba,
-        rng: &mut ThreadRng,
-    ) -> Vec<Particle> {
+    pub fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle> {
         let mut particles = Vec::new();
 
-        let rate = (self.max_spawn_rate * rate_factor) as usize;
+        let rate = (self.max_spawn_rate * self.spawn_rate_factor) as usize;
 
         let velocity = match self.direction {
             EmitDirection::North => vec2(0.0, speed),

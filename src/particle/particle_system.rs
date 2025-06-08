@@ -3,8 +3,10 @@
 //
 // The Particle System of System 3
 
+use std::collections::HashMap;
+
 use nannou::prelude::*;
-use nannou::rand::{rngs::ThreadRng, Rng};
+use nannou::rand::rngs::ThreadRng;
 
 use crate::{
     forces::{ForceFields, WindCircle},
@@ -16,14 +18,13 @@ pub struct ParticleSystem {
     // Particles
     pub particles: Vec<Particle>,
     pub particle_limit: usize,
-    pub is_spawning: bool,
     pub spawn_rate: f32,
 
     // forces
     pub forces: ForceFields,
 
     // masks and emitters
-    pub masks: Vec<Mask>,
+    pub masks: HashMap<usize, Mask>,
     pub emitters: Vec<Emitter>,
 
     // Origin and bounds
@@ -34,10 +35,9 @@ pub struct ParticleSystem {
     default_particle_color: Rgb,
 
     // OSC params
-    pub alpha: f32,         // scale the alpha of the particles
-    pub num_particles: f32, // normalized proportion of particle_limit
-    pub shake: f32,         // scale the shake of the particles
-    pub trail: f32,         // scale the trail of the particles
+    pub alpha: f32,               // scale the alpha of the particles
+    pub particle_num_factor: f32, // normalized proportion of particle_limit
+    pub trail: f32,               // scale the trail of the particles
 
     // DPI scale
     dpi_scale: f32,
@@ -59,14 +59,13 @@ impl ParticleSystem {
         let grid_rows = (height / 30.0) as usize;
 
         // pre-populate the first mask
-        let masks = vec![(Mask::make_drone_1(1)), (Mask::full_screen(2))];
+        let masks = HashMap::new();
 
         Self {
             origin,
             particles: Vec::new(),
             particle_limit: particle_limit as usize,
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
-            is_spawning: false,
             spawn_rate: 20.0,
             masks,
             emitters: Vec::new(),
@@ -76,8 +75,7 @@ impl ParticleSystem {
             default_particle_color,
 
             alpha: 0.0,
-            num_particles: 1.0,
-            shake: 0.0,
+            particle_num_factor: 1.0,
             trail: 0.0,
 
             dpi_scale,
@@ -85,22 +83,28 @@ impl ParticleSystem {
     }
 
     /********************* Make drone ********************************** */
+
+    // Create a drone with a mask and emitters. Return the mask's rect
     pub fn make_drone_with(
         &mut self,
+        id: usize,
         circle: WindCircle,
-        alpha: f32,
-        num_particles: f32,
-        shake: f32,
-        trail: f32,
-    ) {
-        let Some(mask) = self.masks.iter().find(|mask| mask.player_id == circle.id) else {
-            println!("No mask found for player {}", circle.id);
-            return;
-        };
+        alpha: i32,
+        num_particles: i32,
+        trail: i32,
+    ) -> Rect {
+        if self.masks.contains_key(&id) {
+            self.masks.remove(&id);
+        }
+
+        let mask = Mask::make_drone(id);
 
         let emitter_left_origin = vec2(mask.rect.left() - 20.0, mask.origin.y);
         let emitter_right_origin = vec2(mask.rect.right() + 20.0, mask.origin.y);
 
+        let spawn_rate_factor = (num_particles as f32) / 100.0;
+
+        // Create particle emitters
         let emitter_left = Emitter::new(
             circle.id,
             emitter_left_origin,
@@ -108,6 +112,7 @@ impl ParticleSystem {
             mask.rect.bottom_left(),
             EmitDirection::East,
             self.spawn_rate,
+            spawn_rate_factor,
         );
 
         let emitter_right = Emitter::new(
@@ -117,25 +122,44 @@ impl ParticleSystem {
             mask.rect.bottom_right(),
             EmitDirection::West,
             self.spawn_rate,
+            spawn_rate_factor,
         );
 
+        // Add the emitters
         self.emitters.push(emitter_left);
         self.emitters.push(emitter_right);
 
-        self.alpha = alpha;
-        self.num_particles = num_particles;
-        self.shake = shake;
-        self.trail = trail;
-        self.is_spawning = true;
+        // Set the particle system params
+        self.alpha = (alpha as f32) / 100.0;
+        self.particle_num_factor = spawn_rate_factor;
+        //self.num_particles = 1.0;
+        self.trail = (trail as f32) / 100.0;
+
+        // Add the wind circle to the forces
         self.forces.add_wind_circle(circle);
+
+        // Add the mask
+        let mask_rect = mask.rect;
+        self.masks.insert(id, mask);
+
+        // Return the mask's rect
+        mask_rect
     }
 
     /********************* Update methods ********************************** */
 
     pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
-        if self.is_spawning {
-            self.spawn(rng);
+        // Cull excess particles
+        let limit = (self.particle_limit as f32 * self.particle_num_factor) as usize;
+        if self.particles.len() > limit {
+            println!("Particles: {}", self.particles.len());
+            println!("Max Particle limit: {}", self.particle_limit);
+            println!("Particle num factor: {}", self.particle_num_factor);
+            println!("Current particle limit: {}", limit);
+            self.cull_excess_particles(limit);
         }
+
+        self.handle_spawning(rng);
 
         self.forces.update(show_forces);
 
@@ -144,8 +168,7 @@ impl ParticleSystem {
             let particle = &mut self.particles[read_inx];
             self.forces.apply(particle);
             particle.update();
-
-            if particle.is_offscreen(self.bounds_rect) {
+            if particle.is_out_of_bounds(self.bounds_rect) {
                 particle.kill();
             }
             if !particle.is_dead() {
@@ -156,21 +179,19 @@ impl ParticleSystem {
             }
         }
         self.particles.truncate(write_inx);
-        if self.particles.len() > self.particle_limit {
-            self.cull_excess_particles();
-        }
     }
 
-    pub fn spawn(&mut self, rng: &mut ThreadRng) {
+    pub fn handle_spawning(&mut self, rng: &mut ThreadRng) {
         for emitter in self.emitters.iter() {
-            let particles = emitter.emit(
-                self.num_particles,
-                10.0,
-                self.default_particle_size,
-                rgba_from(self.default_particle_color, self.alpha),
-                rng,
-            );
-            self.particles.extend(particles);
+            if emitter.is_spawning {
+                let particles = emitter.emit(
+                    10.0,
+                    self.default_particle_size,
+                    rgba_from(self.default_particle_color, self.alpha),
+                    rng,
+                );
+                self.particles.extend(particles);
+            }
         }
     }
     /*
@@ -313,10 +334,10 @@ impl ParticleSystem {
     }
      */
 
-    fn cull_excess_particles(&mut self) {
+    fn cull_excess_particles(&mut self, limit: usize) {
         let num_particles = self.particles.len();
-        for i in 0..num_particles - self.particle_limit.clamp(0, num_particles) {
-            self.particles[i].set_age_per_tick(10.0);
+        for i in 0..(num_particles - limit).clamp(0, num_particles) {
+            self.particles[i].set_age_per_tick(100.0);
         }
     }
 
@@ -332,21 +353,39 @@ impl ParticleSystem {
     }
 
     pub fn set_circle_volume(&mut self, id: i32, alpha: f32) {
-        let radius = 100.0;
-        let width = 10.0;
-        self.forces.set_circle_dims(id as usize, radius, width);
+        let Some(params) = self.forces.get_circle_params(id as usize) else {
+            return;
+        };
+
+        let radius = params.radius;
+        let new_width = radius * alpha + 100.0;
+
+        self.forces.set_circle_dims(id as usize, radius, new_width);
     }
 
-    pub fn set_deviation(&mut self, id: usize, deviation: f32) {
-        self.forces.update_wind_circle_center_bias(id, deviation);
+    pub fn set_gravity(&mut self, id: usize, gravity: f32) {
+        self.forces.update_wind_circle_center_bias(id, gravity);
+    }
+
+    pub fn set_is_spawning(&mut self, id: usize, is_spawning: bool) {
+        self.emitters.iter_mut().for_each(|emitter| {
+            if emitter.id == id {
+                emitter.is_spawning = is_spawning;
+            }
+        });
     }
 
     pub fn set_strength(&mut self, id: usize, strength: f32) {
         self.forces.update_wind_circle_strength(id, strength);
     }
 
-    pub fn set_num_particles(&mut self, _id: i32, num_particles: f32) {
-        self.num_particles = num_particles;
+    pub fn set_num_particles(&mut self, id: i32, num_particles: f32) {
+        self.particle_num_factor = num_particles;
+        self.emitters.iter_mut().for_each(|emitter| {
+            if emitter.id == id as usize {
+                emitter.spawn_rate_factor = num_particles;
+            }
+        });
     }
 
     fn make_bounds_rect(&self) -> Rect {
@@ -360,14 +399,12 @@ impl ParticleSystem {
 
     /********************* Draw methods ********************************** */
 
+    // In this draw mode, particles are only drawn if they are within the bounds of the mask
+    // associated with the emitter that spawned them.
     pub fn draw(&self, draw: &Draw) {
         for particle in self.particles.iter() {
-            let Some(mask) = self
-                .masks
-                .iter()
-                .find(|mask| mask.player_id == particle.parent_id)
-            else {
-                return;
+            let Some(mask) = self.masks.get(&particle.parent_id) else {
+                continue;
             };
 
             if mask.contains(particle.position()) {

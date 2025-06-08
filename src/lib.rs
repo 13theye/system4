@@ -5,4 +5,5 @@ pub mod forces;
 pub mod fps;
 pub mod osc;
 pub mod particle;
+pub mod terminals;
 pub mod view;

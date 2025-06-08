@@ -14,7 +14,6 @@ pub enum OscCommand {
         val: f32,
     },
     ParticlesNumParticles {
-        // Note: change this to normalized in Max
         id: i32,
         val: f32,
     },
@@ -26,7 +25,7 @@ pub enum OscCommand {
         id: i32,
         val: f32,
     },
-    ParticlesShake {
+    ParticlesGravity {
         id: i32,
         val: f32,
     },
@@ -40,12 +39,11 @@ pub enum OscCommand {
     },
     MakeDrone {
         id: i32,
-        alpha: f32,
-        num_particles: f32,
-        force: f32,
-        deviation: f32,
-        shake: f32,
-        trail: f32,
+        alpha: i32,
+        num_particles: i32,
+        force: i32,
+        gravity: i32,
+        trail: i32,
     },
 
     TermBrightness {
@@ -99,9 +97,9 @@ impl OscSender {
     }
 
     // Callback message when drone initialization is done
-    pub fn send_drone_on_off(&self, player_id: i32, val: i32) {
+    pub fn send_drone_on_off(&self, player_id: usize, val: i32) {
         let addr = "/sys2/droneOnOff".to_string();
-        let args = vec![osc::Type::Int(player_id), osc::Type::Int(val)];
+        let args = vec![osc::Type::Int(player_id as i32), osc::Type::Int(val)];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
@@ -111,12 +109,11 @@ impl OscSender {
     pub fn send_make_drone(
         &self,
         player_id: i32,
-        alpha: f32,
-        num_particles: f32,
-        force: f32,
-        deviation: f32,
-        shake: f32,
-        trail: f32,
+        alpha: i32,
+        num_particles: i32,
+        force: i32,
+        gravity: i32,
+        trail: i32,
     ) {
         println!(
             "Sending makeDrone to {}:{}",
@@ -125,12 +122,11 @@ impl OscSender {
         let addr = "/sys2/makeDrone".to_string();
         let args = vec![
             osc::Type::Int(player_id),
-            osc::Type::Float(alpha),
-            osc::Type::Float(num_particles),
-            osc::Type::Float(force),
-            osc::Type::Float(deviation),
-            osc::Type::Float(shake),
-            osc::Type::Float(trail),
+            osc::Type::Int(alpha),
+            osc::Type::Int(num_particles),
+            osc::Type::Int(force),
+            osc::Type::Int(gravity),
+            osc::Type::Int(trail),
         ];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
@@ -171,28 +167,24 @@ impl OscController {
                         }
                     }
                     "/sys2/particles/force" => {
-                        if let [osc::Type::Int(id), osc::Type::Int(_int), osc::Type::Float(val)] =
-                            &message.args[..]
-                        {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
                                 .push(OscCommand::ParticlesForce { id: *id, val: *val });
                         }
                     }
                     "/sys2/particles/deviation" => {
-                        if let [osc::Type::Int(id), osc::Type::Int(_int), osc::Type::Float(val)] =
-                            &message.args[..]
-                        {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
                                 .push(OscCommand::ParticlesDeviation { id: *id, val: *val });
                         }
                     }
-                    "/sys2/particles/shake" => {
+                    "/sys2/particles/trail" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
-                                .push(OscCommand::ParticlesShake { id: *id, val: *val });
+                                .push(OscCommand::ParticlesGravity { id: *id, val: *val });
                         }
                     }
-                    "/sys2/particles/trail" => {
+                    "/sys2/particles/gravity" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
                                 .push(OscCommand::ParticlesTrail { id: *id, val: *val });
@@ -200,7 +192,7 @@ impl OscController {
                     }
                     /********************* Drone Commands *************************** */
                     "/sys2/makeDrone" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(alpha), osc::Type::Float(num_particles), osc::Type::Float(force), osc::Type::Float(deviation), osc::Type::Float(shake), osc::Type::Float(trail)] =
+                        if let [osc::Type::Int(id), osc::Type::Int(alpha), osc::Type::Int(num_particles), osc::Type::Int(force), osc::Type::Int(gravity), osc::Type::Int(trail)] =
                             &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MakeDrone {
@@ -208,8 +200,7 @@ impl OscController {
                                 alpha: *alpha,
                                 num_particles: *num_particles,
                                 force: *force,
-                                deviation: *deviation,
-                                shake: *shake,
+                                gravity: *gravity,
                                 trail: *trail,
                             });
                         }

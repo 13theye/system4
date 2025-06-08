@@ -90,7 +90,7 @@ impl Particle {
             .color(self.color);
     }
 
-    pub fn is_offscreen(&self, bounds_rect: Rect) -> bool {
+    pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {
         let buffer = 1000.0;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer

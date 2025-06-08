@@ -5,10 +5,11 @@
 //
 // src/main.rs
 
-use nannou::rand::rngs::ThreadRng;
-use nannou::{prelude::*, wgpu::TextureReshaper};
+use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::*;
+
+use std::fs;
 
 use system3::{
     config::*,
@@ -16,15 +17,21 @@ use system3::{
     fps::FpsManager,
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
+    terminals::{TerminalParams, TerminalSystem},
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
-const RED_DEFAULT_PARTICLE_COLOR: (f32, f32, f32) = (1.0, 0.28, 0.28);
-const DEFAULT_PARTICLE_COLOR: (f32, f32, f32) = (0.73, 0.73, 0.74);
+const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
+const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
+const TERMINAL_END_RGBA: (f32, f32, f32, f32) = (0.0, 0.3, 0.0, 1.0);
+const TERMINAL_NUM_LINES: usize = 8;
+const TERMINAL_LINE_MARGIN: f32 = 8.0;
 
 struct Model {
     particle_system: ParticleSystem,
     particle_limit: u32,
+
+    terminal_system: TerminalSystem,
 
     // OSC
     osc: OscController,
@@ -49,6 +56,7 @@ struct Model {
     // Rendering engine
     rendering: Nnpipe,
     dpi_scale: f32,
+    font: Font,
 
     // Egui
     egui: Egui,
@@ -99,9 +107,9 @@ fn model(app: &App) -> Model {
         render_size.y,
         DEFAULT_PARTICLE_SIZE,
         rgb(
-            DEFAULT_PARTICLE_COLOR.0,
-            DEFAULT_PARTICLE_COLOR.1,
-            DEFAULT_PARTICLE_COLOR.2,
+            DEFAULT_PARTICLE_RGB.0,
+            DEFAULT_PARTICLE_RGB.1,
+            DEFAULT_PARTICLE_RGB.2,
         ),
         particle_limit,
         dpi_scale,
@@ -190,6 +198,16 @@ fn model(app: &App) -> Model {
     // Set up rng
     let rng = ThreadRng::default();
 
+    // --- Load Font for Nannou Draw (Hangul) ---
+    // Assumes "assets/gulim.ttf" exists relative to the executable
+    // or relative to the project root if running with `cargo run`
+    let assets = app.assets_path().expect("Could not find assets directory");
+    let font_path = assets.join("terminal_font.ttf");
+    let font_bytes = fs::read(&font_path)
+        .unwrap_or_else(|_| panic!("Failed to read font file at {:?}", font_path));
+    let font = Font::from_bytes(font_bytes)
+        .unwrap_or_else(|_| panic!("Failed to load font at {:?}", font_path));
+
     // Create FPS manager
     let mut fps = FpsManager::new_with(true, false);
     let performer_rect = app.window(performer_window_id).unwrap().rect();
@@ -198,15 +216,20 @@ fn model(app: &App) -> Model {
         performer_rect.top() - 10.0,
     ));
 
+    // Create terminal system
+    let terminal_system = TerminalSystem::new();
+
     Model {
         particle_system,
         particle_limit,
+        terminal_system,
         osc,
         osc_send,
         osc_loop,
         render_size,
         render_rect,
         dpi_scale,
+        font,
         audience_window_id,
         performer_window_id,
         control_window_id,
@@ -244,13 +267,21 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let commands = model.osc.take_commands();
     process_osc(model, commands);
 
-    // Update particles
+    // Update particle system
     model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
     // Draw particles
     model.particle_system.draw(&model.draw);
+
+    // Update terminals
+    if let Some((id, finish_signal)) = model.terminal_system.update(&model.draw) {
+        if finish_signal {
+            model.osc_send.send_drone_on_off(id, 1);
+            model.particle_system.set_is_spawning(id, true);
+        }
+    }
 
     render_and_post(app, model);
 }
@@ -333,9 +364,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             model.show_bounds = !model.show_bounds;
         }
         Key::C => {
-            model
-                .osc_loop
-                .send_make_drone(1, 1.0, 1.0, 50.0, 0.0, 1.0, 1.0);
+            model.osc_loop.send_make_drone(1, 100, 20, 0, 0, 0);
             /*
             model
                 .particle_system
@@ -415,7 +444,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     ui.heading("Wind Circle Settings");
                     ui.add_space(5.0);
 
-                    let settings = model.particle_system.forces.get_circle_params();
+                    let settings = model.particle_system.forces.get_circle_params_all();
                     if settings.is_empty() {
                         ui.label("No wind circles found");
                         ui.label("C: Create wind circle");
@@ -451,7 +480,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         let current_params = model
                             .particle_system
                             .forces
-                            .get_circle_params()
+                            .get_circle_params_all()
                             .get(&selected_id)
                             .cloned();
 
@@ -475,7 +504,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Width slider
                             let mut width = params.width;
                             if ui
-                                .add(egui::Slider::new(&mut width, 0.0..=2000.0).text("Width"))
+                                .add(egui::Slider::new(&mut width, 0.0..=2000.0).text("Width (Br)"))
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -491,7 +520,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Strength slider
                             let mut strength = params.strength;
                             if ui
-                                .add(egui::Slider::new(&mut strength, 0.0..=30.0).text("Strength"))
+                                .add(egui::Slider::new(&mut strength, 0.0..=30.0).text("Force"))
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -507,10 +536,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center bias slider
                             let mut center_bias = params.center_bias;
                             if ui
-                                .add(
-                                    egui::Slider::new(&mut center_bias, 0.0..=2.0)
-                                        .text("Center Bias"),
-                                )
+                                .add(egui::Slider::new(&mut center_bias, 0.0..=2.0).text("Gravity"))
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -658,23 +684,13 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                 alpha,
                 num_particles,
                 force,
-                deviation,
-                shake,
+                gravity,
                 trail,
             } => {
-                make_drone(
-                    model,
-                    id,
-                    alpha,
-                    num_particles,
-                    force,
-                    deviation,
-                    shake,
-                    trail,
-                );
+                make_drone(model, id, alpha, num_particles, force, gravity, trail);
             }
-            OscCommand::ParticlesDeviation { id, val } => {
-                set_deviation(model, id, val);
+            OscCommand::ParticlesGravity { id, val } => {
+                set_gravity(model, id, val);
             }
             OscCommand::ParticlesNumParticles { id, val } => {
                 set_num_particles(model, id, val);
@@ -697,35 +713,88 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
 fn make_drone(
     model: &mut Model,
     id: i32,
-    alpha: f32,
-    num_particles: f32,
-    force: f32,
-    deviation: f32,
-    shake: f32,
-    trail: f32,
+    alpha: i32,
+    num_particles: i32,
+    force: i32,
+    gravity: i32,
+    trail: i32,
 ) {
+    let player_id = id as usize;
     let center = match id {
         1 => pt2(-1280.0, 200.0),
         4 => pt2(1280.0, 200.0),
         _ => pt2(0.0, 0.0),
     };
     let (radius, width) = (500.0, 700.0);
-    let center_bias = deviation;
-    let circle = WindCircle::new(id as usize, center, radius, width, force, center_bias);
+    let center_bias = (gravity as f32) / 100.0;
+    let strength = ((force as f32) / 100.0) + 10.0;
 
-    model
-        .particle_system
-        .make_drone_with(circle, alpha, num_particles, shake, trail);
+    let circle = WindCircle::new(player_id, center, radius, width, strength, center_bias);
 
-    model.osc_send.send_drone_on_off(id, 1);
+    // Create the drone / circle
+    let mask_rect =
+        model
+            .particle_system
+            .make_drone_with(player_id, circle, alpha, num_particles, trail);
+
+    let num_lines = TERMINAL_NUM_LINES;
+    let line_margin = TERMINAL_LINE_MARGIN;
+    let font_size = 40;
+    let terminal_height = (font_size as f32 + line_margin * 2.0) * num_lines as f32;
+
+    // Position terminal: mask bottom - half terminal height - 20pt padding
+    let terminal_origin = vec2(
+        mask_rect.x() as f32, // Center horizontally with mask
+        mask_rect.bottom() - terminal_height / 2.0 - 30.0, // Position below mask with padding
+    );
+    println!("terminal_origin: {:?}", terminal_origin);
+
+    // Create the terminal
+    let terminal_params = TerminalParams {
+        origin: terminal_origin,
+        num_lines,
+        line_width: mask_rect.w(),
+        line_margin,
+        start_color: rgba(
+            TERMINAL_START_RGBA.0,
+            TERMINAL_START_RGBA.1,
+            TERMINAL_START_RGBA.2,
+            TERMINAL_START_RGBA.3,
+        ),
+        end_color: rgba(
+            TERMINAL_END_RGBA.0,
+            TERMINAL_END_RGBA.1,
+            TERMINAL_END_RGBA.2,
+            TERMINAL_END_RGBA.3,
+        ),
+        color_fade_secs: 2.0,
+        chars_per_second: 0.6,
+        font: model.font.clone(),
+        font_size,
+    };
+    let Some(terminal) =
+        model
+            .terminal_system
+            .add_new_terminal(player_id, terminal_params, model.dpi_scale)
+    else {
+        println!("Failed to add terminal for player {}", player_id);
+        return;
+    };
+
+    // Normalizing and naming mess
+    let brightness = (alpha as f32) / 100.0;
+    let volume = (num_particles as f32) / 100.0;
+    let trail = (trail as f32) / 100.0;
+
+    terminal.begin_start_sequence(brightness, volume, strength, center_bias, trail);
 }
 
 fn set_alpha(model: &mut Model, id: i32, alpha: f32) {
     model.particle_system.set_circle_volume(id, alpha);
 }
 
-fn set_deviation(model: &mut Model, id: i32, deviation: f32) {
-    model.particle_system.set_deviation(id as usize, deviation);
+fn set_gravity(model: &mut Model, id: i32, gravity: f32) {
+    model.particle_system.set_gravity(id as usize, gravity);
 }
 
 fn set_force(model: &mut Model, id: i32, force: f32) {
@@ -734,7 +803,5 @@ fn set_force(model: &mut Model, id: i32, force: f32) {
 }
 
 fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
-    model
-        .particle_system
-        .set_num_particles(id, num_particles / 2000.0);
+    model.particle_system.set_num_particles(id, num_particles);
 }
