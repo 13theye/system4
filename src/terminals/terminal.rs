@@ -5,6 +5,8 @@
 use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
+use crate::view::Voice;
+
 #[derive(Clone)]
 pub struct Line {
     pub chars: Vec<char>,
@@ -82,7 +84,7 @@ pub struct Terminal {
     lines: HashMap<usize, Option<Line>>,
     line_positions: HashMap<usize, Vec2>,
 
-    pub player_id: usize,
+    pub voice: Voice,
     pub params: TerminalParams,
     pub rect: Rect,
 
@@ -113,7 +115,6 @@ fn generate_line_positions(params: &TerminalParams) -> (HashMap<usize, Vec2>, f3
 
     // Start from the top of the terminal and go down
     let top_y = params.origin.y + total_height / 2.0;
-    let left_x = params.origin.x - params.line_width / 2.0;
 
     for i in 0..params.num_lines {
         line_positions.insert(
@@ -129,7 +130,7 @@ fn generate_line_positions(params: &TerminalParams) -> (HashMap<usize, Vec2>, f3
 }
 
 impl Terminal {
-    pub fn new_with_params(player_id: usize, params: TerminalParams, dpi_scale: f32) -> Self {
+    pub fn new_with_params(voice: Voice, params: TerminalParams, dpi_scale: f32) -> Self {
         let (line_positions, total_height) = generate_line_positions(&params);
 
         let rect = Rect::from_x_y_w_h(
@@ -143,7 +144,7 @@ impl Terminal {
             lines: HashMap::new(),
             line_positions,
 
-            player_id,
+            voice,
             rect,
             params,
 

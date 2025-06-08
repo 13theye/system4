@@ -18,6 +18,7 @@ use system3::{
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
     terminals::{TerminalParams, TerminalSystem},
+    utils::IdGenerator,
     view::Voice,
 };
 
@@ -60,7 +61,7 @@ struct Model {
     font: Font,
 
     // Simple ID counter
-    id_counter: usize,
+    id_generator: IdGenerator,
 
     // Egui
     egui: Egui,
@@ -234,7 +235,7 @@ fn model(app: &App) -> Model {
         render_rect,
         dpi_scale,
         font,
-        id_counter: 0,
+        id_generator: IdGenerator::new(),
         audience_window_id,
         performer_window_id,
         control_window_id,
@@ -281,10 +282,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.particle_system.draw(&model.draw);
 
     // Update terminals
-    if let Some((id, finish_signal)) = model.terminal_system.update(&model.draw) {
+    if let Some((voice, finish_signal)) = model.terminal_system.update(&model.draw) {
         if finish_signal {
+            let id = voice.to_i32();
             model.osc_send.send_drone_on_off(id, 1);
-            model.particle_system.set_is_spawning(id, true);
+            model.particle_system.set_is_spawning(voice, true);
         }
     }
 
@@ -725,9 +727,9 @@ fn make_drone(
     trail: i32,
 ) {
     let voice = Voice::from_i32(id);
-    let center = match id {
-        1 => pt2(-1280.0, 200.0),
-        4 => pt2(1280.0, 200.0),
+    let center = match voice {
+        Voice::Voice1 => pt2(-1280.0, 200.0),
+        Voice::Voice4 => pt2(1280.0, 200.0),
         _ => pt2(0.0, 0.0),
     };
     let (radius, width) = (500.0, 700.0);
@@ -735,7 +737,7 @@ fn make_drone(
     let strength = ((force as f32) / 100.0) + 10.0;
 
     let circle = WindCircle::new(
-        model.generate_id(),
+        model.id_generator.generate(),
         voice,
         center,
         radius,
@@ -745,10 +747,14 @@ fn make_drone(
     );
 
     // Create the drone / circle
-    let mask_rect =
-        model
-            .particle_system
-            .make_drone_with(voice, circle, alpha, num_particles, trail);
+    let mask_rect = model.particle_system.make_drone_with(
+        &mut model.id_generator,
+        voice,
+        circle,
+        alpha,
+        num_particles,
+        trail,
+    );
 
     let num_lines = TERMINAL_NUM_LINES;
     let line_margin = TERMINAL_LINE_MARGIN;
@@ -803,25 +809,24 @@ fn make_drone(
 }
 
 fn set_alpha(model: &mut Model, id: i32, alpha: f32) {
-    model.particle_system.set_circle_volume(id, alpha);
+    let voice = Voice::from_i32(id);
+    model.particle_system.set_circle_volume(voice, alpha);
 }
 
 fn set_gravity(model: &mut Model, id: i32, gravity: f32) {
-    model.particle_system.set_gravity(id as usize, gravity);
+    let voice = Voice::from_i32(id);
+    model.particle_system.set_gravity(voice, gravity);
 }
 
 fn set_force(model: &mut Model, id: i32, force: f32) {
+    let voice = Voice::from_i32(id);
     let strength = force * 30.0; // 30 is the max strength of the wind circle
-    model.particle_system.set_strength(id as usize, strength);
+    model.particle_system.set_strength(voice, strength);
 }
 
 fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
-    model.particle_system.set_num_particles(id, num_particles);
-}
-
-impl Model {
-    fn generate_id(&mut self) -> usize {
-        self.id_counter += 1;
-        self.id_counter
-    }
+    let voice = Voice::from_i32(id);
+    model
+        .particle_system
+        .set_num_particles(voice, num_particles);
 }

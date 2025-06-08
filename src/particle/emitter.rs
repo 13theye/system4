@@ -2,12 +2,13 @@
 //
 // The thing that spits out particles
 
-use crate::particle::Particle;
+use crate::{particle::Particle, view::Voice};
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
 pub struct Emitter {
-    pub id: usize, // player number that this Emitter belongs to
+    pub id: usize,           // unique id for this emitter
+    pub parent_voice: Voice, // voice that this emitter belongs to
     pub origin: Vec2,
     pub start: Vec2,
     pub end: Vec2,
@@ -24,9 +25,11 @@ pub enum EmitDirection {
     West,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Emitter {
     pub fn new(
         id: usize,
+        parent_voice: Voice,
         origin: Vec2,
         start: Vec2,
         end: Vec2,
@@ -36,6 +39,7 @@ impl Emitter {
     ) -> Self {
         Self {
             id,
+            parent_voice,
             origin,
             start,
             end,
@@ -73,6 +77,7 @@ impl Emitter {
 
             particles.push(Particle::new_with_motion(
                 self.id,
+                self.parent_voice,
                 position,
                 size,
                 color,

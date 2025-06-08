@@ -11,6 +11,7 @@ use crate::{
         Gravity,
     },
     particle::Particle,
+    view::Voice,
 };
 
 pub struct ForceFields {
@@ -101,25 +102,71 @@ impl ForceFields {
             .map(|circle| circle.with_params_read(|params| params.clone()))
     }
 
+    pub fn get_circle_ids_by_voice(&self, voice: Voice) -> Vec<usize> {
+        self.wind_circles
+            .iter()
+            .filter(|(_, circle)| circle.parent_voice == voice)
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
     /******************* OSC command compatibility methods ********************* */
 
-    pub fn update_wind_circle_center_bias(&mut self, id: usize, bias: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
+    pub fn set_circle_center_bias_by_voice(&mut self, voice: Voice, bias: f32) {
+        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
+
+        if circle_ids.is_empty() {
+            println!("Wind circles not found for {}", voice);
+            return;
+        }
+
+        for id in circle_ids {
+            let Some(circle) = self.wind_circles.get_mut(&id) else {
+                return;
+            };
+
             circle.with_params_write(|p| {
                 p.center_bias(bias);
             });
-        } else {
-            println!("Wind circle {} not found", id);
         }
     }
 
-    pub fn update_wind_circle_strength(&mut self, id: usize, strength: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
+    pub fn set_circle_volume_by_voice(&mut self, voice: Voice, alpha: f32) {
+        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
+
+        if circle_ids.is_empty() {
+            println!("Wind circles not found for {}", voice);
+            return;
+        }
+
+        for id in circle_ids {
+            let Some(params) = self.get_circle_params(id) else {
+                return;
+            };
+
+            let radius = params.radius;
+            let new_width = radius * alpha + 200.0;
+
+            self.set_circle_dims(id, radius, new_width);
+        }
+    }
+
+    pub fn set_circle_strength_by_voice(&mut self, voice: Voice, strength: f32) {
+        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
+
+        if circle_ids.is_empty() {
+            println!("Wind circles not found for {}", voice);
+            return;
+        }
+
+        for id in circle_ids {
+            let Some(circle) = self.wind_circles.get_mut(&id) else {
+                return;
+            };
+
             circle.with_params_write(|p| {
                 p.strength(strength);
             });
-        } else {
-            println!("Wind circle {} not found", id);
         }
     }
 

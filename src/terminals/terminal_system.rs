@@ -5,11 +5,14 @@
 use nannou::prelude::*;
 use std::collections::HashMap;
 
-use crate::terminals::{Terminal, TerminalParams};
+use crate::{
+    terminals::{Terminal, TerminalParams},
+    view::Voice,
+};
 
 #[derive(Default)]
 pub struct TerminalSystem {
-    pub terminals: HashMap<usize, Terminal>,
+    pub terminals: HashMap<Voice, Terminal>,
 }
 
 impl TerminalSystem {
@@ -21,27 +24,27 @@ impl TerminalSystem {
 
     pub fn add_new_terminal(
         &mut self,
-        id: usize,
+        voice: Voice,
         params: TerminalParams,
         dpi_scale: f32,
     ) -> Option<&mut Terminal> {
-        let terminal = Terminal::new_with_params(id, params, dpi_scale);
-        self.terminals.insert(id, terminal);
-        self.terminals.get_mut(&id)
+        let terminal = Terminal::new_with_params(voice, params, dpi_scale);
+        self.terminals.insert(voice, terminal);
+        self.terminals.get_mut(&voice)
     }
 
-    pub fn update(&mut self, draw: &Draw) -> Option<(usize, bool)> {
-        for (id, terminal) in self.terminals.iter_mut() {
+    pub fn update(&mut self, draw: &Draw) -> Option<(Voice, bool)> {
+        for (voice, terminal) in self.terminals.iter_mut() {
             if let Some(finish_signal) = terminal.update(draw) {
-                return Some((*id, finish_signal));
+                return Some((*voice, finish_signal));
             }
         }
         None
     }
 
-    pub fn add_text_line(&mut self, id: usize, text: String, does_fade: bool) {
+    pub fn add_text_line(&mut self, voice: Voice, text: String, does_fade: bool) {
         self.terminals
-            .get_mut(&id)
+            .get_mut(&voice)
             .unwrap()
             .add_text_to_line(1, text, does_fade);
     }

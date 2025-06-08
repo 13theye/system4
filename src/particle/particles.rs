@@ -2,13 +2,15 @@
 //
 // Particle struct for the Particle System
 
+use crate::view::Voice;
 use nannou::prelude::*;
 
 const PARTICLE_MASS: f32 = 11.0;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct Particle {
-    pub parent_id: usize, // the emitter that spawned this particle
+    pub parent_emitter: usize, // the emitter that spawned this particle
+    pub parent_voice: Voice,   // the voice that this particle belongs to
     position: Point2,
     pub velocity: Vec2,
     pub acceleration: Vec2,
@@ -22,9 +24,16 @@ pub struct Particle {
 }
 
 impl Particle {
-    pub fn new(parent_id: usize, position: Point2, size: f32, color: Rgba) -> Self {
+    pub fn new(
+        parent_id: usize,
+        parent_voice: Voice,
+        position: Point2,
+        size: f32,
+        color: Rgba,
+    ) -> Self {
         Self {
-            parent_id,
+            parent_emitter: parent_id,
+            parent_voice,
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
@@ -39,6 +48,7 @@ impl Particle {
 
     pub fn new_with_motion(
         parent_id: usize,
+        parent_voice: Voice,
         position: Point2,
         size: f32,
         color: Rgba,
@@ -46,7 +56,8 @@ impl Particle {
         velocity: Vec2,
     ) -> Self {
         Self {
-            parent_id,
+            parent_emitter: parent_id,
+            parent_voice,
             acceleration,
             velocity,
             position,

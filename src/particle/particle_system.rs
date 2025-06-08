@@ -11,7 +11,8 @@ use nannou::rand::rngs::ThreadRng;
 use crate::{
     forces::{ForceFields, WindCircle},
     particle::{EmitDirection, Emitter, Particle},
-    view::Mask,
+    utils::IdGenerator,
+    view::{Mask, Voice},
 };
 
 pub struct ParticleSystem {
@@ -24,7 +25,7 @@ pub struct ParticleSystem {
     pub forces: ForceFields,
 
     // masks and emitters
-    pub masks: HashMap<usize, Mask>,
+    pub masks: HashMap<Voice, Mask>,
     pub emitters: Vec<Emitter>,
 
     // Origin and bounds
@@ -87,17 +88,18 @@ impl ParticleSystem {
     // Create a drone with a mask and emitters. Return the mask's rect
     pub fn make_drone_with(
         &mut self,
-        id: usize,
+        id_generator: &mut IdGenerator,
+        voice: Voice,
         circle: WindCircle,
         alpha: i32,
         num_particles: i32,
         trail: i32,
     ) -> Rect {
-        if self.masks.contains_key(&id) {
-            self.masks.remove(&id);
+        if self.masks.contains_key(&voice) {
+            self.masks.remove(&voice);
         }
 
-        let mask = Mask::make_drone(id);
+        let mask = Mask::make_drone(voice);
 
         let emitter_left_origin = vec2(mask.rect.left() - 20.0, mask.origin.y);
         let emitter_right_origin = vec2(mask.rect.right() + 20.0, mask.origin.y);
@@ -106,7 +108,8 @@ impl ParticleSystem {
 
         // Create particle emitters
         let emitter_left = Emitter::new(
-            circle.id,
+            id_generator.generate(),
+            voice,
             emitter_left_origin,
             mask.rect.top_left(),
             mask.rect.bottom_left(),
@@ -116,7 +119,8 @@ impl ParticleSystem {
         );
 
         let emitter_right = Emitter::new(
-            circle.id,
+            id_generator.generate(),
+            voice,
             emitter_right_origin,
             mask.rect.top_right(),
             mask.rect.bottom_right(),
@@ -140,7 +144,7 @@ impl ParticleSystem {
 
         // Add the mask
         let mask_rect = mask.rect;
-        self.masks.insert(id, mask);
+        self.masks.insert(voice, mask);
 
         // Return the mask's rect
         mask_rect
@@ -194,145 +198,8 @@ impl ParticleSystem {
             }
         }
     }
-    /*
-    pub fn spawn_old(&mut self, rng: &mut ThreadRng) {
-        let rect = self.bounds_rect;
-        let spawn_speed = self.spawn_rate;
-
-        let spawn_rate_sides = (20.0 * self.num_particles) as usize;
-
-        // Spawn particles from the left
-        for _ in 0..spawn_rate_sides {
-            let y = rng.gen_range(-1080.0..1080.0);
-            /*
-            if y > -50.0 && y < 50.0 {
-                continue;
-            }
-             */
-            let position: Vec2 = if y > 0.0 {
-                vec2(rect.left() - 10.0, y)
-            } else {
-                vec2(rect.right() + 10.0, y)
-            };
-            let velocity = if y > 0.0 {
-                vec2(spawn_speed, 0.0)
-            } else {
-                vec2(-spawn_speed, 0.0)
-            };
-
-            self.add_particle_with_velocity(position, velocity);
-        }
-
-        // Spawn particles from the right
-        for _ in 0..spawn_rate_sides {
-            let y = rng.gen_range(-1080.0..1080.0);
-            /*
-            if y > -50.0 && y < 50.0 {
-                continue;
-            }
-            */
-            let position: Vec2 = if y > 0.0 {
-                vec2(rect.right() + 10.0, y)
-            } else {
-                vec2(rect.left() - 10.0, y)
-            };
-            let velocity = if y > 0.0 {
-                vec2(-spawn_speed, 0.0)
-            } else {
-                vec2(spawn_speed, 0.0)
-            };
-
-            self.add_particle_with_velocity(position, velocity);
-        }
-
-        /*
-        // Spawn particles from the top
-        for _ in 0..35 {
-            let x = rng.gen_range(-1920.0..1920.0);
-            /*
-            if x > -50.0 && x < 50.0 {
-                continue;
-            }
-             */
-            let position: Vec2 = if x > 0.0 {
-                vec2(x, rect.top() + 10.0)
-            } else {
-                vec2(x, rect.bottom() - 10.0)
-            };
-            let velocity = if x > 0.0 {
-                vec2(0.0, -spawn_speed)
-            } else {
-                vec2(0.0, spawn_speed)
-            };
-
-            self.add_particle_with_velocity(position, velocity);
-        }
-
-
-        // Spawn particles from the bottom
-        for _ in 0..35 {
-            let x = rng.gen_range(-1920.0..1920.0);
-            /*
-            if x > -50.0 && x < 50.0 {
-                continue;
-            }
-            */
-            let position: Vec2 = if x > 0.0 {
-                vec2(x, rect.bottom() - 10.0)
-            } else {
-                vec2(x, rect.top() + 10.0)
-            };
-            let velocity = if x > 0.0 {
-                vec2(0.0, spawn_speed)
-            } else {
-                vec2(0.0, -spawn_speed)
-            };
-
-            self.add_particle_with_velocity(position, velocity);
-        }
-        */
-    }
-     */
 
     /********************* Particle methods ********************************** */
-    /*
-    pub fn add_particle(&mut self, position: Vec2) {
-        self.particles.push(Particle::new(
-            position,
-            self.default_particle_size,
-            rgba_from(self.default_particle_color, self.alpha),
-        ));
-    }
-
-    pub fn add_particle_with_velocity(&mut self, position: Vec2, velocity: Vec2) {
-        let acceleration = vec2(0.0, 0.0);
-
-        self.particles.push(Particle::new_with_motion(
-            position,
-            self.default_particle_size,
-            rgba_from(self.default_particle_color, self.alpha),
-            acceleration,
-            velocity,
-        ));
-    }
-
-    pub fn add_particle_with_random_motion(&mut self, rng: &mut ThreadRng) {
-        let lo = -2.0;
-        let hi = 2.0;
-        let acceleration = vec2(rng.gen_range(lo..hi), rng.gen_range(lo..hi));
-        let velocity = vec2(rng.gen_range(lo..hi), rng.gen_range(lo..hi));
-        self.particles.push(Particle::new_with_motion(
-            vec2(
-                rng.gen_range(self.bounds_rect.left()..self.bounds_rect.right()),
-                rng.gen_range(self.bounds_rect.bottom()..self.bounds_rect.top()),
-            ),
-            self.default_particle_size,
-            rgba_from(self.default_particle_color, self.alpha),
-            acceleration,
-            velocity,
-        ));
-    }
-     */
 
     fn cull_excess_particles(&mut self, limit: usize) {
         let num_particles = self.particles.len();
@@ -352,37 +219,30 @@ impl ParticleSystem {
         self.alpha = alpha;
     }
 
-    pub fn set_circle_volume(&mut self, id: i32, alpha: f32) {
-        let Some(params) = self.forces.get_circle_params(id as usize) else {
-            return;
-        };
-
-        let radius = params.radius;
-        let new_width = radius * alpha + 100.0;
-
-        self.forces.set_circle_dims(id as usize, radius, new_width);
+    pub fn set_circle_volume(&mut self, voice: Voice, alpha: f32) {
+        self.forces.set_circle_volume_by_voice(voice, alpha);
     }
 
-    pub fn set_gravity(&mut self, id: usize, gravity: f32) {
-        self.forces.update_wind_circle_center_bias(id, gravity);
+    pub fn set_gravity(&mut self, voice: Voice, gravity: f32) {
+        self.forces.set_circle_center_bias_by_voice(voice, gravity);
     }
 
-    pub fn set_is_spawning(&mut self, id: usize, is_spawning: bool) {
+    pub fn set_is_spawning(&mut self, voice: Voice, is_spawning: bool) {
         self.emitters.iter_mut().for_each(|emitter| {
-            if emitter.id == id {
+            if emitter.parent_voice == voice {
                 emitter.is_spawning = is_spawning;
             }
         });
     }
 
-    pub fn set_strength(&mut self, id: usize, strength: f32) {
-        self.forces.update_wind_circle_strength(id, strength);
+    pub fn set_strength(&mut self, voice: Voice, strength: f32) {
+        self.forces.set_circle_strength_by_voice(voice, strength);
     }
 
-    pub fn set_num_particles(&mut self, id: i32, num_particles: f32) {
+    pub fn set_num_particles(&mut self, voice: Voice, num_particles: f32) {
         self.particle_num_factor = num_particles;
         self.emitters.iter_mut().for_each(|emitter| {
-            if emitter.id == id as usize {
+            if emitter.parent_voice == voice {
                 emitter.spawn_rate_factor = num_particles;
             }
         });
@@ -403,7 +263,7 @@ impl ParticleSystem {
     // associated with the emitter that spawned them.
     pub fn draw(&self, draw: &Draw) {
         for particle in self.particles.iter() {
-            let Some(mask) = self.masks.get(&particle.parent_id) else {
+            let Some(mask) = self.masks.get(&particle.parent_voice) else {
                 continue;
             };
 
