@@ -96,7 +96,15 @@ impl ForceFields {
             .collect()
     }
 
-    pub fn get_circle_params(&self, id: usize) -> Option<WindCircleParams> {
+    pub fn get_circle_params_by_voice(&self, voice: Voice) -> BTreeMap<usize, WindCircleParams> {
+        self.wind_circles
+            .iter()
+            .filter(|(_, circle)| circle.parent_voice == voice)
+            .map(|(id, circle)| (*id, circle.with_params_read(|params| params.clone())))
+            .collect()
+    }
+
+    pub fn get_circle_params_by_id(&self, id: usize) -> Option<WindCircleParams> {
         self.wind_circles
             .get(&id)
             .map(|circle| circle.with_params_read(|params| params.clone()))
@@ -158,7 +166,7 @@ impl ForceFields {
         }
 
         for id in circle_ids {
-            let Some(params) = self.get_circle_params(id) else {
+            let Some(params) = self.get_circle_params_by_id(id) else {
                 return;
             };
 

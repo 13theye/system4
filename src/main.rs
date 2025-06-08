@@ -9,7 +9,7 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshape
 use nannou_egui::Egui;
 use nnpipe::*;
 
-use std::fs;
+use std::{collections::HashMap, fs};
 
 use system3::{
     config::*,
@@ -73,7 +73,7 @@ struct Model {
     fps: FpsManager,
 
     // UI state
-    selected_circle_id: Option<usize>,
+    selected_circle_id: HashMap<Voice, Option<usize>>,
 
     // Debug stuff
     show_bounds: bool,
@@ -249,7 +249,12 @@ fn model(app: &App) -> Model {
         egui,
         rng,
         fps,
-        selected_circle_id: None,
+        selected_circle_id: HashMap::from([
+            (Voice::Voice1, None),
+            (Voice::Voice2, None),
+            (Voice::Voice3, None),
+            (Voice::Voice4, None),
+        ]),
         show_bounds: false,
         show_forces: false,
     }
@@ -422,7 +427,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
             ui.horizontal(|ui| {
                 // Vertical 1: Instructions and status info
                 ui.vertical(|ui| {
-                    ui.set_min_size(egui::vec2(200.0, height));
+                    ui.set_min_size(egui::vec2(150.0, height));
                     // Status info
                     ui.label(format!(
                         "Particles: {}",
@@ -437,50 +442,78 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     ui.add_space(30.0);
 
                     // Instructions section
-                    ui.label("Space: add particles");
-                    ui.label("P: Toggle debug mode");
+                    ui.label("...");
+                    ui.label("P: Debug view");
                 });
 
                 // Wind Circle Settings - use horizontal layout for two vertical sections
 
-                // Vertical 2: Heading and dropdown
+                // Voice 1 (col 2)
                 ui.vertical(|ui| {
-                    ui.set_min_width(150.0);
-                    ui.heading("Wind Circle Settings");
+                    ui.set_min_width(350.0);
+                    ui.heading("Voice 1: Drone");
                     ui.add_space(5.0);
 
-                    let settings = model.particle_system.forces.get_circle_params_all();
+                    let settings = model
+                        .particle_system
+                        .forces
+                        .get_circle_params_by_voice(Voice::Voice1);
                     if settings.is_empty() {
                         ui.label("No wind circles found");
                         ui.label("C: Create wind circle");
                     } else {
                         // Handle circle selection - set default if none selected
-                        if model.selected_circle_id.is_none()
-                            || !settings.contains_key(&model.selected_circle_id.unwrap())
+                        let current_selection = model
+                            .selected_circle_id
+                            .get(&Voice::Voice1)
+                            .copied()
+                            .flatten();
+                        if current_selection.is_none()
+                            || !settings.contains_key(&current_selection.unwrap())
                         {
-                            model.selected_circle_id = settings.keys().next().copied();
+                            let new_selection = settings.keys().next().copied();
+                            model
+                                .selected_circle_id
+                                .insert(Voice::Voice1, new_selection);
                         }
 
-                        if let Some(selected_id) = model.selected_circle_id {
+                        if let Some(selected_id) = model
+                            .selected_circle_id
+                            .get(&Voice::Voice1)
+                            .copied()
+                            .flatten()
+                        {
                             // Dropdown to select circle
                             egui::ComboBox::from_label("Select Circle")
                                 .selected_text(format!("Circle {}", selected_id))
                                 .show_ui(ui, |ui| {
                                     for (id, _) in settings.iter() {
+                                        let mut current_voice_selection = model
+                                            .selected_circle_id
+                                            .get(&Voice::Voice1)
+                                            .copied()
+                                            .flatten();
                                         ui.selectable_value(
-                                            &mut model.selected_circle_id,
+                                            &mut current_voice_selection,
                                             Some(*id),
                                             format!("Circle {}", id),
                                         );
+                                        model
+                                            .selected_circle_id
+                                            .insert(Voice::Voice1, current_voice_selection);
                                     }
                                 });
                         }
                     }
 
-                    ui.set_min_width(300.0);
                     ui.add_space(10.0);
 
-                    if let Some(selected_id) = model.selected_circle_id {
+                    if let Some(selected_id) = model
+                        .selected_circle_id
+                        .get(&Voice::Voice1)
+                        .copied()
+                        .flatten()
+                    {
                         // Get current parameter values by cloning them
                         let current_params = model
                             .particle_system
@@ -560,10 +593,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center X slider
                             let mut center_x = params.center.x;
                             if ui
-                                .add(
-                                    egui::Slider::new(&mut center_x, -2000.0..=2000.0)
-                                        .text("Center X"),
-                                )
+                                .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("X"))
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -581,10 +611,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center Y slider
                             let mut center_y = params.center.y;
                             if ui
-                                .add(
-                                    egui::Slider::new(&mut center_y, -1100.0..=1100.0)
-                                        .text("Center Y"),
-                                )
+                                .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Y"))
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -604,7 +631,206 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     } else {
                         ui.label("No circle selected");
                     }
-                });
+                }); // end Voice 1
+
+                // Voice 2 (col 3)
+                ui.vertical(|ui| {
+                    ui.set_min_width(300.0);
+                    ui.heading("Voice 2: Rhythm");
+                    ui.add_space(5.0);
+                }); // end Voice 2
+
+                // Voice 3
+                ui.vertical(|ui| {
+                    ui.set_min_width(300.0);
+                    ui.heading("Voice 3: Rhythm");
+                    ui.add_space(5.0);
+                }); // end Voice 3
+
+                // Vertical 5: Heading and dropdown
+                ui.vertical(|ui| {
+                    ui.set_min_width(300.0);
+                    ui.heading("Voice 4: Drone");
+                    ui.add_space(5.0);
+
+                    let settings = model
+                        .particle_system
+                        .forces
+                        .get_circle_params_by_voice(Voice::Voice4);
+                    if settings.is_empty() {
+                        ui.label("No wind circles found");
+                        ui.label("C: Create wind circle");
+                    } else {
+                        // Handle circle selection - set default if none selected
+                        let current_selection = model
+                            .selected_circle_id
+                            .get(&Voice::Voice4)
+                            .copied()
+                            .flatten();
+                        if current_selection.is_none()
+                            || !settings.contains_key(&current_selection.unwrap())
+                        {
+                            let new_selection = settings.keys().next().copied();
+                            model
+                                .selected_circle_id
+                                .insert(Voice::Voice4, new_selection);
+                        }
+
+                        if let Some(selected_id) = model
+                            .selected_circle_id
+                            .get(&Voice::Voice4)
+                            .copied()
+                            .flatten()
+                        {
+                            // Dropdown to select circle
+                            egui::ComboBox::from_label("Select Circle")
+                                .selected_text(format!("Circle {}", selected_id))
+                                .show_ui(ui, |ui| {
+                                    for (id, _) in settings.iter() {
+                                        let mut current_voice_selection = model
+                                            .selected_circle_id
+                                            .get(&Voice::Voice4)
+                                            .copied()
+                                            .flatten();
+                                        ui.selectable_value(
+                                            &mut current_voice_selection,
+                                            Some(*id),
+                                            format!("Circle {}", id),
+                                        );
+                                        model
+                                            .selected_circle_id
+                                            .insert(Voice::Voice4, current_voice_selection);
+                                    }
+                                });
+                        }
+                    }
+
+                    ui.add_space(10.0);
+
+                    if let Some(selected_id) = model
+                        .selected_circle_id
+                        .get(&Voice::Voice4)
+                        .copied()
+                        .flatten()
+                    {
+                        // Get current parameter values by cloning them
+                        let current_params = model
+                            .particle_system
+                            .forces
+                            .get_circle_params_all()
+                            .get(&selected_id)
+                            .cloned();
+
+                        if let Some(params) = current_params {
+                            // Radius slider
+                            let mut radius = params.radius;
+                            if ui
+                                .add(egui::Slider::new(&mut radius, 0.0..=1100.0).text("Radius"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.radius(radius));
+                                }
+                            }
+
+                            // Width slider
+                            let mut width = params.width;
+                            if ui
+                                .add(egui::Slider::new(&mut width, 0.0..=2000.0).text("Width (Br)"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.width(width));
+                                }
+                            }
+
+                            // Strength slider
+                            let mut strength = params.strength;
+                            if ui
+                                .add(egui::Slider::new(&mut strength, 0.0..=30.0).text("Force"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.strength(strength));
+                                }
+                            }
+
+                            // Center bias slider
+                            let mut center_bias = params.center_bias;
+                            if ui
+                                .add(egui::Slider::new(&mut center_bias, 0.0..=2.0).text("Gravity"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| p.center_bias(center_bias));
+                                }
+                            }
+
+                            ui.add_space(5.0);
+                            ui.label("Center Position:");
+
+                            // Center X slider
+                            let mut center_x = params.center.x;
+                            if ui
+                                .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("X"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| {
+                                        p.center(vec2(center_x, p.center.y))
+                                    });
+                                }
+                            }
+
+                            // Center Y slider
+                            let mut center_y = params.center.y;
+                            if ui
+                                .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Y"))
+                                .changed()
+                            {
+                                if let Some(circle) = model
+                                    .particle_system
+                                    .forces
+                                    .wind_circles
+                                    .get_mut(&selected_id)
+                                {
+                                    circle.with_params_write(|p| {
+                                        p.center(vec2(p.center.x, center_y))
+                                    });
+                                }
+                            }
+                        } else {
+                            ui.label("No parameters available");
+                        }
+                    } else {
+                        ui.label("No circle selected");
+                    }
+                }); // end Voice 4
             });
         });
 
@@ -834,4 +1060,13 @@ fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
     model
         .particle_system
         .set_num_particles(voice, num_particles);
+}
+
+impl Drop for Model {
+    fn drop(&mut self) {
+        println!("App terminating, sending kill drone signals...");
+        erase_drone(self, 1);
+        erase_drone(self, 4);
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 }

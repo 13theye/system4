@@ -216,7 +216,6 @@ impl ParticleSystem {
     }
 
     pub fn kill_voice(&mut self, voice: Voice) {
-        self.masks.remove(&voice);
         self.emitters
             .retain(|emitter| emitter.parent_voice != voice);
         self.forces.remove_wind_by_voice(voice);
