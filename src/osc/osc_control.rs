@@ -132,6 +132,14 @@ impl OscSender {
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
     }
+
+    pub fn send_erase_drone(&self, player_id: i32) {
+        let addr = "/sys2/eraseDrone".to_string();
+        let args = vec![osc::Type::Int(player_id)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
 }
 
 pub struct OscController {

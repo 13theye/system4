@@ -112,6 +112,24 @@ impl ForceFields {
 
     /******************* OSC command compatibility methods ********************* */
 
+    pub fn remove_wind_by_voice(&mut self, voice: Voice) {
+        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
+
+        if circle_ids.is_empty() {
+            println!("Wind circles not found for {}", voice);
+            return;
+        }
+
+        for id in circle_ids {
+            let Some(circle) = self.wind_circles.get_mut(&id) else {
+                return;
+            };
+
+            circle.remove_from_field(&mut self.wind_field, true);
+            self.wind_circles.remove(&id);
+        }
+    }
+
     pub fn set_circle_center_bias_by_voice(&mut self, voice: Voice, bias: f32) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 

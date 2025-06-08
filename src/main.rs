@@ -372,13 +372,11 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         }
         Key::C => {
             model.osc_loop.send_make_drone(1, 100, 20, 0, 0, 0);
-            /*
-            model
-                .particle_system
-                .forces
-                .add_gravity_source(vec2(0.0, 0.0), 10000.0);
-             */
         }
+        Key::X => {
+            model.osc_loop.send_erase_drone(1);
+        }
+
         _ => {}
     }
 }
@@ -703,7 +701,7 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                 set_num_particles(model, id, val);
             }
             OscCommand::EraseDrone { id } => {
-                println!("EraseDrone: id={}", id);
+                erase_drone(model, id);
             }
             OscCommand::ParticlesAlpha { id, val } => {
                 set_alpha(model, id, val);
@@ -714,6 +712,13 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
             _ => {}
         }
     }
+}
+
+fn erase_drone(model: &mut Model, id: i32) {
+    let voice = Voice::from_i32(id);
+    model.particle_system.kill_voice(voice);
+    model.particle_system.forces.update(model.show_forces);
+    model.osc_send.send_drone_on_off(id, 0);
 }
 
 #[allow(clippy::too_many_arguments)]

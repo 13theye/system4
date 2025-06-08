@@ -204,7 +204,7 @@ impl ParticleSystem {
     fn cull_excess_particles(&mut self, limit: usize) {
         let num_particles = self.particles.len();
         for i in 0..(num_particles - limit).clamp(0, num_particles) {
-            self.particles[i].set_age_per_tick(100.0);
+            self.particles[i].set_life_span(200.0);
         }
     }
 
@@ -213,6 +213,13 @@ impl ParticleSystem {
     pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
         self.bounds_size = Vec2::new(width, height);
         self.bounds_rect = self.make_bounds_rect();
+    }
+
+    pub fn kill_voice(&mut self, voice: Voice) {
+        self.masks.remove(&voice);
+        self.emitters
+            .retain(|emitter| emitter.parent_voice != voice);
+        self.forces.remove_wind_by_voice(voice);
     }
 
     pub fn set_alpha(&mut self, alpha: f32) {
