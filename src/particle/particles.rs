@@ -12,7 +12,7 @@ pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     pub parent_voice: Voice,   // the voice that this particle belongs to
     position: Point2,
-    feedback_positions: Vec<Point2>,
+    feedback_positions: [Option<Point2>; 10],
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
@@ -38,7 +38,7 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: Vec::with_capacity(10),
+            feedback_positions: [None; 10],
             life_span: 1000.0,
             age_per_tick: 1.0,
             is_alive: true,
@@ -63,7 +63,8 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            life_span: 1200.0,
+            feedback_positions: [None; 10],
+            life_span: 1000.0,
             age_per_tick: 1.0,
             is_alive: true,
             size,
@@ -73,6 +74,9 @@ impl Particle {
     }
 
     pub fn update(&mut self) {
+        // Add the current position to the feedback positions
+        self.record_feedback_position();
+
         self.velocity += self.acceleration;
         self.position += self.velocity;
 
@@ -92,15 +96,37 @@ impl Particle {
         self.position
     }
 
-    pub fn draw(&self, draw: &Draw, dpi_scale: f32) {
+    fn record_feedback_position(&mut self) {
+        for i in 0..9 {
+            self.feedback_positions[i] = self.feedback_positions[i + 1];
+        }
+        self.feedback_positions[0] = Some(self.position);
+    }
+
+    pub fn draw(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
         let scaled_position = self.position / dpi_scale;
         let scaled_size = self.size / dpi_scale;
-        draw.line()
-            .xy(scaled_position)
-            .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-            .end(scaled_position + vec2(0.0, scaled_size / 2.0))
-            .stroke_weight(scaled_size)
-            .color(self.color);
+
+        if feedback < 0.05 {
+            draw.line()
+                .xy(scaled_position)
+                .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
+                .end(scaled_position + vec2(0.0, scaled_size / 2.0))
+                .stroke_weight(scaled_size)
+                .color(self.color);
+        } else {
+            for i in 0..(feedback * 10.0).round() as usize {
+                if let Some(position) = self.feedback_positions[i] {
+                    let scaled_position = position / dpi_scale;
+                    draw.line()
+                        .xy(scaled_position)
+                        .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
+                        .end(scaled_position + vec2(0.0, scaled_size / 2.0))
+                        .stroke_weight(scaled_size)
+                        .color(self.color);
+                }
+            }
+        }
     }
 
     pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {

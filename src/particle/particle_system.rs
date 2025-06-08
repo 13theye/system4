@@ -20,6 +20,7 @@ pub struct ParticleSystem {
     pub particles: Vec<Particle>,
     pub particle_limit: usize,
     pub spawn_rate: f32,
+    pub feedback: HashMap<Voice, f32>,
 
     // forces
     pub forces: ForceFields,
@@ -66,6 +67,7 @@ impl ParticleSystem {
             origin,
             particles: Vec::new(),
             particle_limit: particle_limit as usize,
+            feedback: HashMap::new(),
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
             spawn_rate: 20.0,
             masks,
@@ -268,8 +270,10 @@ impl ParticleSystem {
                 continue;
             };
 
+            let feedback = self.feedback.get(&particle.parent_voice).unwrap_or(&0.0);
+
             if mask.contains(particle.position()) {
-                particle.draw(draw, self.dpi_scale);
+                particle.draw(draw, *feedback, self.dpi_scale);
             }
         }
     }
