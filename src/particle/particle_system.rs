@@ -261,54 +261,54 @@ impl ParticleSystem {
             .sum()
     }
 
-    pub fn kill_voice(&mut self, voice: Voice) {
+    pub fn kill_voice(&mut self, voice: &Voice) {
         self.emitters
-            .retain(|emitter| emitter.parent_voice != voice);
+            .retain(|emitter| emitter.parent_voice != *voice);
         self.forces.remove_wind_by_voice(voice);
     }
 
-    pub fn set_alpha_limit(&mut self, voice: Voice, alpha: f32) {
-        self.alpha_limits.insert(voice, alpha);
+    pub fn set_alpha_limit(&mut self, voice: &Voice, alpha: f32) {
+        self.alpha_limits.insert(*voice, alpha);
     }
 
-    pub fn set_feedback(&mut self, voice: Voice, feedback: f32) {
-        self.feedback.insert(voice, feedback);
+    pub fn set_feedback(&mut self, voice: &Voice, feedback: f32) {
+        self.feedback.insert(*voice, feedback);
     }
 
-    pub fn set_gravity(&mut self, voice: Voice, gravity: f32) {
+    pub fn set_gravity(&mut self, voice: &Voice, gravity: f32) {
         self.forces.set_circle_center_bias_by_voice(voice, gravity);
     }
 
-    pub fn set_is_spawning(&mut self, voice: Voice, is_spawning: bool) {
+    pub fn set_is_spawning(&mut self, voice: &Voice, is_spawning: bool) {
         self.emitters.iter_mut().for_each(|emitter| {
-            if emitter.parent_voice == voice {
+            if emitter.parent_voice == *voice {
                 emitter.is_spawning = is_spawning;
             }
         });
     }
 
-    pub fn set_strength(&mut self, voice: Voice, strength: f32) {
+    pub fn set_strength(&mut self, voice: &Voice, strength: f32) {
         self.forces.set_circle_strength_by_voice(voice, strength);
     }
 
-    pub fn set_num_particles(&mut self, voice: Voice, num_particles: f32) {
+    pub fn set_num_particles(&mut self, voice: &Voice, num_particles: f32) {
         let limit = (self.default_particle_limit as f32 * num_particles) as usize;
-        self.particle_limits.insert(voice, limit);
+        self.particle_limits.insert(*voice, limit);
 
         let spawn_rate_factor = self
             .particle_num_factors
-            .insert(voice, num_particles)
+            .insert(*voice, num_particles)
             .unwrap_or(0.5);
         self.emitters.iter_mut().for_each(|emitter| {
-            if emitter.parent_voice == voice {
+            if emitter.parent_voice == *voice {
                 emitter.spawn_rate_factor = spawn_rate_factor;
             }
         });
     }
 
-    pub fn set_radius_inner(&mut self, voice: Voice, val: f32) {
-        let Some(mask) = self.masks.get(&voice) else {
-            println!("Can't set inner radius:No mask found for voice: {}", voice);
+    pub fn set_radius_inner(&mut self, voice: &Voice, val: f32) {
+        let Some(mask) = self.masks.get(voice) else {
+            println!("Can't set inner radius: No mask found for voice: {}", voice);
             return;
         };
 
@@ -316,10 +316,10 @@ impl ParticleSystem {
         let max_radius = (mask.size.x.max(mask.size.y) + 50.0) / 2.0;
         let radius = max_radius * val;
 
-        self.forces.set_circle_outer_radius_by_voice(voice, radius);
+        self.forces.set_circle_inner_radius_by_voice(voice, radius);
     }
 
-    pub fn set_radius_outer(&mut self, voice: Voice, val: f32) {
+    pub fn set_radius_outer(&mut self, voice: &Voice, val: f32) {
         self.forces.set_circle_outer_radius_by_voice(voice, val);
     }
 

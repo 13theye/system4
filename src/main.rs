@@ -293,7 +293,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         if finish_signal {
             let id = voice.to_i32();
             model.osc_send.send_drone_on_off(id, 1);
-            model.particle_system.set_is_spawning(voice, true);
+            model.particle_system.set_is_spawning(&voice, true);
         }
     }
 
@@ -596,7 +596,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 )
                                 .changed()
                             {
-                                model.particle_system.set_alpha_limit(Voice::Voice1, alpha);
+                                model.particle_system.set_alpha_limit(&Voice::Voice1, alpha);
                             }
 
                             // Volume slider
@@ -616,7 +616,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             {
                                 model
                                     .particle_system
-                                    .set_num_particles(Voice::Voice1, volume);
+                                    .set_num_particles(&Voice::Voice1, volume);
                             }
 
                             // Strength slider
@@ -674,7 +674,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 )
                                 .changed()
                             {
-                                model.particle_system.set_feedback(Voice::Voice1, feedback);
+                                model.particle_system.set_feedback(&Voice::Voice1, feedback);
                             }
 
                             // Center X slider
@@ -882,7 +882,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 )
                                 .changed()
                             {
-                                model.particle_system.set_alpha_limit(Voice::Voice4, alpha);
+                                model.particle_system.set_alpha_limit(&Voice::Voice4, alpha);
                             }
 
                             // Volume slider
@@ -902,7 +902,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             {
                                 model
                                     .particle_system
-                                    .set_num_particles(Voice::Voice4, volume);
+                                    .set_num_particles(&Voice::Voice4, volume);
                             }
 
                             // Strength slider
@@ -960,7 +960,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 )
                                 .changed()
                             {
-                                model.particle_system.set_feedback(Voice::Voice4, feedback);
+                                model.particle_system.set_feedback(&Voice::Voice4, feedback);
                             }
 
                             // Center X slider
@@ -1131,7 +1131,7 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
 
 fn erase_drone(model: &mut Model, id: i32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.kill_voice(voice);
+    model.particle_system.kill_voice(&voice);
     model.particle_system.forces.update(model.show_forces);
     model.osc_send.send_drone_on_off(id, 0);
 }
@@ -1230,28 +1230,28 @@ fn make_drone(
 
 fn set_alpha(model: &mut Model, id: i32, alpha: f32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_alpha_limit(voice, alpha);
+    model.particle_system.set_alpha_limit(&voice, alpha);
 }
 
 fn set_gravity(model: &mut Model, id: i32, gravity: f32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_gravity(voice, gravity);
+    model.particle_system.set_gravity(&voice, gravity);
 }
 
 fn set_force(model: &mut Model, id: i32, force: f32) {
     let voice = Voice::from_i32(id);
     let strength = force * 30.0; // 30 is the max strength of the wind circle
-    model.particle_system.set_strength(voice, strength);
+    model.particle_system.set_strength(&voice, strength);
 }
 
 fn set_radius_inner(model: &mut Model, id: i32, val: f32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_radius_inner(voice, val);
+    model.particle_system.set_radius_inner(&voice, val);
 }
 
 fn set_radius_outer(model: &mut Model, id: i32, val: f32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_radius_outer(voice, val);
+    model.particle_system.set_radius_outer(&voice, val);
 }
 
 fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
@@ -1259,12 +1259,12 @@ fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
 
     model
         .particle_system
-        .set_num_particles(voice, num_particles);
+        .set_num_particles(&voice, num_particles);
 }
 
 fn set_feedback(model: &mut Model, id: i32, feedback: f32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_feedback(voice, feedback);
+    model.particle_system.set_feedback(&voice, feedback);
 }
 
 impl Drop for Model {
