@@ -193,7 +193,7 @@ impl OscController {
                     "/sys2/particles/outerRadius" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
-                                .push(OscCommand::ParticlesInnerRadius { id: *id, val: *val });
+                                .push(OscCommand::ParticlesOuterRadius { id: *id, val: *val });
                         }
                     }
                     "/sys2/particles/gravity" => {
