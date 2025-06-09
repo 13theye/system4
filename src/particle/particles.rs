@@ -78,12 +78,7 @@ impl Particle {
             self.color = color;
         }
 
-        self.color.alpha = if self.life_span > 100.0 {
-            alpha
-        } else {
-            let fade = self.life_span / 100.0;
-            alpha * fade
-        };
+        self.color.alpha = alpha * self.life_span.min(100.0) / 100.0;
     }
 
     pub fn position(&self) -> Point2 {
