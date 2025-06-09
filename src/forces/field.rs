@@ -110,17 +110,17 @@ impl ForceFields {
             .map(|circle| circle.with_params_read(|params| params.clone()))
     }
 
-    pub fn get_circle_ids_by_voice(&self, voice: Voice) -> Vec<usize> {
+    pub fn get_circle_ids_by_voice(&self, voice: &Voice) -> Vec<usize> {
         self.wind_circles
             .iter()
-            .filter(|(_, circle)| circle.parent_voice == voice)
+            .filter(|(_, circle)| circle.parent_voice == *voice)
             .map(|(id, _)| *id)
             .collect()
     }
 
     /******************* OSC command compatibility methods ********************* */
 
-    pub fn remove_wind_by_voice(&mut self, voice: Voice) {
+    pub fn remove_wind_by_voice(&mut self, voice: &Voice) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 
         if circle_ids.is_empty() {
@@ -138,7 +138,7 @@ impl ForceFields {
         }
     }
 
-    pub fn set_circle_center_bias_by_voice(&mut self, voice: Voice, bias: f32) {
+    pub fn set_circle_center_bias_by_voice(&mut self, voice: &Voice, bias: f32) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 
         if circle_ids.is_empty() {
@@ -157,7 +157,7 @@ impl ForceFields {
         }
     }
 
-    pub fn set_circle_volume_by_voice(&mut self, voice: Voice, alpha: f32) {
+    pub fn set_circle_volume_by_voice(&mut self, voice: &Voice, alpha: f32) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 
         if circle_ids.is_empty() {
@@ -177,7 +177,7 @@ impl ForceFields {
         }
     }
 
-    pub fn set_circle_strength_by_voice(&mut self, voice: Voice, strength: f32) {
+    pub fn set_circle_strength_by_voice(&mut self, voice: &Voice, strength: f32) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 
         if circle_ids.is_empty() {
@@ -196,7 +196,7 @@ impl ForceFields {
         }
     }
 
-    pub fn set_circle_outer_radius_by_voice(&mut self, voice: Voice, radius: f32) {
+    pub fn set_circle_outer_radius_by_voice(&mut self, voice: &Voice, radius: f32) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 
         if circle_ids.is_empty() {
@@ -215,7 +215,7 @@ impl ForceFields {
         }
     }
 
-    pub fn set_circle_inner_radius_by_voice(&mut self, voice: Voice, val: f32) {
+    pub fn set_circle_inner_radius_by_voice(&mut self, voice: &Voice, val: f32) {
         let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
 
         if circle_ids.is_empty() {

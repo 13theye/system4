@@ -145,19 +145,17 @@ impl OscSender {
             .ok();
     }
 
-    pub fn send_note(&self, id: i32, velocity: i32, duration: i32, filter: i32) {
-        let addr = "/sys2/note".to_string();
+    pub fn send_inner_radius(&self, player_id: i32, val: f32) {
+        let addr = "/sys2/particles/innerRadius".to_string();
+        let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
 
-        let pitch = 1; // always send the same pitch
-
-        let args = vec![
-            osc::Type::Int(id),
-            osc::Type::Int(pitch),
-            osc::Type::Int(velocity),
-            osc::Type::Int(duration),
-            osc::Type::Int(filter),
-        ];
-
+    pub fn send_outer_radius(&self, player_id: i32, val: f32) {
+        let addr = "/sys2/particles/outerRadius".to_string();
+        let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
