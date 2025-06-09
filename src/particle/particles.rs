@@ -5,6 +5,7 @@
 use nannou::prelude::*;
 
 const PARTICLE_MASS: f32 = 11.0;
+const PARTICLE_LIFE_SPAN: f32 = 3600.0;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
@@ -30,7 +31,7 @@ impl Particle {
             velocity: vec2(0.0, 0.0),
             position,
             feedback_positions: [None; 4],
-            life_span: 1200.0,
+            life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
             is_alive: true,
             size,
@@ -53,7 +54,7 @@ impl Particle {
             velocity,
             position,
             feedback_positions: [None; 4],
-            life_span: 1200.0,
+            life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
             is_alive: true,
             size,

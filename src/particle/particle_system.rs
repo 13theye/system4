@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use nannou::prelude::*;
-use nannou::rand::rngs::ThreadRng;
+use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 
 use crate::{
     forces::{ForceFields, WindCircle},
@@ -201,10 +201,24 @@ impl ParticleSystem {
     }
 
     pub fn handle_spawning(&mut self, rng: &mut ThreadRng) {
-        for emitter in self.emitters.iter() {
+        let mut indices: Vec<usize> = (0..self.emitters.len()).collect();
+        indices.shuffle(rng);
+
+        for i in indices {
+            let emitter = &self.emitters[i];
             if emitter.is_spawning {
                 let parent_voice = emitter.parent_voice;
                 let particle_vec = self.particles.entry(parent_voice).or_default();
+                let particle_limit = self
+                    .particle_limits
+                    .get(&parent_voice)
+                    .copied()
+                    .unwrap_or(self.default_particle_limit);
+
+                // Don't add new particles if limit is reached
+                if particle_vec.len() > particle_limit {
+                    return;
+                }
 
                 let color_limit = self
                     .color_limits
@@ -239,6 +253,7 @@ impl ParticleSystem {
             if num_particles > *limit {
                 for particle in particles
                     .iter_mut()
+                    .rev() // kill youngest particles first
                     .take((num_particles - limit).clamp(0, num_particles))
                 {
                     particle.set_age_per_tick(200.0);
