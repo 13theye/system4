@@ -144,6 +144,24 @@ impl OscSender {
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
     }
+
+    pub fn send_note(&self, id: i32, velocity: i32, duration: i32, filter: i32) {
+        let addr = "/sys2/note".to_string();
+
+        let pitch = 1; // always send the same pitch
+
+        let args = vec![
+            osc::Type::Int(id),
+            osc::Type::Int(pitch),
+            osc::Type::Int(velocity),
+            osc::Type::Int(duration),
+            osc::Type::Int(filter),
+        ];
+
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
 }
 
 pub struct OscController {

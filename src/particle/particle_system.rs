@@ -12,7 +12,7 @@ use crate::{
     forces::{ForceFields, WindCircle},
     particle::{EmitDirection, Emitter, Particle},
     utils::IdGenerator,
-    view::{voice_id, Mask, Voice},
+    view::{Mask, Voice},
 };
 
 pub struct ParticleSystem {
