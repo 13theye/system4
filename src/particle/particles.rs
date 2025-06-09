@@ -62,7 +62,7 @@ impl Particle {
         }
     }
 
-    pub fn update(&mut self, color: Rgba) {
+    pub fn update(&mut self, color: Rgba, alpha: f32) {
         // Add the current position to the feedback positions
         self.record_feedback_position();
 
@@ -79,10 +79,10 @@ impl Particle {
         }
 
         self.color.alpha = if self.life_span > 100.0 {
-            self.color.alpha
+            alpha
         } else {
             let fade = self.life_span / 100.0;
-            self.color.alpha * fade
+            alpha * fade
         };
     }
 
@@ -116,7 +116,7 @@ impl Particle {
                         self.color.red,
                         self.color.green,
                         self.color.blue,
-                        (self.color.alpha - (i as f32 / 3.0)).min(0.1),
+                        (self.color.alpha - (i as f32 / 3.0)).max(0.1),
                     );
                     draw.line()
                         .xy(scaled_position)

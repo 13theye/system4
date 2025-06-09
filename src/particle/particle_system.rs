@@ -184,7 +184,7 @@ impl ParticleSystem {
                     return;
                 };
 
-                particle.update(rgba_from(*color_limit, *alpha_limit));
+                particle.update(rgba_from(*color_limit, *alpha_limit), *alpha_limit);
                 if particle.is_out_of_bounds(self.bounds_rect) {
                     particle.kill();
                 }

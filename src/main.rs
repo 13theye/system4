@@ -377,11 +377,15 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             // Toggle debug and FPS display
             model.show_bounds = !model.show_bounds;
         }
-        Key::C => {
+        Key::Key1 => {
             model.osc_loop.send_make_drone(1, 100, 20, 0, 0, 0);
+        }
+        Key::Key4 => {
+            model.osc_loop.send_make_drone(4, 100, 20, 0, 0, 0);
         }
         Key::X => {
             model.osc_loop.send_erase_drone(1);
+            model.osc_loop.send_erase_drone(4);
         }
 
         _ => {}
@@ -462,7 +466,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         .get_circle_params_by_voice(Voice::Voice1);
                     if settings.is_empty() {
                         ui.label("No wind circles found");
-                        ui.label("C: Create wind circle");
+                        ui.label("1: Create wind circle");
                     } else {
                         // Handle circle selection - set default if none selected
                         let current_selection = model
@@ -748,7 +752,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         .get_circle_params_by_voice(Voice::Voice4);
                     if settings.is_empty() {
                         ui.label("No wind circles found");
-                        ui.label("C: Create wind circle");
+                        ui.label("4: Create wind circle");
                     } else {
                         // Handle circle selection - set default if none selected
                         let current_selection = model
@@ -867,7 +871,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             let mut alpha = model
                                 .particle_system
                                 .alpha_limits
-                                .get(&Voice::Voice1)
+                                .get(&Voice::Voice4)
                                 .copied()
                                 .unwrap_or(1.0);
                             if ui
@@ -885,7 +889,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             let mut volume = model
                                 .particle_system
                                 .particle_num_factors
-                                .get(&Voice::Voice1)
+                                .get(&Voice::Voice4)
                                 .copied()
                                 .unwrap_or(0.2);
                             if ui
