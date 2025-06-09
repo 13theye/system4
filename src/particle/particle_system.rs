@@ -12,15 +12,12 @@ use crate::{
     forces::{ForceFields, WindCircle},
     particle::{EmitDirection, Emitter, Particle},
     utils::IdGenerator,
-    view::{Mask, Voice},
+    view::{voice_id, Mask, Voice},
 };
 
 pub struct ParticleSystem {
     // Particles
-    pub particles: Vec<Particle>,
-    pub particle_limit: usize,
-    pub spawn_rate: f32,
-    pub feedback: HashMap<Voice, f32>,
+    pub particles: HashMap<Voice, Vec<Particle>>,
 
     // forces
     pub forces: ForceFields,
@@ -28,6 +25,12 @@ pub struct ParticleSystem {
     // masks and emitters
     pub masks: HashMap<Voice, Mask>,
     pub emitters: Vec<Emitter>,
+
+    // Global params
+    pub default_particle_limit: usize,
+    pub particle_limits: HashMap<Voice, usize>,
+    pub feedback: HashMap<Voice, f32>,
+    pub global_max_spawn_rate: f32,
 
     // Origin and bounds
     origin: Point2,
@@ -39,8 +42,8 @@ pub struct ParticleSystem {
     // OSC params
     pub alpha_limits: HashMap<Voice, f32>, // scale the alpha of the particles
     pub color_limits: HashMap<Voice, Rgb>,
-    pub particle_num_factor: f32, // normalized proportion of particle_limit
-    pub trail: f32,               // scale the trail of the particles
+    pub particle_num_factors: HashMap<Voice, f32>, // normalized proportion of particle_limit
+    pub trail: f32,                                // scale the trail of the particles
 
     // DPI scale
     dpi_scale: f32,
@@ -53,7 +56,7 @@ impl ParticleSystem {
         height: f32,
         default_particle_size: f32,
         default_particle_color: Rgb,
-        particle_limit: u32,
+        default_particle_limit: u32,
         dpi_scale: f32,
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
@@ -66,21 +69,22 @@ impl ParticleSystem {
 
         Self {
             origin,
-            particles: Vec::new(),
-            particle_limit: particle_limit as usize,
+            particles: HashMap::new(),
+            particle_limits: HashMap::new(),
             feedback: HashMap::new(),
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
-            spawn_rate: 20.0,
+            global_max_spawn_rate: 20.0,
             masks,
             emitters: Vec::new(),
             bounds_size,
             bounds_rect,
             default_particle_size,
             default_particle_color,
+            default_particle_limit: default_particle_limit as usize,
 
             alpha_limits: HashMap::new(),
             color_limits: HashMap::new(),
-            particle_num_factor: 1.0,
+            particle_num_factors: HashMap::new(),
             trail: 0.0,
 
             dpi_scale,
@@ -118,7 +122,7 @@ impl ParticleSystem {
             mask.rect.top_left(),
             mask.rect.bottom_left(),
             EmitDirection::East,
-            self.spawn_rate,
+            self.global_max_spawn_rate,
             spawn_rate_factor,
         );
 
@@ -129,7 +133,7 @@ impl ParticleSystem {
             mask.rect.top_right(),
             mask.rect.bottom_right(),
             EmitDirection::West,
-            self.spawn_rate,
+            self.global_max_spawn_rate,
             spawn_rate_factor,
         );
 
@@ -142,7 +146,7 @@ impl ParticleSystem {
         self.alpha_limits.insert(voice, alpha_limit);
         self.color_limits.insert(voice, self.default_particle_color);
 
-        self.particle_num_factor = spawn_rate_factor;
+        self.particle_num_factors.insert(voice, spawn_rate_factor);
         //self.num_particles = 1.0;
         self.trail = (trail as f32) / 100.0;
 
@@ -160,49 +164,47 @@ impl ParticleSystem {
     /********************* Update methods ********************************** */
 
     pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
-        // Cull excess particles
-        let limit = (self.particle_limit as f32 * self.particle_num_factor) as usize;
-        if self.particles.len() > limit {
-            self.cull_excess_particles(limit);
-        }
-
         self.handle_spawning(rng);
+
+        self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
-        let mut write_inx = 0;
-        for read_inx in 0..self.particles.len() {
-            let particle = &mut self.particles[read_inx];
-            self.forces.apply(particle);
+        for (voice, particles) in self.particles.iter_mut() {
+            let mut write_inx = 0;
+            for read_inx in 0..particles.len() {
+                let particle = &mut particles[read_inx];
+                self.forces.apply(particle);
 
-            let parent_voice = particle.parent_voice;
-            let Some(color_limit) = self.color_limits.get(&parent_voice) else {
-                return;
-            };
+                let Some(color_limit) = self.color_limits.get(voice) else {
+                    return;
+                };
 
-            let Some(alpha_limit) = self.alpha_limits.get(&parent_voice) else {
-                return;
-            };
+                let Some(alpha_limit) = self.alpha_limits.get(voice) else {
+                    return;
+                };
 
-            particle.update(rgba_from(*color_limit, *alpha_limit));
-            if particle.is_out_of_bounds(self.bounds_rect) {
-                particle.kill();
-            }
-
-            if !particle.is_dead() {
-                if write_inx != read_inx {
-                    self.particles[write_inx] = self.particles[read_inx];
+                particle.update(rgba_from(*color_limit, *alpha_limit));
+                if particle.is_out_of_bounds(self.bounds_rect) {
+                    particle.kill();
                 }
-                write_inx += 1;
+
+                if !particle.is_dead() {
+                    if write_inx != read_inx {
+                        particles[write_inx] = particles[read_inx];
+                    }
+                    write_inx += 1;
+                }
             }
+            particles.truncate(write_inx);
         }
-        self.particles.truncate(write_inx);
     }
 
     pub fn handle_spawning(&mut self, rng: &mut ThreadRng) {
         for emitter in self.emitters.iter() {
             if emitter.is_spawning {
                 let parent_voice = emitter.parent_voice;
+                let particle_vec = self.particles.entry(parent_voice).or_insert_with(Vec::new);
 
                 let color_limit = self
                     .color_limits
@@ -218,17 +220,30 @@ impl ParticleSystem {
                     rgba_from(color_limit, alpha_limit),
                     rng,
                 );
-                self.particles.extend(particles);
+                particle_vec.extend(particles);
             }
         }
     }
 
     /********************* Particle methods ********************************** */
 
-    fn cull_excess_particles(&mut self, limit: usize) {
-        let num_particles = self.particles.len();
-        for i in 0..(num_particles - limit).clamp(0, num_particles) {
-            self.particles[i].set_age_per_tick(200.0);
+    fn cull_excess_particles(&mut self) {
+        for (voice, particles) in self.particles.iter_mut() {
+            let limit = self
+                .particle_limits
+                .get(voice)
+                .unwrap_or(&self.default_particle_limit);
+
+            let num_particles = particles.len();
+
+            if num_particles > *limit {
+                for particle in particles
+                    .iter_mut()
+                    .take((num_particles - limit).clamp(0, num_particles))
+                {
+                    particle.set_age_per_tick(200.0);
+                }
+            }
         }
     }
 
@@ -237,6 +252,13 @@ impl ParticleSystem {
     pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
         self.bounds_size = Vec2::new(width, height);
         self.bounds_rect = self.make_bounds_rect();
+    }
+
+    pub fn get_particle_count(&self) -> usize {
+        self.particles
+            .values()
+            .map(|particles| particles.len())
+            .sum()
     }
 
     pub fn kill_voice(&mut self, voice: Voice) {
@@ -270,9 +292,16 @@ impl ParticleSystem {
     }
 
     pub fn set_num_particles(&mut self, voice: Voice, num_particles: f32) {
+        let limit = (self.default_particle_limit as f32 * num_particles) as usize;
+        self.particle_limits.insert(voice, limit);
+
+        let spawn_rate_factor = self
+            .particle_num_factors
+            .insert(voice, num_particles)
+            .unwrap_or(0.5);
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice == voice {
-                emitter.spawn_rate_factor = num_particles;
+                emitter.spawn_rate_factor = spawn_rate_factor;
             }
         });
     }
@@ -308,15 +337,17 @@ impl ParticleSystem {
     // In this draw mode, particles are only drawn if they are within the bounds of the mask
     // associated with the emitter that spawned them.
     pub fn draw(&self, draw: &Draw) {
-        for particle in self.particles.iter() {
-            let Some(mask) = self.masks.get(&particle.parent_voice) else {
-                continue;
-            };
+        for (voice, particles) in self.particles.iter() {
+            for particle in particles.iter() {
+                let Some(mask) = self.masks.get(voice) else {
+                    continue;
+                };
 
-            let feedback = self.feedback.get(&particle.parent_voice).unwrap_or(&0.0);
+                let feedback = self.feedback.get(voice).unwrap_or(&0.0);
 
-            if mask.contains(particle.position()) {
-                particle.draw(draw, *feedback, self.dpi_scale);
+                if mask.contains(particle.position()) {
+                    particle.draw(draw, *feedback, self.dpi_scale);
+                }
             }
         }
     }

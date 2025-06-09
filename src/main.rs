@@ -433,7 +433,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     // Status info
                     ui.label(format!(
                         "Particles: {}",
-                        model.particle_system.particles.len()
+                        model.particle_system.get_particle_count()
                     ));
                     // FPS
                     ui.label(format!("FPS: {:.1}", model.fps.fps()));
@@ -596,7 +596,12 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             }
 
                             // Volume slider
-                            let mut volume = model.particle_system.particle_num_factor;
+                            let mut volume = model
+                                .particle_system
+                                .particle_num_factors
+                                .get(&Voice::Voice1)
+                                .copied()
+                                .unwrap_or(0.2);
                             if ui
                                 .add(
                                     egui::Slider::new(&mut volume, 0.0..=1.0)
@@ -877,7 +882,12 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             }
 
                             // Volume slider
-                            let mut volume = model.particle_system.particle_num_factor;
+                            let mut volume = model
+                                .particle_system
+                                .particle_num_factors
+                                .get(&Voice::Voice1)
+                                .copied()
+                                .unwrap_or(0.2);
                             if ui
                                 .add(
                                     egui::Slider::new(&mut volume, 0.0..=1.0)

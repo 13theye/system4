@@ -77,7 +77,6 @@ impl Emitter {
 
             particles.push(Particle::new_with_motion(
                 self.id,
-                self.parent_voice,
                 position,
                 size,
                 color,
