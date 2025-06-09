@@ -204,7 +204,7 @@ impl ParticleSystem {
         for emitter in self.emitters.iter() {
             if emitter.is_spawning {
                 let parent_voice = emitter.parent_voice;
-                let particle_vec = self.particles.entry(parent_voice).or_insert_with(Vec::new);
+                let particle_vec = self.particles.entry(parent_voice).or_default();
 
                 let color_limit = self
                     .color_limits
@@ -306,7 +306,7 @@ impl ParticleSystem {
         });
     }
 
-    pub fn set_radius_inner(&mut self, voice: &Voice, val: f32) {
+    pub fn set_radius_outer(&mut self, voice: &Voice, val: f32) {
         let Some(mask) = self.masks.get(voice) else {
             println!("Can't set inner radius: No mask found for voice: {}", voice);
             return;
@@ -316,11 +316,11 @@ impl ParticleSystem {
         let max_radius = (mask.size.x.max(mask.size.y) + 50.0) / 2.0;
         let radius = max_radius * val;
 
-        self.forces.set_circle_inner_radius_by_voice(voice, radius);
+        self.forces.set_circle_outer_radius_by_voice(voice, radius);
     }
 
-    pub fn set_radius_outer(&mut self, voice: &Voice, val: f32) {
-        self.forces.set_circle_outer_radius_by_voice(voice, val);
+    pub fn set_radius_inner(&mut self, voice: &Voice, val: f32) {
+        self.forces.set_circle_inner_radius_by_voice(voice, val);
     }
 
     fn make_bounds_rect(&self) -> Rect {

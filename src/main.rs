@@ -383,6 +383,12 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         Key::Key4 => {
             model.osc_loop.send_make_drone(4, 100, 20, 0, 0, 0);
         }
+        Key::C => {
+            model.osc_loop.send_inner_radius(4, 0.5);
+        }
+        Key::R => {
+            model.osc_loop.send_outer_radius(4, 0.5);
+        }
         Key::X => {
             model.osc_loop.send_erase_drone(1);
             model.osc_loop.send_erase_drone(4);
