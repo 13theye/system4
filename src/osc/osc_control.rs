@@ -21,7 +21,11 @@ pub enum OscCommand {
         id: i32,
         val: f32,
     },
-    ParticlesDeviation {
+    ParticlesInnerRadius {
+        id: i32,
+        val: f32,
+    },
+    ParticlesOuterRadius {
         id: i32,
         val: f32,
     },
@@ -180,19 +184,25 @@ impl OscController {
                                 .push(OscCommand::ParticlesForce { id: *id, val: *val });
                         }
                     }
-                    "/sys2/particles/deviation" => {
+                    "/sys2/particles/innerRadius" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
-                                .push(OscCommand::ParticlesDeviation { id: *id, val: *val });
+                                .push(OscCommand::ParticlesInnerRadius { id: *id, val: *val });
                         }
                     }
-                    "/sys2/particles/trail" => {
+                    "/sys2/particles/outerRadius" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesInnerRadius { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/gravity" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
                                 .push(OscCommand::ParticlesGravity { id: *id, val: *val });
                         }
                     }
-                    "/sys2/particles/gravity" => {
+                    "/sys2/particles/trail" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
                                 .push(OscCommand::ParticlesTrail { id: *id, val: *val });

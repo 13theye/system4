@@ -12,7 +12,7 @@ pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     pub parent_voice: Voice,   // the voice that this particle belongs to
     position: Point2,
-    feedback_positions: [Option<Point2>; 10],
+    feedback_positions: [Option<Point2>; 4],
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub life_span: f32,
@@ -38,8 +38,8 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: [None; 10],
-            life_span: 1000.0,
+            feedback_positions: [None; 4],
+            life_span: 1200.0,
             age_per_tick: 1.0,
             is_alive: true,
             size,
@@ -63,8 +63,8 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            feedback_positions: [None; 10],
-            life_span: 1000.0,
+            feedback_positions: [None; 4],
+            life_span: 1200.0,
             age_per_tick: 1.0,
             is_alive: true,
             size,
@@ -73,7 +73,7 @@ impl Particle {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, color: Rgba) {
         // Add the current position to the feedback positions
         self.record_feedback_position();
 
@@ -85,11 +85,16 @@ impl Particle {
 
         self.life_span -= self.age_per_tick;
 
-        if self.life_span < 200.0 {
-            self.color.alpha = self.life_span / 200.0;
-        } else {
-            self.color.alpha = 1.0;
+        if self.color != color {
+            self.color = color;
         }
+
+        self.color.alpha = if self.life_span > 100.0 {
+            self.color.alpha
+        } else {
+            let fade = self.life_span / 100.0;
+            self.color.alpha * fade
+        };
     }
 
     pub fn position(&self) -> Point2 {
@@ -97,8 +102,8 @@ impl Particle {
     }
 
     fn record_feedback_position(&mut self) {
-        for i in 0..9 {
-            self.feedback_positions[i] = self.feedback_positions[i + 1];
+        for i in (1..3).rev() {
+            self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
         self.feedback_positions[0] = Some(self.position);
     }
@@ -107,23 +112,29 @@ impl Particle {
         let scaled_position = self.position / dpi_scale;
         let scaled_size = self.size / dpi_scale;
 
-        if feedback < 0.05 {
-            draw.line()
-                .xy(scaled_position)
-                .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-                .end(scaled_position + vec2(0.0, scaled_size / 2.0))
-                .stroke_weight(scaled_size)
-                .color(self.color);
-        } else {
-            for i in 0..(feedback * 10.0).round() as usize {
+        draw.line()
+            .xy(scaled_position)
+            .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
+            .end(scaled_position + vec2(0.0, scaled_size / 2.0))
+            .stroke_weight(scaled_size)
+            .color(self.color);
+
+        if feedback > 0.1 {
+            for i in 1..(feedback * 3.0).round().min(3.0) as usize {
                 if let Some(position) = self.feedback_positions[i] {
                     let scaled_position = position / dpi_scale;
+                    let color = rgba(
+                        self.color.red,
+                        self.color.green,
+                        self.color.blue,
+                        (self.color.alpha - (i as f32 / 3.0)).min(0.1),
+                    );
                     draw.line()
                         .xy(scaled_position)
                         .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
                         .end(scaled_position + vec2(0.0, scaled_size / 2.0))
                         .stroke_weight(scaled_size)
-                        .color(self.color);
+                        .color(color);
                 }
             }
         }

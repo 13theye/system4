@@ -28,6 +28,7 @@ const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
 const TERMINAL_END_RGBA: (f32, f32, f32, f32) = (0.0, 0.3, 0.0, 1.0);
 const TERMINAL_NUM_LINES: usize = 8;
 const TERMINAL_LINE_MARGIN: f32 = 8.0;
+const TERMINAL_CHARS_PER_SECOND: f32 = 0.6; // final is 0.6
 
 struct Model {
     particle_system: ParticleSystem,
@@ -453,7 +454,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                 ui.vertical(|ui| {
                     ui.set_min_width(350.0);
                     ui.heading("Voice 1: Drone");
-                    ui.add_space(5.0);
+                    ui.add_space(2.0);
 
                     let settings = model
                         .particle_system
@@ -485,25 +486,37 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             .flatten()
                         {
                             // Dropdown to select circle
-                            egui::ComboBox::from_label("Select Circle")
+                            let current_voice_selection = model
+                                .selected_circle_id
+                                .get(&Voice::Voice1)
+                                .copied()
+                                .flatten();
+                            /*
+                            egui::ComboBox::from_id_source("voice1_circle_selector")
                                 .selected_text(format!("Circle {}", selected_id))
                                 .show_ui(ui, |ui| {
                                     for (id, _) in settings.iter() {
-                                        let mut current_voice_selection = model
-                                            .selected_circle_id
-                                            .get(&Voice::Voice1)
-                                            .copied()
-                                            .flatten();
                                         ui.selectable_value(
                                             &mut current_voice_selection,
                                             Some(*id),
                                             format!("Circle {}", id),
                                         );
-                                        model
-                                            .selected_circle_id
-                                            .insert(Voice::Voice1, current_voice_selection);
                                     }
                                 });
+                                 */
+
+                            // Update the selection if it changed
+                            if current_voice_selection
+                                != model
+                                    .selected_circle_id
+                                    .get(&Voice::Voice1)
+                                    .copied()
+                                    .flatten()
+                            {
+                                model
+                                    .selected_circle_id
+                                    .insert(Voice::Voice1, current_voice_selection);
+                            }
                         }
                     }
 
@@ -525,9 +538,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
                         if let Some(params) = current_params {
                             // Radius slider
-                            let mut radius = params.radius;
+                            let mut radius = params.outer_radius;
                             if ui
-                                .add(egui::Slider::new(&mut radius, 0.0..=1100.0).text("Radius"))
+                                .add(
+                                    egui::Slider::new(&mut radius, 0.0..=1100.0)
+                                        .text("OR")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -536,14 +553,18 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.radius(radius));
+                                    circle.with_params_write(|p| p.outer_radius(radius));
                                 }
                             }
 
-                            // Width slider
-                            let mut width = params.width;
+                            // Inner Radius slider
+                            let mut inner_radius = params.inner_radius;
                             if ui
-                                .add(egui::Slider::new(&mut width, 0.0..=2000.0).text("Width (Br)"))
+                                .add(
+                                    egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
+                                        .text("IR")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -552,14 +573,51 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.width(width));
+                                    circle.with_params_write(|p| p.inner_radius(inner_radius));
                                 }
+                            }
+
+                            // Alpha slider
+                            let mut alpha = model
+                                .particle_system
+                                .alpha_limits
+                                .get(&Voice::Voice1)
+                                .copied()
+                                .unwrap_or(1.0);
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut alpha, 0.0..=1.0)
+                                        .text("Brightness")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
+                                .changed()
+                            {
+                                model.particle_system.set_alpha_limit(Voice::Voice1, alpha);
+                            }
+
+                            // Volume slider
+                            let mut volume = model.particle_system.particle_num_factor;
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut volume, 0.0..=1.0)
+                                        .text("Volume")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
+                                .changed()
+                            {
+                                model
+                                    .particle_system
+                                    .set_num_particles(Voice::Voice1, volume);
                             }
 
                             // Strength slider
                             let mut strength = params.strength;
                             if ui
-                                .add(egui::Slider::new(&mut strength, 0.0..=30.0).text("Force"))
+                                .add(
+                                    egui::Slider::new(&mut strength, 0.0..=30.0)
+                                        .text("Force")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -575,7 +633,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center bias slider
                             let mut center_bias = params.center_bias;
                             if ui
-                                .add(egui::Slider::new(&mut center_bias, 0.0..=2.0).text("Gravity"))
+                                .add(
+                                    egui::Slider::new(&mut center_bias, 0.0..=2.0)
+                                        .text("Gravity")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -588,13 +650,31 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 }
                             }
 
-                            ui.add_space(5.0);
-                            ui.label("Center Position:");
+                            // Feedback slider
+                            let mut feedback = model
+                                .particle_system
+                                .feedback
+                                .get(&Voice::Voice1)
+                                .copied()
+                                .unwrap_or(0.0);
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut feedback, 0.0..=1.0)
+                                        .text("Feedback")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
+                                .changed()
+                            {
+                                model.particle_system.set_feedback(Voice::Voice1, feedback);
+                            }
 
                             // Center X slider
                             let mut center_x = params.center.x;
                             if ui
-                                .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("X"))
+                                .add(
+                                    egui::Slider::new(&mut center_x, -2000.0..=2000.0)
+                                        .text("Ctr X"),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -612,7 +692,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center Y slider
                             let mut center_y = params.center.y;
                             if ui
-                                .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Y"))
+                                .add(
+                                    egui::Slider::new(&mut center_y, -1100.0..=1100.0)
+                                        .text("Ctr Y"),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -648,11 +731,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     ui.add_space(5.0);
                 }); // end Voice 3
 
-                // Vertical 5: Heading and dropdown
+                // Voice 4: Column 5
                 ui.vertical(|ui| {
                     ui.set_min_width(300.0);
                     ui.heading("Voice 4: Drone");
-                    ui.add_space(5.0);
+                    ui.add_space(2.0);
 
                     let settings = model
                         .particle_system
@@ -684,25 +767,37 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             .flatten()
                         {
                             // Dropdown to select circle
-                            egui::ComboBox::from_label("Select Circle")
+                            let current_voice_selection = model
+                                .selected_circle_id
+                                .get(&Voice::Voice4)
+                                .copied()
+                                .flatten();
+                            /* Leaving this out because only one circle per voice
+                            egui::ComboBox::from_id_source("voice4_circle_selector")
                                 .selected_text(format!("Circle {}", selected_id))
                                 .show_ui(ui, |ui| {
                                     for (id, _) in settings.iter() {
-                                        let mut current_voice_selection = model
-                                            .selected_circle_id
-                                            .get(&Voice::Voice4)
-                                            .copied()
-                                            .flatten();
                                         ui.selectable_value(
                                             &mut current_voice_selection,
                                             Some(*id),
                                             format!("Circle {}", id),
                                         );
-                                        model
-                                            .selected_circle_id
-                                            .insert(Voice::Voice4, current_voice_selection);
                                     }
                                 });
+                                 */
+
+                            // Update the selection if it changed
+                            if current_voice_selection
+                                != model
+                                    .selected_circle_id
+                                    .get(&Voice::Voice4)
+                                    .copied()
+                                    .flatten()
+                            {
+                                model
+                                    .selected_circle_id
+                                    .insert(Voice::Voice4, current_voice_selection);
+                            }
                         }
                     }
 
@@ -724,9 +819,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
                         if let Some(params) = current_params {
                             // Radius slider
-                            let mut radius = params.radius;
+                            let mut radius = params.outer_radius;
                             if ui
-                                .add(egui::Slider::new(&mut radius, 0.0..=1100.0).text("Radius"))
+                                .add(
+                                    egui::Slider::new(&mut radius, 0.0..=1100.0)
+                                        .text("OR")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -735,14 +834,18 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.radius(radius));
+                                    circle.with_params_write(|p| p.outer_radius(radius));
                                 }
                             }
 
-                            // Width slider
-                            let mut width = params.width;
+                            // Inner radius slider
+                            let mut inner_radius = params.inner_radius;
                             if ui
-                                .add(egui::Slider::new(&mut width, 0.0..=2000.0).text("Width (Br)"))
+                                .add(
+                                    egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
+                                        .text("IR")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -751,14 +854,51 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.width(width));
+                                    circle.with_params_write(|p| p.inner_radius(inner_radius));
                                 }
+                            }
+
+                            // Alpha slider
+                            let mut alpha = model
+                                .particle_system
+                                .alpha_limits
+                                .get(&Voice::Voice1)
+                                .copied()
+                                .unwrap_or(1.0);
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut alpha, 0.0..=1.0)
+                                        .text("Brightness")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
+                                .changed()
+                            {
+                                model.particle_system.set_alpha_limit(Voice::Voice4, alpha);
+                            }
+
+                            // Volume slider
+                            let mut volume = model.particle_system.particle_num_factor;
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut volume, 0.0..=1.0)
+                                        .text("Volume")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
+                                .changed()
+                            {
+                                model
+                                    .particle_system
+                                    .set_num_particles(Voice::Voice4, volume);
                             }
 
                             // Strength slider
                             let mut strength = params.strength;
                             if ui
-                                .add(egui::Slider::new(&mut strength, 0.0..=30.0).text("Force"))
+                                .add(
+                                    egui::Slider::new(&mut strength, 0.0..=30.0)
+                                        .text("Force")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -774,7 +914,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center bias slider
                             let mut center_bias = params.center_bias;
                             if ui
-                                .add(egui::Slider::new(&mut center_bias, 0.0..=2.0).text("Gravity"))
+                                .add(
+                                    egui::Slider::new(&mut center_bias, 0.0..=2.0)
+                                        .text("Gravity")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -787,13 +931,31 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 }
                             }
 
-                            ui.add_space(5.0);
-                            ui.label("Center Position:");
+                            // Feedback slider
+                            let mut feedback = model
+                                .particle_system
+                                .feedback
+                                .get(&Voice::Voice4)
+                                .copied()
+                                .unwrap_or(0.0);
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut feedback, 0.0..=1.0)
+                                        .text("Feedback")
+                                        .custom_formatter(|n, _| format!("{:.3}", n)),
+                                )
+                                .changed()
+                            {
+                                model.particle_system.set_feedback(Voice::Voice4, feedback);
+                            }
 
                             // Center X slider
                             let mut center_x = params.center.x;
                             if ui
-                                .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("X"))
+                                .add(
+                                    egui::Slider::new(&mut center_x, -2000.0..=2000.0)
+                                        .text("Ctr X"),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -811,7 +973,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Center Y slider
                             let mut center_y = params.center.y;
                             if ui
-                                .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Y"))
+                                .add(
+                                    egui::Slider::new(&mut center_y, -1100.0..=1100.0)
+                                        .text("Ctr Y"),
+                                )
                                 .changed()
                             {
                                 if let Some(circle) = model
@@ -924,12 +1089,10 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
             OscCommand::ParticlesGravity { id, val } => {
                 set_gravity(model, id, val);
             }
+            OscCommand::ParticlesTrail { id, val } => {
+                set_feedback(model, id, val);
+            }
             OscCommand::ParticlesNumParticles { id, val } => {
-                let mut val = val;
-                if id == 4 {
-                    val += 0.5;
-                    println!("Num particles: {}", val);
-                }
                 set_num_particles(model, id, val);
             }
             OscCommand::EraseDrone { id } => {
@@ -940,6 +1103,12 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
             }
             OscCommand::ParticlesForce { id, val } => {
                 set_force(model, id, val);
+            }
+            OscCommand::ParticlesInnerRadius { id, val } => {
+                set_radius_inner(model, id, val);
+            }
+            OscCommand::ParticlesOuterRadius { id, val } => {
+                set_radius_outer(model, id, val);
             }
             _ => {}
         }
@@ -969,7 +1138,7 @@ fn make_drone(
         Voice::Voice4 => pt2(1280.0, 200.0),
         _ => pt2(0.0, 0.0),
     };
-    let (radius, width) = (500.0, 700.0);
+    let (outer_radius, inner_radius) = (620.0, 200.0);
     let center_bias = (gravity as f32) / 100.0;
     let strength = ((force as f32) / 100.0) + 10.0;
 
@@ -977,8 +1146,8 @@ fn make_drone(
         model.id_generator.generate(),
         voice,
         center,
-        radius,
-        width,
+        outer_radius,
+        inner_radius,
         strength,
         center_bias,
     );
@@ -1024,7 +1193,7 @@ fn make_drone(
             TERMINAL_END_RGBA.3,
         ),
         color_fade_secs: 2.0,
-        chars_per_second: 0.6,
+        chars_per_second: TERMINAL_CHARS_PER_SECOND,
         font: model.font.clone(),
         font_size,
     };
@@ -1047,7 +1216,7 @@ fn make_drone(
 
 fn set_alpha(model: &mut Model, id: i32, alpha: f32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_circle_volume(voice, alpha);
+    model.particle_system.set_alpha_limit(voice, alpha);
 }
 
 fn set_gravity(model: &mut Model, id: i32, gravity: f32) {
@@ -1061,11 +1230,27 @@ fn set_force(model: &mut Model, id: i32, force: f32) {
     model.particle_system.set_strength(voice, strength);
 }
 
+fn set_radius_inner(model: &mut Model, id: i32, val: f32) {
+    let voice = Voice::from_i32(id);
+    model.particle_system.set_radius_inner(voice, val);
+}
+
+fn set_radius_outer(model: &mut Model, id: i32, val: f32) {
+    let voice = Voice::from_i32(id);
+    model.particle_system.set_radius_outer(voice, val);
+}
+
 fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
     let voice = Voice::from_i32(id);
+
     model
         .particle_system
         .set_num_particles(voice, num_particles);
+}
+
+fn set_feedback(model: &mut Model, id: i32, feedback: f32) {
+    let voice = Voice::from_i32(id);
+    model.particle_system.set_feedback(voice, feedback);
 }
 
 impl Drop for Model {

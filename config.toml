@@ -45,7 +45,7 @@ height = 270
 
 [particles]
 # The limit of particles. (Int)
-limit = 20000
+limit = 30000
 
 
 

@@ -373,8 +373,8 @@ impl WindCircle {
     ) -> Self {
         let config = WindCircleParams {
             center,
-            radius,
-            width,
+            outer_radius: radius,
+            inner_radius: width,
             strength,
             center_bias,
             needs_recalculation: true,
@@ -453,7 +453,7 @@ impl WindCircle {
         params: &WindCircleParams,
     ) -> (usize, usize, usize, usize) {
         // Calculate the outer radius for bounding box
-        let outer_radius = params.radius + params.width / 2.0;
+        let outer_radius = params.outer_radius + params.inner_radius / 2.0;
 
         // Use the same coordinate transformation as position_to_idx for consistency
         let center_pos_transformed = field.world_to_grid_coords(params.center);
@@ -479,8 +479,8 @@ impl WindCircle {
 
     fn calculate_wind_for_cell(&self, cell: &WindCell, params: &WindCircleParams) -> Option<Wind> {
         let distance_to_center = (cell.origin - params.center).length();
-        let inner_radius = params.radius - params.width / 2.0;
-        let outer_radius = params.radius + params.width / 2.0;
+        let inner_radius = params.inner_radius;
+        let outer_radius = params.outer_radius;
 
         if distance_to_center >= inner_radius && distance_to_center <= outer_radius {
             // Wind generation logic specific to circular fields
@@ -561,8 +561,8 @@ impl WindCircle {
 #[derive(Clone)]
 pub struct WindCircleParams {
     pub center: Vec2, // center of the circle in the ParticleSystem space
-    pub radius: f32,
-    pub width: f32,                // width of the wind band (for hollow circles)
+    pub outer_radius: f32,
+    pub inner_radius: f32,         // inner hole radius
     pub strength: f32,             // strength of the wind
     pub center_bias: f32,          // 0.0 = purely tangential, 1.0 = purely radial inward
     pub needs_recalculation: bool, // if settings changed, we need to recalculate the cells
@@ -576,16 +576,16 @@ impl WindCircleParams {
         }
     }
 
-    pub fn radius(&mut self, radius: f32) {
-        if self.radius != radius {
-            self.radius = radius;
+    pub fn outer_radius(&mut self, radius: f32) {
+        if self.outer_radius != radius {
+            self.outer_radius = radius;
             self.needs_recalculation = true;
         }
     }
 
-    pub fn width(&mut self, width: f32) {
-        if self.width != width {
-            self.width = width;
+    pub fn inner_radius(&mut self, radius: f32) {
+        if self.inner_radius != radius {
+            self.inner_radius = radius;
             self.needs_recalculation = true;
         }
     }

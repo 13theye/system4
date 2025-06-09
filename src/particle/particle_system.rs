@@ -37,7 +37,8 @@ pub struct ParticleSystem {
     default_particle_color: Rgb,
 
     // OSC params
-    pub alpha: f32,               // scale the alpha of the particles
+    pub alpha_limits: HashMap<Voice, f32>, // scale the alpha of the particles
+    pub color_limits: HashMap<Voice, Rgb>,
     pub particle_num_factor: f32, // normalized proportion of particle_limit
     pub trail: f32,               // scale the trail of the particles
 
@@ -77,7 +78,8 @@ impl ParticleSystem {
             default_particle_size,
             default_particle_color,
 
-            alpha: 0.0,
+            alpha_limits: HashMap::new(),
+            color_limits: HashMap::new(),
             particle_num_factor: 1.0,
             trail: 0.0,
 
@@ -136,7 +138,10 @@ impl ParticleSystem {
         self.emitters.push(emitter_right);
 
         // Set the particle system params
-        self.alpha = (alpha as f32) / 100.0;
+        let alpha_limit = (alpha as f32) / 100.0;
+        self.alpha_limits.insert(voice, alpha_limit);
+        self.color_limits.insert(voice, self.default_particle_color);
+
         self.particle_num_factor = spawn_rate_factor;
         //self.num_particles = 1.0;
         self.trail = (trail as f32) / 100.0;
@@ -169,10 +174,21 @@ impl ParticleSystem {
         for read_inx in 0..self.particles.len() {
             let particle = &mut self.particles[read_inx];
             self.forces.apply(particle);
-            particle.update();
+
+            let parent_voice = particle.parent_voice;
+            let Some(color_limit) = self.color_limits.get(&parent_voice) else {
+                return;
+            };
+
+            let Some(alpha_limit) = self.alpha_limits.get(&parent_voice) else {
+                return;
+            };
+
+            particle.update(rgba_from(*color_limit, *alpha_limit));
             if particle.is_out_of_bounds(self.bounds_rect) {
                 particle.kill();
             }
+
             if !particle.is_dead() {
                 if write_inx != read_inx {
                     self.particles[write_inx] = self.particles[read_inx];
@@ -186,10 +202,20 @@ impl ParticleSystem {
     pub fn handle_spawning(&mut self, rng: &mut ThreadRng) {
         for emitter in self.emitters.iter() {
             if emitter.is_spawning {
+                let parent_voice = emitter.parent_voice;
+
+                let color_limit = self
+                    .color_limits
+                    .get(&parent_voice)
+                    .copied()
+                    .unwrap_or(self.default_particle_color);
+
+                let alpha_limit = self.alpha_limits.get(&parent_voice).copied().unwrap_or(1.0);
+
                 let particles = emitter.emit(
                     10.0,
                     self.default_particle_size,
-                    rgba_from(self.default_particle_color, self.alpha),
+                    rgba_from(color_limit, alpha_limit),
                     rng,
                 );
                 self.particles.extend(particles);
@@ -202,7 +228,7 @@ impl ParticleSystem {
     fn cull_excess_particles(&mut self, limit: usize) {
         let num_particles = self.particles.len();
         for i in 0..(num_particles - limit).clamp(0, num_particles) {
-            self.particles[i].set_life_span(200.0);
+            self.particles[i].set_age_per_tick(200.0);
         }
     }
 
@@ -219,12 +245,12 @@ impl ParticleSystem {
         self.forces.remove_wind_by_voice(voice);
     }
 
-    pub fn set_alpha(&mut self, alpha: f32) {
-        self.alpha = alpha;
+    pub fn set_alpha_limit(&mut self, voice: Voice, alpha: f32) {
+        self.alpha_limits.insert(voice, alpha);
     }
 
-    pub fn set_circle_volume(&mut self, voice: Voice, alpha: f32) {
-        self.forces.set_circle_volume_by_voice(voice, alpha);
+    pub fn set_feedback(&mut self, voice: Voice, feedback: f32) {
+        self.feedback.insert(voice, feedback);
     }
 
     pub fn set_gravity(&mut self, voice: Voice, gravity: f32) {
@@ -249,6 +275,23 @@ impl ParticleSystem {
                 emitter.spawn_rate_factor = num_particles;
             }
         });
+    }
+
+    pub fn set_radius_inner(&mut self, voice: Voice, val: f32) {
+        let Some(mask) = self.masks.get(&voice) else {
+            println!("Can't set inner radius:No mask found for voice: {}", voice);
+            return;
+        };
+
+        // The maximum outer radius is half the largest side of the mask
+        let max_radius = (mask.size.x.max(mask.size.y) + 50.0) / 2.0;
+        let radius = max_radius * val;
+
+        self.forces.set_circle_outer_radius_by_voice(voice, radius);
+    }
+
+    pub fn set_radius_outer(&mut self, voice: Voice, val: f32) {
+        self.forces.set_circle_outer_radius_by_voice(voice, val);
     }
 
     fn make_bounds_rect(&self) -> Rect {

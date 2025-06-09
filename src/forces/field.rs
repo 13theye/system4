@@ -170,7 +170,7 @@ impl ForceFields {
                 return;
             };
 
-            let radius = params.radius;
+            let radius = params.outer_radius;
             let new_width = radius * alpha + 200.0;
 
             self.set_circle_dims(id, radius, new_width);
@@ -196,11 +196,52 @@ impl ForceFields {
         }
     }
 
+    pub fn set_circle_outer_radius_by_voice(&mut self, voice: Voice, radius: f32) {
+        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
+
+        if circle_ids.is_empty() {
+            println!("Wind circles not found for {}", voice);
+            return;
+        }
+
+        for id in circle_ids {
+            let Some(circle) = self.wind_circles.get_mut(&id) else {
+                return;
+            };
+
+            circle.with_params_write(|p| {
+                p.outer_radius(radius);
+            });
+        }
+    }
+
+    pub fn set_circle_inner_radius_by_voice(&mut self, voice: Voice, val: f32) {
+        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
+
+        if circle_ids.is_empty() {
+            println!("Wind circles not found for {}", voice);
+            return;
+        }
+
+        for id in circle_ids {
+            let Some(circle) = self.wind_circles.get_mut(&id) else {
+                return;
+            };
+
+            let outer_radius = circle.with_params_read(|p| p.outer_radius);
+            let inner_radius = outer_radius * val;
+
+            circle.with_params_write(|p| {
+                p.inner_radius(inner_radius);
+            });
+        }
+    }
+
     pub fn set_circle_dims(&mut self, id: usize, radius: f32, width: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
             circle.with_params_write(|p| {
-                p.radius(radius);
-                p.width(width);
+                p.outer_radius(radius);
+                p.inner_radius(width);
             });
         } else {
             println!("Wind circle {} not found", id);
