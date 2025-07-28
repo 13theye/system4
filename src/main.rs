@@ -1,6 +1,6 @@
 // System 3
 //
-// (c) 2025 13th Eye & Tacit Group
+// (c) 2025 13th Eye LLC & Tacit Group
 //
 //
 // src/main.rs
@@ -8,6 +8,7 @@
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::*;
+use thread_priority::*;
 
 use std::{collections::HashMap, fs};
 
@@ -24,7 +25,9 @@ use system3::{
 
 const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
+// full brightness color for terminal
 const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
+// dimmed brightness color for terminal
 const TERMINAL_END_RGBA: (f32, f32, f32, f32) = (0.0, 0.3, 0.0, 1.0);
 const TERMINAL_NUM_LINES: usize = 8;
 const TERMINAL_LINE_MARGIN: f32 = 8.0;
@@ -168,6 +171,14 @@ fn model(app: &App) -> Model {
         std::process::exit(1);
     };
 
+    // Set macOS window flags
+    #[cfg(target_os = "macos")]
+    set_macos_window_behavior(&audience_window);
+    #[cfg(target_os = "macos")]
+    set_macos_window_behavior(&performer_window);
+    #[cfg(target_os = "macos")]
+    set_macos_window_behavior(&control_window);
+
     println!(
         "Audience window scale: {:?}",
         audience_window.scale_factor()
@@ -262,6 +273,18 @@ fn model(app: &App) -> Model {
 }
 
 fn main() {
+    // Set main thread to high priority to prevent animation interruptions
+    let thread_priority = ThreadPriority::Max;
+    let result = set_current_thread_priority(thread_priority);
+
+    if let Err(e) = result {
+        println!("Warning: Failed to set main thread priority: {:?}", e);
+    } else {
+        println!(
+            "Main thread priority set to {:?}: {:?}",
+            thread_priority, result
+        );
+    }
     nannou::app(model).update(update).run();
 }
 
@@ -332,11 +355,11 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
         let performer_rect = app.window(model.performer_window_id).unwrap().rect();
 
         // Create a scaled draw context that matches texture coordinates
-        let texture_size = vec2(model.rendering.width as f32, model.rendering.height as f32);
+        let texture_size = model.rendering.scene_texture.size();
 
         // Calculate scale factor from texture to window
-        let scale_x = performer_rect.w() / texture_size.x;
-        let scale_y = performer_rect.h() / texture_size.y;
+        let scale_x = performer_rect.w() / texture_size[0] as f32;
+        let scale_y = performer_rect.h() / texture_size[1] as f32;
 
         // Apply transform to match texture coordinates
         model
@@ -1279,5 +1302,32 @@ impl Drop for Model {
         erase_drone(self, 1);
         erase_drone(self, 4);
         std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+/// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.
+#[cfg(target_os = "macos")]
+fn set_macos_window_behavior(window: &Window) {
+    use nannou::winit::platform::macos::WindowExtMacOS;
+    // removed the NSUInteger type below because it's just an alias for usize.
+    // this allowed for the removal of objc2_foundation as a dependency.
+    // use objc2_foundation::NSUInteger;
+
+    let ns_window = window.winit_window().ns_window();
+
+    // Combine behaviors
+    const NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES: usize = 1 << 0;
+    const NS_WINDOW_COLLECTION_BEHAVIOR_STATIONARY: usize = 1 << 4;
+    const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY: usize = 1 << 7;
+
+    let behavior = NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES
+        | NS_WINDOW_COLLECTION_BEHAVIOR_STATIONARY
+        | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY;
+
+    unsafe {
+        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+        let ns_window = ns_window as *mut NSWindow;
+        (*ns_window)
+            .setCollectionBehavior(NSWindowCollectionBehavior::from_bits_truncate(behavior));
     }
 }
