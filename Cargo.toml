@@ -1,5 +1,5 @@
 [package]
-name = "system3"
+name = "system4"
 authors = ["13th Eye <jjhh@13theye.com>"]
 version = "0.1.0"
 edition = "2021"
@@ -17,9 +17,9 @@ thread-priority = "2"
 toml = "0.8"
 
 [lib]
-name = "system3"
+name = "system4"
 path = "src/lib.rs"
 
 [[bin]]
-name = "system3"
+name = "system4"
 path = "src/main.rs"
