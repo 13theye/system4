@@ -86,7 +86,7 @@ struct Model {
 
 fn model(app: &App) -> Model {
     // Load config
-    let config = Config::load().expect("\nSystem 3: FAILED TO LOAD CONFIG.TOML\n");
+    let config = Config::load().expect("\nSystem 4: FAILED TO LOAD CONFIG.TOML\n");
 
     // Main game data elements
     let particle_limit = config.particles.limit;
@@ -127,7 +127,7 @@ fn model(app: &App) -> Model {
     // Create window
     let audience_window_id = app
         .new_window()
-        .title("Tacit Group: System_3 0.1.0")
+        .title("Tacit Group: System_4 0.1.0")
         .size(config.audience_window.width, config.audience_window.height)
         .msaa_samples(1)
         .view(audience_view)
@@ -136,7 +136,7 @@ fn model(app: &App) -> Model {
 
     let performer_window_id = app
         .new_window()
-        .title("System_3 Performance Monitor v0.1.0")
+        .title("System_4 Performance Monitor v0.1.0")
         .size(
             config.performer_window.width,
             config.performer_window.height,
@@ -148,7 +148,7 @@ fn model(app: &App) -> Model {
 
     let control_window_id = app
         .new_window()
-        .title("System_3 Performer Control v0.1.0")
+        .title("System_4 Performer Control v0.1.0")
         .size(config.control_window.width, config.control_window.height)
         .msaa_samples(1)
         .key_pressed(key_pressed)
