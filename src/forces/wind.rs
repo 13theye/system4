@@ -9,20 +9,18 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+/// A wind is a simple vector force that is applied to a particle.
+/// It has a direction and a strength.
+/// The direction is a unit vector that points in the direction of the wind.
+/// The strength is a scalar that multiplies the direction to get the actual force.
+/// The force is calculated as the difference between the wind's target velocity
+/// and the particle's current velocity. Particle intertia is also considered.
+/// The force is then added to the particle's acceleration.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Wind {
     direction: Vec2,
     strength: f32,
 }
-
-// A wind is a simple vector force that is applied to a particle.
-// It has a direction and a strength.
-// The direction is a unit vector that points in the direction of the wind.
-// The strength is a scalar that multiplies the direction to get the actual force.
-// The force is calculated as the difference between the wind's target velocity
-// and the particle's current velocity. Particle intertia is also considered.
-// The force is then added to the particle's acceleration.
-
 impl Wind {
     pub fn new() -> Self {
         Self {
@@ -31,6 +29,7 @@ impl Wind {
         }
     }
 
+    /// Create a new Wind with a direction and strength
     pub fn new_with(direction: Vec2, strength: f32) -> Self {
         Self {
             direction,
@@ -38,6 +37,7 @@ impl Wind {
         }
     }
 
+    /// Apply the Wind to a Particle
     pub fn apply(&self, particle: &mut Particle) {
         // Calculate the x and y components of particle's current velocity
         let particle_vx = particle.velocity.x;
@@ -65,6 +65,10 @@ impl Wind {
     }
 }
 
+/// A WindCell is a basic unit of a WindField.
+/// It contains a list of winds that are acting on it,
+/// and a combined wind cache that is the sum of all the winds.
+/// The combined wind is recalculated when the cell or wind is updated.
 pub struct WindCell {
     winds: HashMap<usize, Wind>,
     combined_wind: Option<Wind>,
@@ -72,11 +76,6 @@ pub struct WindCell {
     rect: Rect,
     needs_update: bool,
 }
-
-// A WindCell is a basic unit of a WindField.
-// It contains a list of winds that are acting on it,
-// and a combined wind cache that is the sum of all the winds.
-// The combined wind is recalculated when the cell or wind is updated.
 
 impl WindCell {
     pub fn new_from_origin(origin: Vec2, size: Vec2) -> Self {
@@ -91,16 +90,19 @@ impl WindCell {
         }
     }
 
+    /// Add a Wind to this WindCell.
     pub fn add_wind(&mut self, source_id: usize, wind: Wind) {
         self.winds.insert(source_id, wind);
         self.needs_update = true;
     }
 
+    /// Remove a Wind from this WindCell.
     pub fn remove_wind(&mut self, id: usize) {
         self.winds.remove(&id);
         self.needs_update = true;
     }
 
+    /// Get the sum of all Winds in this WindCell, recalculating if necessary.
     pub fn get_combined_wind(&mut self) -> Option<Wind> {
         if self.needs_update {
             self.calculate_combined_wind();
@@ -108,6 +110,7 @@ impl WindCell {
         self.combined_wind
     }
 
+    /// Calculate the combined effects of all Winds in this WindCell.
     fn calculate_combined_wind(&mut self) {
         if self.winds.is_empty() {
             self.combined_wind = None;
@@ -131,6 +134,9 @@ impl WindCell {
     }
 }
 
+/// The WindField is a grid of WindCells.
+/// It is used to apply wind forces to particles.
+/// The grid is used to quickly find the wind force at a given position.
 pub struct WindField {
     // Grid of winds in x,y order. (0,0) is top left.
     cells: Vec<Vec<WindCell>>,
@@ -143,11 +149,8 @@ pub struct WindField {
     cell_size: Vec2,
 }
 
-// The WindField is a grid of WindCells.
-// It is used to apply wind forces to particles.
-// The grid is used to quickly find the wind force at a given position.
-
 impl WindField {
+    /// Create a new WindField with a center origin, x&y size, number of columns and number of rows.
     pub fn new(origin: Vec2, bounds_size: Vec2, grid_cols: usize, grid_rows: usize) -> Self {
         let cell_size = Vec2::new(
             bounds_size.x / grid_cols as f32,
@@ -185,6 +188,7 @@ impl WindField {
         }
     }
 
+    /// Given a particle, determines the WindCell that contains the particle, and then applies the WindCell's Wind on that particle.
     pub fn apply(&mut self, particle: &mut Particle) {
         let Some(wind) = self.get_wind_at_pos(particle.position()) else {
             return;
@@ -192,6 +196,7 @@ impl WindField {
         wind.apply(particle);
     }
 
+    /// Force a recalculation of all cells in the WindField.
     pub fn force_update_all(&mut self) {
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
@@ -204,29 +209,33 @@ impl WindField {
 
     /******************* Grid accessors *******************/
 
-    // Get combined wind at a position in ParticleSystem coordinates
+    /// Get combined wind at a position in ParticleSystem coordinates
     pub fn get_wind_at_pos(&mut self, position: Vec2) -> Option<Wind> {
         let (x, y) = self.position_to_idx(position)?;
 
         self.get_wind(x, y)
     }
 
+    /// Get the cell at a grid position (0,0 is top left)
     pub fn get_cell(&self, x: usize, y: usize) -> Option<&WindCell> {
         let col = self.cells.get(x)?;
         col.get(y)
     }
 
+    /// Get a mutable reference to the cell at a grid position (0,0 is top left)
     pub fn get_mut_cell(&mut self, x: usize, y: usize) -> Option<&mut WindCell> {
         let col = self.cells.get_mut(x)?;
         col.get_mut(y)
     }
 
+    /// Get the combined wind at a grid position (0,0 is top left)
     pub fn get_wind(&mut self, x: usize, y: usize) -> Option<Wind> {
         let col = self.cells.get_mut(x)?;
         let cell = col.get_mut(y)?;
         cell.get_combined_wind()
     }
 
+    /// Clear the Wind from a cell at a grid position (0,0 is top left)
     pub fn clear_cell(&mut self, x: usize, y: usize) {
         let Some(cell) = self.get_mut_cell(x, y) else {
             return;
@@ -234,7 +243,7 @@ impl WindField {
         cell.combined_wind = None;
     }
 
-    // Take a center-origin position and convert it to a index with 0,0 at top left
+    /// Take a center-origin position and convert it to a grid position index (0,0 is top left)
     fn position_to_idx(&self, pos: Vec2) -> Option<(usize, usize)> {
         let transformed = self.world_to_grid_coords(pos);
         let i = transformed.x.floor() as isize;
@@ -247,7 +256,7 @@ impl WindField {
         }
     }
 
-    // Helper method to transform world coordinates to grid coordinates (floating point)
+    /// Helper method to transform world coordinates to grid coordinates (floating point)
     fn world_to_grid_coords(&self, pos: Vec2) -> Vec2 {
         let x1 = pos.x + self.bounds_size.x / 2.0;
         let y1 = -pos.y + self.bounds_size.y / 2.0;
@@ -257,12 +266,14 @@ impl WindField {
 
     /******************* Draw for Performer *******************/
 
+    /// Draw the WindField
     pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
         self.draw_grid(draw, scale_x, scale_y);
         self.draw_vectors(draw, scale_x, scale_y);
     }
 
+    /// Draw all the Wind vectors
     fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         // Draw wind vectors from each cell's origin
         for col in 0..self.grid_cols {
@@ -285,7 +296,7 @@ impl WindField {
         }
     }
 
-    // Draw a grid of lines that represent the cells -- fast but less accurate
+    /// Draw a grid of lines that represent the cells -- fast but less accurate
     pub fn draw_grid(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         let cols = self.grid_cols;
         let rows = self.grid_rows;
@@ -319,7 +330,7 @@ impl WindField {
         }
     }
 
-    // Draw a grid of rectangles that represent the cells -- slow but more accurate
+    /// Draw a grid of rectangles that represent the cells -- slow but more accurate
     pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
@@ -336,6 +347,7 @@ impl WindField {
         }
     }
 
+    /// Draw the origin of this WindField
     fn draw_origin(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         draw.ellipse()
             .xy(self.origin * vec2(scale_x, scale_y))
@@ -346,6 +358,13 @@ impl WindField {
 
 /******************* WindCircle ******************************* */
 
+/// A WindCircle defines a circular area. Under this area, a Wind is applied
+/// to the WindCell that the circle covers.
+/// - The circle is defined by a center, radius, width, strength, and center bias.
+/// - The center bias is a value between 0.0 and 1.0 that controls the balance between tangential and radial inward wind.
+/// - A center bias between 1.0 and 2.0 moves back toward a tangential wind, in the opposite direction.
+/// - The wind is applied to the WindField by calculating the bounding box of the circle and applying the wind to the cells within the box.
+/// - The wind is then removed from the WindField by removing the wind from the cells that are within the circle.
 #[derive(Clone)]
 pub struct WindCircle {
     pub id: usize,
@@ -353,13 +372,6 @@ pub struct WindCircle {
     cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
     params: Arc<RwLock<WindCircleParams>>, // Params of the circle
 }
-
-// A WindCircle is a circular area of wind that is applied to the WindField.
-// It is used to create a circular wind effect.
-// The circle is defined by a center, radius, width, strength, and center bias.
-// The center bias is a value between 0.0 and 1.0 that controls the balance between tangential and radial inward wind.
-// The wind is applied to the WindField by calculating the bounding box of the circle and applying the wind to the cells within the box.
-// The wind is then removed from the WindField by removing the wind from the cells that are within the circle.
 
 impl WindCircle {
     pub fn new(
@@ -387,6 +399,7 @@ impl WindCircle {
         }
     }
 
+    /// Recalculate wind within each grid inside this circle, if the parameters have changed
     pub fn update(&mut self, field: &mut WindField, show_forces: bool) {
         if self.has_changes() {
             self.remove_from_field(field, show_forces);
@@ -395,7 +408,7 @@ impl WindCircle {
         }
     }
 
-    // Remove the circle's wind from the field
+    /// Remove the circle's wind from the field
     pub fn remove_from_field(&mut self, field: &mut WindField, show_forces: bool) {
         for cell_idx in self.cell_idxs.iter() {
             let Some(cell) = field.get_mut_cell(cell_idx.x, cell_idx.y) else {
@@ -410,7 +423,7 @@ impl WindCircle {
         self.cell_idxs.clear();
     }
 
-    // Apply the circle's wind to the field, return the cells that were affected
+    /// Apply the circle's wind to the field, return the cells that were affected
     pub fn apply_to_field(&self, field: &mut WindField, show_forces: bool) -> Vec<CellIdx> {
         // Get a copy of the config
         let params = self.params.read().unwrap_or_else(|poisoned| {
@@ -446,7 +459,7 @@ impl WindCircle {
         affected_cells
     }
 
-    // Get the bounding box containing all cells that are affected by the circle
+    /// Get the bounding box containing all cells that are affected by the circle
     fn calculate_bounding_box(
         &self,
         field: &WindField,
@@ -477,6 +490,7 @@ impl WindCircle {
         (min_col, max_col, min_row, max_row)
     }
 
+    /// Calculate the Wind force within a cell. Returns the wind force if this cell contains one.
     fn calculate_wind_for_cell(&self, cell: &WindCell, params: &WindCircleParams) -> Option<Wind> {
         let distance_to_center = (cell.origin - params.center).length();
         let inner_radius = params.inner_radius;
@@ -516,18 +530,22 @@ impl WindCircle {
 
     /******************* Methods to change circle properties *******************/
 
+    /// Returns true if the WindCircle has parameter changes that have not been applied.
     pub fn has_changes(&self) -> bool {
         self.with_params_read(|params| params.needs_recalculation)
     }
 
+    /// Clear the needs_recalculation flag, indicating that the parameters have been applied.
     pub fn clear_changes(&mut self) {
         self.with_params_write(|params| params.needs_recalculation = false);
     }
 
+    /// Return the WindCircleParams wrapped in an Arc<RwLock>
     pub fn params_arc(&self) -> Arc<RwLock<WindCircleParams>> {
         self.params.clone()
     }
 
+    /// Abstracted function to read the parameters of the WindCircle.
     pub fn with_params_read<R>(&self, f: impl FnOnce(&WindCircleParams) -> R) -> R {
         let params = self.params.read().unwrap_or_else(|poisoned| {
             eprintln!("Warning: RwLock was poisoned. Recovering...");
@@ -536,6 +554,7 @@ impl WindCircle {
         f(&params)
     }
 
+    /// Abstracted function to change parameters of the WindCircle.
     pub fn with_params_write<R>(&self, f: impl FnOnce(&mut WindCircleParams) -> R) -> R {
         let mut params = self.params.write().unwrap_or_else(|poisoned| {
             eprintln!("Warning: RwLock was poisoned. Recovering...");
@@ -544,6 +563,7 @@ impl WindCircle {
         f(&mut params)
     }
 
+    /// Draw the center of the WindCircle
     pub fn draw_center(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         let params = self.params.read().unwrap_or_else(|poisoned| {
             eprintln!("Warning: RwLock was poisoned. Recovering...");
@@ -558,6 +578,13 @@ impl WindCircle {
     }
 }
 
+/// Parameters for a WindCircle.
+/// - Center: The centerpoint of the circle in ParticleSystem space
+/// - Outer radius: The outer radius of the circle
+/// - Inner radius: The radius of the hole in the center of the circle
+/// - Strength: The strength of the wind applied within the circle
+/// - Center bias: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
+/// - Needs recalculation: Flag to indicate that one or more parameters have changed so that WindField will recalculate
 #[derive(Clone)]
 pub struct WindCircleParams {
     pub center: Vec2, // center of the circle in the ParticleSystem space
@@ -569,6 +596,7 @@ pub struct WindCircleParams {
 }
 
 impl WindCircleParams {
+    /// Set the center of the WindCircle
     pub fn center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
@@ -576,6 +604,7 @@ impl WindCircleParams {
         }
     }
 
+    /// Set the OR of the WindCircle
     pub fn outer_radius(&mut self, radius: f32) {
         if self.outer_radius != radius {
             self.outer_radius = radius;
@@ -583,6 +612,7 @@ impl WindCircleParams {
         }
     }
 
+    /// Set the IR of the WindCircle
     pub fn inner_radius(&mut self, radius: f32) {
         if self.inner_radius != radius {
             self.inner_radius = radius;
@@ -590,6 +620,7 @@ impl WindCircleParams {
         }
     }
 
+    /// Set the strength of the WindCircle
     pub fn strength(&mut self, strength: f32) {
         if self.strength != strength {
             self.strength = strength;
@@ -597,6 +628,7 @@ impl WindCircleParams {
         }
     }
 
+    /// Set the center bias of the WindCircle
     pub fn center_bias(&mut self, center_bias: f32) {
         if self.center_bias != center_bias {
             self.center_bias = center_bias;

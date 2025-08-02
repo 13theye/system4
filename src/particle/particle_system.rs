@@ -1,8 +1,7 @@
-// src/particle/particle_system.rs
-//
-//
-// The Particle System of System 3
-
+/// src/particle/particle_system.rs
+///
+///
+/// The Particle System of System 3
 use std::collections::HashMap;
 
 use nannou::prelude::*;
@@ -10,7 +9,7 @@ use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 
 use crate::{
     forces::{ForceFields, WindCircle},
-    particle::{EmitDirection, Emitter, Particle},
+    particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
     utils::IdGenerator,
     view::{Mask, Voice},
 };
@@ -24,7 +23,7 @@ pub struct ParticleSystem {
 
     // masks and emitters
     pub masks: HashMap<Voice, Mask>,
-    pub emitters: Vec<Emitter>,
+    pub emitters: Vec<Box<dyn Emitter>>,
 
     // Global params
     pub default_particle_limit: usize,
@@ -73,7 +72,7 @@ impl ParticleSystem {
             particle_limits: HashMap::new(),
             feedback: HashMap::new(),
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
-            global_max_spawn_rate: 20.0,
+            global_max_spawn_rate: 40.0,
             masks,
             emitters: Vec::new(),
             bounds_size,
@@ -112,10 +111,11 @@ impl ParticleSystem {
         let emitter_left_origin = vec2(mask.rect.left() - 20.0, mask.origin.y);
         let emitter_right_origin = vec2(mask.rect.right() + 20.0, mask.origin.y);
 
-        let spawn_rate_factor = (num_particles as f32) / 100.0;
+        let max_particle_percentage = (num_particles as f32) / 100.0;
+        let spawn_rate_factor = 1.0;
 
         // Create particle emitters
-        let emitter_left = Emitter::new(
+        let emitter_left = LinearEmitter::new(
             id_generator.generate(),
             voice,
             emitter_left_origin,
@@ -126,7 +126,7 @@ impl ParticleSystem {
             spawn_rate_factor,
         );
 
-        let emitter_right = Emitter::new(
+        let emitter_right = LinearEmitter::new(
             id_generator.generate(),
             voice,
             emitter_right_origin,
@@ -137,16 +137,26 @@ impl ParticleSystem {
             spawn_rate_factor,
         );
 
+        let emitter_center = PointEmitter::new(
+            id_generator.generate(),
+            voice,
+            mask.origin,
+            self.global_max_spawn_rate,
+            spawn_rate_factor,
+        );
+
         // Add the emitters
-        self.emitters.push(emitter_left);
-        self.emitters.push(emitter_right);
+        self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        self.emitters.push(Box::new(emitter_right));
+        self.emitters.push(Box::new(emitter_center));
 
         // Set the particle system params
         let alpha_limit = (alpha as f32) / 100.0;
         self.alpha_limits.insert(voice, alpha_limit);
         self.color_limits.insert(voice, self.default_particle_color);
 
-        self.particle_num_factors.insert(voice, spawn_rate_factor);
+        self.particle_num_factors
+            .insert(voice, max_particle_percentage);
         //self.num_particles = 1.0;
         self.trail = (trail as f32) / 100.0;
 
@@ -164,8 +174,7 @@ impl ParticleSystem {
     /********************* Update methods ********************************** */
 
     pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
-        self.handle_spawning(rng);
-
+        self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
@@ -174,7 +183,7 @@ impl ParticleSystem {
             let mut write_inx = 0;
             for read_inx in 0..particles.len() {
                 let particle = &mut particles[read_inx];
-                self.forces.apply(particle);
+                self.forces.apply_forces_to_particle(particle);
 
                 let Some(color_limit) = self.color_limits.get(voice) else {
                     return;
@@ -184,7 +193,7 @@ impl ParticleSystem {
                     return;
                 };
 
-                particle.update(rgba_from(*color_limit, *alpha_limit), *alpha_limit);
+                particle.update(*color_limit, *alpha_limit);
                 if particle.is_out_of_bounds(self.bounds_rect) {
                     particle.kill();
                 }
@@ -200,16 +209,20 @@ impl ParticleSystem {
         }
     }
 
-    pub fn handle_spawning(&mut self, rng: &mut ThreadRng) {
+    pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {
         let mut indices: Vec<usize> = (0..self.emitters.len()).collect();
         indices.shuffle(rng);
 
+        let mut parent_voice: Voice;
+        let mut particle_limit: usize;
+        let mut color_limit: Rgb;
+
         for i in indices {
             let emitter = &self.emitters[i];
-            if emitter.is_spawning {
-                let parent_voice = emitter.parent_voice;
+            if emitter.is_spawning() {
+                parent_voice = emitter.parent_voice();
                 let particle_vec = self.particles.entry(parent_voice).or_default();
-                let particle_limit = self
+                particle_limit = self
                     .particle_limits
                     .get(&parent_voice)
                     .copied()
@@ -220,21 +233,18 @@ impl ParticleSystem {
                     return;
                 }
 
-                let color_limit = self
+                color_limit = self
                     .color_limits
                     .get(&parent_voice)
                     .copied()
                     .unwrap_or(self.default_particle_color);
 
-                let alpha_limit = self.alpha_limits.get(&parent_voice).copied().unwrap_or(1.0);
-
-                let particles = emitter.emit(
+                particle_vec.extend(emitter.emit(
                     10.0,
                     self.default_particle_size,
-                    rgba_from(color_limit, alpha_limit),
+                    rgba_from(color_limit, 0.0),
                     rng,
-                );
-                particle_vec.extend(particles);
+                ));
             }
         }
     }
@@ -248,15 +258,23 @@ impl ParticleSystem {
                 .get(voice)
                 .unwrap_or(&self.default_particle_limit);
 
-            let num_particles = particles.len();
+            // Partition particles into active and fading groups
+            let active_particles: Vec<_> = particles
+                .iter_mut()
+                .filter(|p| p.remaining_life_span > p.fade_out_duration())
+                .collect();
 
-            if num_particles > *limit {
-                for particle in particles
-                    .iter_mut()
-                    .rev() // kill youngest particles first
-                    .take((num_particles - limit).clamp(0, num_particles))
+            let num_active_particles = active_particles.len();
+
+            if num_active_particles > *limit {
+                let excess_active = num_active_particles - limit;
+
+                for particle in active_particles
+                    .into_iter()
+                    .rev() // kill oldest particles first
+                    .take(excess_active)
                 {
-                    particle.set_age_per_tick(200.0);
+                    particle.set_to_fade_out();
                 }
             }
         }
@@ -278,7 +296,7 @@ impl ParticleSystem {
 
     pub fn kill_voice(&mut self, voice: &Voice) {
         self.emitters
-            .retain(|emitter| emitter.parent_voice != *voice);
+            .retain(|emitter| emitter.parent_voice() != *voice);
         self.forces.remove_wind_by_voice(voice);
     }
 
@@ -296,8 +314,8 @@ impl ParticleSystem {
 
     pub fn set_is_spawning(&mut self, voice: &Voice, is_spawning: bool) {
         self.emitters.iter_mut().for_each(|emitter| {
-            if emitter.parent_voice == *voice {
-                emitter.is_spawning = is_spawning;
+            if emitter.parent_voice() == *voice {
+                emitter.set_is_spawning(is_spawning);
             }
         });
     }
@@ -315,8 +333,8 @@ impl ParticleSystem {
             .insert(*voice, num_particles)
             .unwrap_or(0.5);
         self.emitters.iter_mut().for_each(|emitter| {
-            if emitter.parent_voice == *voice {
-                emitter.spawn_rate_factor = spawn_rate_factor;
+            if emitter.parent_voice() == *voice {
+                emitter.set_spawn_rate_factor(spawn_rate_factor);
             }
         });
     }
@@ -349,8 +367,8 @@ impl ParticleSystem {
 
     /********************* Draw methods ********************************** */
 
-    // In this draw mode, particles are only drawn if they are within the bounds of the mask
-    // associated with the emitter that spawned them.
+    /// In this draw mode, particles are only drawn if they are within the bounds of the mask
+    /// associated with the emitter that spawned them.
     pub fn draw(&self, draw: &Draw) {
         for (voice, particles) in self.particles.iter() {
             for particle in particles.iter() {
@@ -367,6 +385,7 @@ impl ParticleSystem {
         }
     }
 
+    /// Draw the forces and emitters
     pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
         self.forces.wind_field.draw(draw, scale_x, scale_y);
@@ -376,6 +395,7 @@ impl ParticleSystem {
         }
     }
 
+    /// Draw the origin
     pub fn draw_origin(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         draw.ellipse()
             .xy(self.origin * vec2(scale_x, scale_y))
@@ -383,6 +403,7 @@ impl ParticleSystem {
             .color(rgba(1.0, 0.0, 1.0, 0.2));
     }
 
+    /// Draw the emitters
     pub fn draw_emitters(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         for emitter in self.emitters.iter() {
             emitter.draw(draw, scale_x, scale_y);
@@ -390,7 +411,7 @@ impl ParticleSystem {
     }
 }
 
-// helper to make a Rgba from an Rgb and alpha value
+/// Helper to make a Rgba from an Rgb and alpha value
 fn rgba_from(rgb: Rgb, alpha: f32) -> Rgba {
     rgba(rgb.red, rgb.green, rgb.blue, alpha)
 }

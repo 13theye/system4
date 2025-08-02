@@ -312,6 +312,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.draw);
+
+    // When a terminal start sequence is finished, send the OSC command to turn on the drone
     for (voice, finish_signal) in finish_signals {
         if finish_signal {
             let id = voice.to_i32();
@@ -1165,6 +1167,7 @@ fn erase_drone(model: &mut Model, id: i32) {
     model.osc_send.send_drone_on_off(id, 0);
 }
 
+/// Start the Voice and begin "make drone" automated display
 #[allow(clippy::too_many_arguments)]
 fn make_drone(
     model: &mut Model,
