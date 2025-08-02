@@ -209,7 +209,7 @@ impl Terminal {
                 if next_line.chars == vec![' '] {
                     self.params.chars_per_second = 6.0;
                 } else {
-                    self.params.chars_per_second = 0.6;
+                    self.params.chars_per_second = 6.0; // 0.6 was a nice speed for audience
                 }
 
                 // Reset timing for this line instance

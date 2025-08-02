@@ -1,6 +1,6 @@
 // src/particle/mod.rs
 pub mod emitter;
-pub use emitter::{EmitDirection, Emitter};
+pub use emitter::{EmitDirection, Emitter, LinearEmitter, PointEmitter};
 
 pub mod particles;
 pub use particles::Particle;

@@ -1,6 +1,6 @@
-// src/force/mod.rs
-//
-
+/// src/force/mod.rs
+///
+/// Modules defining the behavior of forces
 pub mod field;
 pub use field::{CellIdx, ForceFields};
 

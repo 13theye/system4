@@ -5,6 +5,7 @@ pub mod forces;
 pub mod fps;
 pub mod osc;
 pub mod particle;
+pub mod rhythm;
 pub mod terminals;
 pub mod utils;
 pub mod view;
