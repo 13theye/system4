@@ -18,6 +18,7 @@ use system4::{
     fps::FpsManager,
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
+    rendering::HeatmapRenderer,
     terminals::{TerminalParams, TerminalSystem},
     utils::IdGenerator,
     view::Voice,
@@ -61,6 +62,7 @@ struct Model {
 
     // Rendering engine
     rendering: Nnpipe,
+    heatmap_renderer: HeatmapRenderer,
     dpi_scale: f32,
     font: Font,
 
@@ -75,6 +77,9 @@ struct Model {
 
     // FPS display
     fps: FpsManager,
+
+    // Frame counter for optimization
+    frame_count: u64,
 
     // UI state
     selected_circle_id: HashMap<Voice, Option<usize>>,
@@ -201,6 +206,14 @@ fn model(app: &App) -> Model {
         config.rendering.texture_samples,
     );
 
+    // Create heatmap renderer
+    let heatmap_renderer = HeatmapRenderer::new(
+        device,
+        config.rendering.texture_width,
+        config.rendering.texture_height,
+        particle_limit as usize,
+    );
+
     // Create reshapers for both windows
     let audience_reshaper = rendering.create_reshaper_for_post_processed(device, &audience_window);
     let performer_reshaper =
@@ -258,9 +271,11 @@ fn model(app: &App) -> Model {
         performer_draw,
         control_draw,
         rendering,
+        heatmap_renderer,
         egui,
         rng,
         fps,
+        frame_count: 0,
         selected_circle_id: HashMap::from([
             (Voice::Voice1, None),
             (Voice::Voice2, None),
@@ -289,13 +304,28 @@ fn main() {
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
+    // Increment frame counter
+    model.frame_count += 1;
+
+    // First, render GPU heatmap with current particle positions
+    let window = app.main_window();
+    let device = window.device();
+    let queue = window.queue();
+    let particle_positions = model.particle_system.get_live_particle_positions();
+    model.heatmap_renderer.render_heatmap(
+        device,
+        queue,
+        &particle_positions,
+        model.render_rect,
+        model.frame_count,
+    );
+
     // Set white background
     model.draw.background().color(BLACK);
 
-    // Draw analytical heatmap background first
-    model
-        .particle_system
-        .draw_analytical_heatmap_background(&model.draw, model.render_rect);
+    // Draw heatmap as background texture
+    let heatmap_view = model.heatmap_renderer.get_heatmap_view();
+    model.draw.texture(heatmap_view).wh(model.render_size);
 
     // Update FPS counter
     model.fps.update();
@@ -314,7 +344,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .update(&mut model.rng, model.show_forces);
 
     // Draw particles
-    //model.particle_system.draw(&model.draw);
+    model.particle_system.draw(&model.draw);
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.draw);
@@ -394,9 +424,13 @@ fn render_and_post(app: &App, model: &mut Model) {
     let device = window.device();
     let queue = window.queue();
 
-    // Render the game to texture and post-process
+    // Render the game to texture
     model.rendering.render_scene(device, queue, &model.draw);
-    model.rendering.post_process(device, queue);
+
+    // Post-process the texture and draw to screen
+    //model.rendering.post_process(device, queue);
+
+    model.rendering.direct_to_view(device, queue);
 }
 
 // ******************************* Input Capture *****************************

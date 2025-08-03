@@ -29,8 +29,8 @@ arc_resolution = 25
 
 [audience_window]
 # The size of the audience window game render.
-width = 3840
-height = 2160
+width = 1920
+height = 1080
 
 [performer_window]
 # The size of the performer window game render.
@@ -46,7 +46,7 @@ height = 270
 [particles]
 # The limit of particles per mask area. (Int)
 # Global particle limit is the limit * number of masks.
-limit = 6000
+limit = 4000
 
 
 

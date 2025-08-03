@@ -366,6 +366,18 @@ impl ParticleSystem {
         )
     }
 
+    /********************* Particle data extraction ********************************** */
+
+    /// Extract all live particle positions for GPU processing
+    pub fn get_live_particle_positions(&self) -> Vec<Vec2> {
+        self.particles
+            .values()
+            .flat_map(|particles| particles.iter())
+            .filter(|p| p.is_alive())
+            .map(|p| p.position())
+            .collect()
+    }
+
     /********************* Draw methods ********************************** */
 
     /// In this draw mode, particles are only drawn if they are within the bounds of the mask
