@@ -2320,6 +2320,7 @@ dependencies = [
  "nannou_osc",
  "nnpipe",
  "objc2-app-kit",
+ "rayon",
  "serde",
  "serde_json",
  "thread-priority",

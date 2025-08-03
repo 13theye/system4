@@ -289,7 +289,13 @@ fn main() {
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
+    // Set white background
     model.draw.background().color(BLACK);
+
+    // Draw analytical heatmap background first
+    model
+        .particle_system
+        .draw_analytical_heatmap_background(&model.draw, model.render_rect);
 
     // Update FPS counter
     model.fps.update();
@@ -308,7 +314,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .update(&mut model.rng, model.show_forces);
 
     // Draw particles
-    model.particle_system.draw(&model.draw);
+    //model.particle_system.draw(&model.draw);
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.draw);
