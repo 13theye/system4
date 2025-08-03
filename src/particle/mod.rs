@@ -7,3 +7,5 @@ pub use particles::Particle;
 
 pub mod particle_system;
 pub use particle_system::ParticleSystem;
+
+pub mod particle_system_new;

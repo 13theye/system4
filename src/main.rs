@@ -311,21 +311,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let window = app.main_window();
     let device = window.device();
     let queue = window.queue();
-    let particle_positions = model.particle_system.get_live_particle_positions();
-    model.heatmap_renderer.render_heatmap(
-        device,
-        queue,
-        &particle_positions,
-        model.render_rect,
-        model.frame_count,
-    );
 
-    // Set white background
+    // Set background
     model.draw.background().color(BLACK);
-
-    // Draw heatmap as background texture
-    let heatmap_view = model.heatmap_renderer.get_heatmap_view();
-    model.draw.texture(heatmap_view).wh(model.render_size);
 
     // Update FPS counter
     model.fps.update();
@@ -338,13 +326,26 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let commands = model.osc.take_commands();
     process_osc(model, commands);
 
-    // Update particle system
-    model
+    // Update particle system and get live positions
+    let particle_positions = model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
+    // Render heatmap
+    model.heatmap_renderer.render_heatmap(
+        device,
+        queue,
+        &particle_positions,
+        model.render_rect,
+        model.frame_count,
+    );
+
+    // Draw heatmap as texture
+    let heatmap_view = model.heatmap_renderer.get_heatmap_view();
+    model.draw.texture(heatmap_view).wh(model.render_size);
+
     // Draw particles
-    model.particle_system.draw(&model.draw);
+    //model.particle_system.draw(&model.draw);
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.draw);

@@ -1,7 +1,7 @@
 /// src/particle/particle_system.rs
 ///
 ///
-/// The Particle System of System 3
+/// The Particle System of System 4
 use std::collections::HashMap;
 
 use nannou::prelude::*;
@@ -174,11 +174,13 @@ impl ParticleSystem {
 
     /********************* Update methods ********************************** */
 
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> Vec<Vec2> {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
+
+        let mut live_positions = Vec::new();
 
         for (voice, particles) in self.particles.iter_mut() {
             let mut write_inx = 0;
@@ -187,11 +189,11 @@ impl ParticleSystem {
                 self.forces.apply_forces_to_particle(particle);
 
                 let Some(color_limit) = self.color_limits.get(voice) else {
-                    return;
+                    return live_positions;
                 };
 
                 let Some(alpha_limit) = self.alpha_limits.get(voice) else {
-                    return;
+                    return live_positions;
                 };
 
                 particle.update(*color_limit, *alpha_limit);
@@ -200,6 +202,9 @@ impl ParticleSystem {
                 }
 
                 if !particle.is_dead() {
+                    if particle.is_alive() {
+                        live_positions.push(particle.position());
+                    }
                     if write_inx != read_inx {
                         particles[write_inx] = particles[read_inx];
                     }
@@ -208,6 +213,8 @@ impl ParticleSystem {
             }
             particles.truncate(write_inx);
         }
+
+        live_positions
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {
