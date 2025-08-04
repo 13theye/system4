@@ -13,7 +13,7 @@ const FADE_OUT_DURATION: f32 = 100.0;
 pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     position: Point2,
-    feedback_positions: [Option<Point2>; 4],
+    feedback_positions: [Option<Point2>; 8],
     pub velocity: Vec2,
     pub acceleration: Vec2,
 
@@ -34,7 +34,7 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: [None; 4],
+            feedback_positions: [None; 8],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -58,7 +58,7 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            feedback_positions: [None; 4],
+            feedback_positions: [None; 8],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -117,39 +117,45 @@ impl Particle {
     }
 
     fn record_feedback_position(&mut self) {
-        for i in (1..3).rev() {
+        for i in (1..7).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
         self.feedback_positions[0] = Some(self.position);
     }
 
     pub fn draw(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
-        let scaled_position = self.position / dpi_scale;
         let scaled_size = self.size / dpi_scale;
 
         draw.line()
-            .xy(scaled_position)
-            .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-            .end(scaled_position + vec2(0.0, scaled_size / 2.0))
+            .xy(self.position)
+            .start(vec2(scaled_size / 2.0, 0.0))
+            .end(vec2(-scaled_size / 2.0, 0.0))
             .stroke_weight(scaled_size)
             .color(self.rgba);
 
-        if feedback > 0.1 {
-            for i in 1..(feedback * 3.0).round().min(3.0) as usize {
-                if let Some(position) = self.feedback_positions[i] {
-                    let scaled_position = position / dpi_scale;
-                    let color = rgba(
-                        self.rgba.red,
-                        self.rgba.green,
-                        self.rgba.blue,
-                        (self.rgba.alpha - (i as f32 / 3.0)).max(0.1),
-                    );
+        if feedback > 0.01 {
+            // Create trail by connecting feedback positions with scaled distances
+            let mut prev_pos = self.position;
+
+            for i in 1..(feedback * 7.0).round().min(7.0) as usize {
+                if let Some(trail_pos) = self.feedback_positions[i] {
+                    // Work entirely in world coordinates, let draw API handle scaling
+                    let direction = trail_pos - self.position;
+                    let extended_pos = self.position + direction * feedback;
+
+                    // Draw trail segment
+                    let trail_alpha = self.rgba.alpha * (1.0 - i as f32 * 0.125);
+                    let trail_color =
+                        rgba(self.rgba.red, self.rgba.green, self.rgba.blue, trail_alpha);
+
+                    // Draw line connecting positions
                     draw.line()
-                        .xy(scaled_position)
-                        .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-                        .end(scaled_position + vec2(0.0, scaled_size / 2.0))
-                        .stroke_weight(scaled_size)
-                        .color(color);
+                        .start(prev_pos)
+                        .end(extended_pos)
+                        .stroke_weight(scaled_size * (0.5 - i as f32 * 0.05))
+                        .color(trail_color);
+
+                    prev_pos = extended_pos;
                 }
             }
         }

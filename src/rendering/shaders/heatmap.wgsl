@@ -21,7 +21,7 @@ struct HeatmapParams {
 @group(0) @binding(2) var<uniform> params: HeatmapParams;
 
 // Deep red/magenta/orange gradient function
-fn color_from_intensity(intensity: f32) -> vec4<f32> {
+fn magenta_range_from_intensity(intensity: f32) -> vec4<f32> {
     let clamped_intensity = clamp(intensity, 0.0, 1.0);
     
     if (clamped_intensity < 0.25) {
@@ -60,6 +60,13 @@ fn color_from_intensity(intensity: f32) -> vec4<f32> {
         }
         return vec4<f32>(rgb, 0.9);
     }
+}
+
+// Grayscale gradient function
+fn color_from_intensity(intensity: f32) -> vec4<f32> {
+    let clamped_intensity = clamp(intensity, 0.0, 1.0);
+    let gray_value = 1.0 - clamped_intensity;
+    return vec4<f32>(gray_value, gray_value, gray_value, 0.7 + clamped_intensity * 0.2);
 }
 
 @compute @workgroup_size(8, 8, 1)
@@ -118,7 +125,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     // Skip pixels with very low intensity
     if (total_intensity < 0.01) {
-        textureStore(heatmap_texture, pixel_coords, vec4<f32>(0.0, 0.0, 0.0, 0.0));
+        textureStore(heatmap_texture, pixel_coords, vec4<f32>(1.0, 1.0, 1.0, 0.0));
         return;
     }
     

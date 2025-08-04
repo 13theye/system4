@@ -112,7 +112,7 @@ fn model(app: &App) -> Model {
     };
     let osc_loop = OscSender::new(&osc_loop_config).unwrap();
 
-    // I dont know why but DPI scale is needed to place particles correctly in draw.
+    // DPI scale is used to scale the size of draw objects to account for DPI scaling.
     let dpi_scale = config.rendering.dpi_scale;
 
     let particle_system = ParticleSystem::new(
@@ -332,7 +332,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .update(&mut model.rng, model.show_forces);
 
     // Render heatmap
-    model.heatmap_renderer.render_heatmap(
+    /*model.heatmap_renderer.render_heatmap(
         device,
         queue,
         &particle_positions,
@@ -343,9 +343,10 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Draw heatmap as texture
     let heatmap_view = model.heatmap_renderer.get_heatmap_view();
     model.draw.texture(heatmap_view).wh(model.render_size);
+    */
 
     // Draw particles
-    //model.particle_system.draw(&model.draw);
+    model.particle_system.draw(&model.draw);
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.draw);
@@ -429,9 +430,9 @@ fn render_and_post(app: &App, model: &mut Model) {
     model.rendering.render_scene(device, queue, &model.draw);
 
     // Post-process the texture and draw to screen
-    //model.rendering.post_process(device, queue);
+    model.rendering.post_process(device, queue);
 
-    model.rendering.direct_to_view(device, queue);
+    //model.rendering.direct_to_view(device, queue);
 }
 
 // ******************************* Input Capture *****************************

@@ -46,7 +46,7 @@ height = 270
 [particles]
 # The limit of particles per mask area. (Int)
 # Global particle limit is the limit * number of masks.
-limit = 4000
+limit = 8000
 
 
 

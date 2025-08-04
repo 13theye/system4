@@ -1,154 +1,225 @@
 /// particle_system_new.rs
 ///
-/// Faster particles using Structs-of-Arrays
+/// A new particle system that uses the new Particles struct-of-arrays
 ///
+use std::collections::HashMap;
+
 use nannou::prelude::*;
+use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
+use rayon::prelude::*;
 
-const PARTICLE_MASS: f32 = 11.0;
-const PARTICLE_LIFE_SPAN: f32 = 3600.0;
-const FADE_IN_DURATION: f32 = 400.0; // frames to fade in
-const FADE_OUT_DURATION: f32 = 100.0;
+use crate::{
+    forces::{ForceFields, WindCircle},
+    particle::{EmitDirection, Emitter, LinearEmitter, Particles, PointEmitter},
+    utils::IdGenerator,
+    view::{Mask, Voice},
+};
 
-#[derive(Debug, Default)]
-pub struct Particles {
-    // Positioning and motion
-    positions: Vec<Point2>,
-    velocities: Vec<Vec2>,
-    accelerations: Vec<Vec2>,
-    feedback_positions: Vec<[Option<Point2>; 4]>,
+pub struct ParticleSystemNew {
+    // Particles
+    pub particles: Particles,
 
-    // Lifespan
-    ages: Vec<f32>,
-    remaining_life_spans: Vec<f32>,
+    // forces
+    pub forces: ForceFields,
 
-    // Size
-    sizes: Vec<f32>,
-    masses: Vec<f32>,
+    // masks and emitters
+    pub masks: HashMap<Voice, Mask>,
+    pub emitters: Vec<Box<dyn Emitter>>,
 
-    // Color and alpha
-    colors: Vec<Rgb>,
-    alphas: Vec<f32>,
+    // Origin and bounds
+    origin: Point2,
+    bounds_size: Vec2,
+    pub bounds_rect: Rect,
 
-    // Metadata
-    parent_ids: Vec<usize>,
+    // Global Params
+    pub per_voice_particle_limit: usize,
+    pub feedback_settings: HashMap<Voice, f32>,
+    pub global_max_spawn_rate: f32,
+
+    // Default particle params
+    default_particle_size: f32,
+    default_particle_color: Rgb,
+
+    // Params set via OSC
+    pub alpha_limits: HashMap<Voice, f32>, // scale the alpha of the particles
+    pub color_limits: HashMap<Voice, Rgb>,
+    pub particle_limits: HashMap<Voice, usize>,
+    pub particle_num_factors: HashMap<Voice, f32>, // normalized proportion of particle_limit
+    pub trail: f32,
+
+    // DPI scale
+    dpi_scale: f32, // scale the trail of the particles
 }
 
-impl Particles {
-    pub fn new() -> Self {
+impl ParticleSystemNew {
+    pub fn new(
+        origin: Point2,
+        width: f32,
+        height: f32,
+        default_particle_size: f32,
+        default_particle_color: Rgb,
+        default_particle_limit: u32,
+        dpi_scale: f32,
+    ) -> Self {
+        let bounds_size = Vec2::new(width, height);
+        let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
+        let grid_cols = (width / 30.0) as usize;
+        let grid_rows = (height / 30.0) as usize;
+
+        // pre-populate the first mask
+        let masks = HashMap::new();
+
         Self {
-            positions: Vec::new(),
-            velocities: Vec::new(),
-            accelerations: Vec::new(),
-            feedback_positions: Vec::new(),
-            ages: Vec::new(),
-            remaining_life_spans: Vec::new(),
-            sizes: Vec::new(),
-            masses: Vec::new(),
-            colors: Vec::new(),
-            alphas: Vec::new(),
-            parent_ids: Vec::new(),
+            particles: Particles::new(),
+            forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
+
+            masks,
+            emitters: Vec::new(),
+
+            origin,
+            bounds_size,
+            bounds_rect,
+
+            per_voice_particle_limit: default_particle_limit as usize,
+            feedback_settings: HashMap::new(),
+            global_max_spawn_rate: 40.0,
+
+            default_particle_size,
+            default_particle_color,
+
+            alpha_limits: HashMap::new(),
+            color_limits: HashMap::new(),
+            particle_limits: HashMap::new(),
+            particle_num_factors: HashMap::new(),
+            trail: 0.0,
+
+            dpi_scale,
         }
     }
 
-    /// Add a moving particle. Used by Emitters.
-    /// - default parameters implied:
-    /// - particle life span (via constant)
-    /// - particle mass (via constant)
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_new_particle_with_motion(
+    /********************* Make drone ********************************** */
+
+    // Create a drone with a mask and emitters. Return the mask's rect
+    pub fn make_drone_with(
         &mut self,
-        parent_id: usize,
-        position: Point2,
-        size: f32,
-        color: Rgb,
-        alpha: f32,
-        acceleration: Vec2,
-        velocity: Vec2,
-    ) {
-        self.positions.push(position);
-        self.accelerations.push(acceleration);
-        self.velocities.push(velocity);
-        self.feedback_positions.push([None; 4]);
-        self.ages.push(0.0);
-        self.remaining_life_spans.push(PARTICLE_LIFE_SPAN);
-        self.sizes.push(size);
-        self.masses.push(PARTICLE_MASS);
-        self.colors.push(color);
-        self.alphas.push(alpha);
-        self.parent_ids.push(parent_id);
+        id_generator: &mut IdGenerator,
+        voice: Voice,
+        circle: WindCircle,
+        alpha: i32,
+        num_particles: i32,
+        trail: i32,
+    ) -> Rect {
+        if self.masks.contains_key(&voice) {
+            self.masks.remove(&voice);
+        }
+
+        let mask = Mask::make_drone(voice);
+
+        let emitter_left_origin = vec2(mask.rect.left() - 20.0, mask.origin.y);
+        let emitter_right_origin = vec2(mask.rect.right() + 20.0, mask.origin.y);
+
+        let max_particle_percentage = (num_particles as f32) / 100.0;
+        let spawn_rate_factor = 1.0;
+
+        // Create particle emitters
+        let emitter_left = LinearEmitter::new(
+            id_generator.generate(),
+            voice,
+            emitter_left_origin,
+            mask.rect.top_left(),
+            mask.rect.bottom_left(),
+            EmitDirection::East,
+            self.global_max_spawn_rate,
+            spawn_rate_factor,
+        );
+
+        let emitter_right = LinearEmitter::new(
+            id_generator.generate(),
+            voice,
+            emitter_right_origin,
+            mask.rect.top_right(),
+            mask.rect.bottom_right(),
+            EmitDirection::West,
+            self.global_max_spawn_rate,
+            spawn_rate_factor,
+        );
+
+        let emitter_center = PointEmitter::new(
+            id_generator.generate(),
+            voice,
+            mask.origin,
+            self.global_max_spawn_rate,
+            spawn_rate_factor,
+        );
+
+        // Add the emitters
+        //self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        //self.emitters.push(Box::new(emitter_right));
+        self.emitters.push(Box::new(emitter_center));
+
+        // Set the particle system params
+        let alpha_limit = (alpha as f32) / 100.0;
+        self.alpha_limits.insert(voice, alpha_limit);
+        self.color_limits.insert(voice, self.default_particle_color);
+
+        self.particle_num_factors
+            .insert(voice, max_particle_percentage);
+        //self.num_particles = 1.0;
+        self.trail = (trail as f32) / 100.0;
+
+        // Add the wind circle to the forces
+        self.forces.add_wind_circle(circle);
+
+        // Add the mask
+        let mask_rect = mask.rect;
+        self.masks.insert(voice, mask);
+
+        // Return the mask's rect
+        mask_rect
     }
 
-    /// Draw all particles
-    pub fn draw_all(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
-        self.positions
-            .iter()
-            .enumerate()
-            .for_each(|(index, &position)| {
-                let scaled_position = position / dpi_scale;
-                let scaled_size = self.sizes[index] / dpi_scale;
+    /********************* Update methods ********************************** */
 
-                draw.line()
-                    .xy(scaled_position)
-                    .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-                    .end(scaled_position + vec2(0.0, scaled_size / 2.0))
-                    .stroke_weight(scaled_size)
-                    .color(Rgba {
-                        color: self.colors[index],
-                        alpha: self.alphas[index],
-                    });
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> (&Vec<f32>, &Vec<f32>) {
+        //self.handle_particle_emission(rng);
+        //self.cull_excess_particles();
 
-                if feedback > 0.1 {
-                    for i in 1..(feedback * 3.0).round().min(3.0) as usize {
-                        if let Some(position) = self.feedback_positions[index][i] {
-                            let scaled_position = position / dpi_scale;
-                            let color = Rgba {
-                                color: self.colors[index],
-                                alpha: (self.alphas[index] - (i as f32 / 3.0)).max(0.1),
-                            };
-                            draw.line()
-                                .xy(scaled_position)
-                                .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-                                .end(scaled_position + vec2(0.0, scaled_size / 2.0))
-                                .stroke_weight(scaled_size)
-                                .color(color);
-                        }
-                    }
+        self.forces.update(show_forces);
+
+        /*
+        for (voice, particles) in self.particles.iter_mut() {
+            let mut write_inx = 0;
+            for read_inx in 0..particles.len() {
+                let particle = &mut particles[read_inx];s
+                self.forces.apply_forces_to_particle(particle);
+
+                let Some(color_limit) = self.color_limits.get(voice) else {
+                    return live_positions;
+                };
+
+                let Some(alpha_limit) = self.alpha_limits.get(voice) else {
+                    return live_positions;
+                };
+
+                particle.update(*color_limit, *alpha_limit);
+                if particle.is_out_of_bounds(self.bounds_rect) {
+                    particle.kill();
                 }
-            });
-    }
 
-    /******** Particle accessors: lifespan  **************/
+                if !particle.is_dead() {
+                    if particle.is_alive() {
+                        live_positions.push(particle.position());
+                    }
+                    if write_inx != read_inx {
+                        particles[write_inx] = particles[read_inx];
+                    }
+                    write_inx += 1;
+                }
+            }
+            particles.truncate(write_inx);
+        }
+         */
 
-    /// Returns true if the particle has a remaining life span > 0
-    pub fn is_alive(&self, index: usize) -> bool {
-        self.remaining_life_spans[index] > 0.0
-    }
-
-    /// Sets remaining life of a particle to 0
-    pub fn kill(&mut self, index: usize) {
-        self.remaining_life_spans[index] = 0.0;
-    }
-
-    /// Tells a particle to begin fading out
-    pub fn fade_out(&mut self, index: usize) {
-        self.remaining_life_spans[index] = FADE_OUT_DURATION;
-    }
-
-    /// Get a the fade out duration of particles
-    pub fn fade_out_duration(&self) -> f32 {
-        FADE_OUT_DURATION
-    }
-
-    /******** Particle accessors: motion & position ********/
-
-    /// Returns true if the particle is outside of the bounds_rect area
-    /// - buffer is 1000 pixels, allowing for a particle to leave the area
-    ///   and then return
-    pub fn is_out_of_bounds(&self, index: usize, bounds_rect: Rect) -> bool {
-        let buffer = 1000.0;
-        self.positions[index].x < bounds_rect.left() - buffer
-            || self.positions[index].x > bounds_rect.right() + buffer
-            || self.positions[index].y < bounds_rect.bottom() - buffer
-            || self.positions[index].y > bounds_rect.top() + buffer
+        self.particles.positions()
     }
 }
