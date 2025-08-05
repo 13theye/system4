@@ -123,14 +123,12 @@ impl Particle {
         self.feedback_positions[0] = Some(self.position);
     }
 
-    pub fn draw(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
-        let scaled_size = self.size / dpi_scale;
-
+    pub fn draw(&self, draw: &Draw, feedback: f32) {
         draw.line()
             .xy(self.position)
-            .start(vec2(scaled_size / 2.0, 0.0))
-            .end(vec2(-scaled_size / 2.0, 0.0))
-            .stroke_weight(scaled_size)
+            .start(vec2(self.size / 2.0, 0.0))
+            .end(vec2(-self.size / 2.0, 0.0))
+            .stroke_weight(self.size)
             .color(self.rgba);
 
         if feedback > 0.01 {
@@ -152,7 +150,7 @@ impl Particle {
                     draw.line()
                         .start(prev_pos)
                         .end(extended_pos)
-                        .stroke_weight(scaled_size * (0.5 - i as f32 * 0.05))
+                        .stroke_weight(self.size * (0.5 - i as f32 * 0.05))
                         .color(trail_color);
 
                     prev_pos = extended_pos;

@@ -17,12 +17,12 @@ const OOB_BUFFER: f32 = 1000.0;
 #[derive(Debug, Default)]
 pub struct Particles {
     // Positioning and motion
-    pos_x: Vec<f32>,                       // x position
-    pos_y: Vec<f32>,                       // y position
-    vel_x: Vec<f32>,                       // x velocity
-    vel_y: Vec<f32>,                       // y velocity
-    acc_x: Vec<f32>,                       // x acceleration
-    acc_y: Vec<f32>,                       // y acceleration
+    pub(crate) pos_x: Vec<f32>,            // x position
+    pub(crate) pos_y: Vec<f32>,            // y position
+    pub(crate) vel_x: Vec<f32>,            // x velocity
+    pub(crate) vel_y: Vec<f32>,            // y velocity
+    pub(crate) acc_x: Vec<f32>,            // x acceleration
+    pub(crate) acc_y: Vec<f32>,            // y acceleration
     feedback_pos_x: Vec<[Option<f32>; 4]>, // x position of last 4 frames
     feedback_pos_y: Vec<[Option<f32>; 4]>, // y position of last 4 frames
 
@@ -32,8 +32,8 @@ pub struct Particles {
     killed: Vec<bool>,             // whether the particle is "marked for death"
 
     // Size
-    size: Vec<f32>, // size of particles in screen points
-    mass: Vec<f32>, // mass of particles
+    size: Vec<f32>,            // size of particles in screen points
+    pub(crate) mass: Vec<f32>, // mass of particles
 
     // Color and alpha
     color: Vec<Rgb>, // rgb rolor of particles
@@ -41,7 +41,7 @@ pub struct Particles {
 
     // Metadata
     parent_id: Vec<usize>, // id of the parent emitters
-    voice: Vec<Voice>,     // voice that the particle belongs to
+    voice: Vec<i32>,       // voice that the particle belongs to
 }
 
 impl Particles {
@@ -101,7 +101,7 @@ impl Particles {
         self.color.push(rgba.color);
         self.alpha.push(rgba.alpha);
         self.parent_id.push(parent_id);
-        self.voice.push(voice);
+        self.voice.push(voice.to_i32());
     }
 
     /************** Per-cycle updates ***************/
@@ -318,6 +318,25 @@ impl Particles {
         }
     }
 
+    pub fn cull_by_voice(&mut self, voice: Voice, limit: usize) {
+        let excess = self.len_by_voice(voice) - limit;
+        let voice = voice.to_i32();
+        if excess > 0 {
+            let indices_of_excess = self
+                .voice
+                .iter()
+                .enumerate()
+                .filter_map(|(index, &v)| if v == voice { Some(index) } else { None })
+                .take(excess)
+                .collect::<Vec<_>>();
+
+            // Fade out the oldest particles until all excess have been marked
+            for i in indices_of_excess {
+                self.begin_fade_out_particle(i);
+            }
+        }
+    }
+
     /// Draw all particles
     pub fn draw_all(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
         self.pos_x.iter().enumerate().for_each(|(index, &pos_x)| {
@@ -368,13 +387,18 @@ impl Particles {
         });
     }
 
-    /******** Particle accessors: lifespan  **************/
+    /****************** Particle accessors: lifespan  ************************/
 
     /// Tells all particles within a range to begin fading out
     pub fn begin_fade_out(&mut self, range: Range<usize>) {
         for index in range {
             self.remaining_life_span[index] = FADE_OUT_DURATION;
         }
+    }
+
+    /// Tells a particular particle to begin fading out
+    pub fn begin_fade_out_particle(&mut self, index: usize) {
+        self.remaining_life_span[index] = FADE_OUT_DURATION;
     }
 
     /// Returns true if the particle has a remaining life span > 0
@@ -392,7 +416,7 @@ impl Particles {
         FADE_OUT_DURATION
     }
 
-    /******** Particle accessors: motion & position ********/
+    /**************** Particle accessors: motion & position ******************/
 
     /// Returns all particle positions as an owned Vec of Points
     pub fn positions_to_owned(&self) -> Vec<Point2> {
@@ -416,5 +440,22 @@ impl Particles {
             || pos_x > bounds_rect.right() + OOB_BUFFER
             || pos_y < bounds_rect.bottom() - OOB_BUFFER
             || pos_y > bounds_rect.top() + OOB_BUFFER
+    }
+
+    /********************** Helper functions *******************************/
+
+    /// Returns how many particles exist overall
+    pub fn len(&self) -> usize {
+        self.pos_x.len()
+    }
+
+    pub fn len_by_voice(&self, voice: Voice) -> usize {
+        let voice_num = voice.to_i32();
+        self.voice.iter().filter(|&v| *v == voice_num).count()
+    }
+
+    /// Returns true if there are no particles
+    pub fn is_empty(&self) -> bool {
+        self.pos_x.is_empty()
     }
 }

@@ -6,8 +6,6 @@ use std::collections::HashMap;
 
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
-use rayon::prelude::*;
-use serde::de::value::UsizeDeserializer;
 
 use crate::{
     forces::{ForceFields, WindCircle},
@@ -15,6 +13,8 @@ use crate::{
     utils::IdGenerator,
     view::{Mask, Voice},
 };
+
+const NEW_PARTICLE_DEFAULT_SPEED: f32 = 10.0;
 
 pub struct ParticleSystemNew {
     // Particles
@@ -33,7 +33,7 @@ pub struct ParticleSystemNew {
     pub bounds_rect: Rect,
 
     // Global Params
-    pub per_voice_particle_limit: usize,
+    pub default_particle_limit: usize,
     pub feedback_settings: HashMap<Voice, f32>,
     pub global_max_spawn_rate: f32,
 
@@ -47,9 +47,6 @@ pub struct ParticleSystemNew {
     pub particle_limits: HashMap<Voice, usize>,
     pub particle_num_factors: HashMap<Voice, f32>, // normalized proportion of particle_limit
     pub trail: f32,
-
-    // DPI scale
-    dpi_scale: f32, // scale the trail of the particles
 }
 
 impl ParticleSystemNew {
@@ -60,7 +57,6 @@ impl ParticleSystemNew {
         default_particle_size: f32,
         default_particle_color: Rgb,
         default_particle_limit: u32,
-        dpi_scale: f32,
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
@@ -81,7 +77,7 @@ impl ParticleSystemNew {
             bounds_size,
             bounds_rect,
 
-            per_voice_particle_limit: default_particle_limit as usize,
+            default_particle_limit: default_particle_limit as usize,
             feedback_settings: HashMap::new(),
             global_max_spawn_rate: 40.0,
 
@@ -93,8 +89,6 @@ impl ParticleSystemNew {
             particle_limits: HashMap::new(),
             particle_num_factors: HashMap::new(),
             trail: 0.0,
-
-            dpi_scale,
         }
     }
 
@@ -182,8 +176,8 @@ impl ParticleSystemNew {
     /********************* Update methods ********************************** */
 
     pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
-        //self.handle_particle_emission(rng);
-        //self.cull_excess_particles();
+        self.handle_particle_emission(rng);
+        self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
@@ -220,5 +214,70 @@ impl ParticleSystemNew {
             particles.truncate(write_inx);
         }
          */
+    }
+
+    fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {
+        // Randomize the order of emitters
+        let mut inxs: Vec<usize> = (0..self.emitters.len()).collect();
+        inxs.shuffle(rng);
+
+        let mut parent_voice: Voice;
+        let mut particle_limit: usize;
+        let mut color_limit: Rgb;
+
+        let mut particle_counts: HashMap<Voice, usize> = HashMap::new();
+        for voice in Voice::all() {
+            particle_counts.insert(*voice, self.particles.len_by_voice(*voice));
+        }
+
+        for i in inxs {
+            let emitter = &self.emitters[i];
+            if emitter.is_spawning() {
+                parent_voice = emitter.parent_voice();
+
+                particle_limit = self
+                    .particle_limits
+                    .get(&parent_voice)
+                    .copied()
+                    .unwrap_or(self.default_particle_limit);
+
+                // Don't add new particles if limit is reached
+                let Some(particle_count) = particle_counts.get(&parent_voice) else {
+                    return;
+                };
+                if *particle_count >= particle_limit {
+                    return;
+                }
+
+                // Get the current color limit
+                color_limit = self
+                    .color_limits
+                    .get(&parent_voice)
+                    .copied()
+                    .unwrap_or(self.default_particle_color);
+
+                self.particles.append(emitter.emit(
+                    NEW_PARTICLE_DEFAULT_SPEED,
+                    self.default_particle_size,
+                    Rgba {
+                        color: color_limit,
+                        alpha: 0.0,
+                    },
+                    rng,
+                ));
+            }
+        }
+    }
+
+    /// Check each voice's particles against the limit and cull excess
+    fn cull_excess_particles(&mut self) {
+        for voice in Voice::all() {
+            let limit = self
+                .particle_limits
+                .get(&voice)
+                .copied()
+                .unwrap_or(self.default_particle_limit);
+            self.particles.cull_by_voice(*voice, limit);
+        }
     }
 }

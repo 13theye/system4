@@ -5,11 +5,8 @@ use nannou::prelude::*;
 use std::collections::BTreeMap;
 
 use crate::{
-    forces::{
-        wind::{WindCircle, WindCircleParams, WindField},
-        Gravity,
-    },
-    particle::Particle,
+    forces::wind::{WindCircle, WindCircleParams, WindField},
+    particle::Particles,
     view::Voice,
 };
 
@@ -18,11 +15,9 @@ use crate::{
 pub struct ForceFields {
     // Force fields
     pub wind_field: WindField,
-    pub gravity_field: Vec<Gravity>,
 
     // Force objects
     pub wind_circles: BTreeMap<usize, WindCircle>,
-    pub gravity_sources: Vec<Gravity>,
 
     // Origin in the World Coordinate Space
     origin: Vec2,
@@ -41,9 +36,7 @@ impl ForceFields {
 
         Self {
             wind_field: WindField::new(origin, bounds_size, grid_cols, grid_rows),
-            gravity_field: Vec::new(),
             wind_circles: BTreeMap::new(),
-            gravity_sources: Vec::new(),
             origin,
             bounds_size,
             grid_cols,
@@ -65,14 +58,9 @@ impl ForceFields {
     }
 
     /// Apply all applicable forces to a particle
-    pub fn apply_forces_to_particle(&mut self, particle: &mut Particle) {
+    pub fn apply_forces_to_particle(&mut self, particles: &mut Particles) {
         // Apply wind
-        self.wind_field.apply(particle);
-
-        // Apply gravity
-        for gravity_source in &self.gravity_field {
-            gravity_source.apply(particle);
-        }
+        self.wind_field.apply_to_all(particles);
     }
 
     /// Recalculate all applicable forces in this ForceField
@@ -84,12 +72,6 @@ impl ForceFields {
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
         println!("Added wind circle {}", circle.id);
         self.wind_circles.entry(circle.id).or_insert(circle);
-    }
-
-    /// Add a GravitySource to this ForceField
-    pub fn add_gravity_source(&mut self, origin: Vec2, mass: f32) {
-        let gravity = Gravity::new(origin, mass);
-        self.gravity_field.push(gravity);
     }
 
     /// Returns a BTreeMap of all WindCircleParms by WindCircle ID

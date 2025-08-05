@@ -12,6 +12,7 @@ pub enum Voice {
 }
 
 impl Voice {
+    /// Converts a Voice to an i32 key
     pub fn to_i32(&self) -> i32 {
         match self {
             Voice::Voice1 => 1,
@@ -22,6 +23,7 @@ impl Voice {
         }
     }
 
+    /// Converts an i32 key to a Voice
     pub fn from_i32(i: i32) -> Voice {
         match i {
             1 => Voice::Voice1,
@@ -30,6 +32,13 @@ impl Voice {
             4 => Voice::Voice4,
             _ => Voice::Invalid,
         }
+    }
+
+    const ALL: [Voice; 4] = [Voice::Voice1, Voice::Voice2, Voice::Voice3, Voice::Voice4];
+
+    /// Returns a static array of all Voices
+    pub fn all() -> &'static [Voice] {
+        &Self::ALL
     }
 }
 

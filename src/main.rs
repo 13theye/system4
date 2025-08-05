@@ -17,14 +17,14 @@ use system4::{
     forces::WindCircle,
     fps::FpsManager,
     osc::{OscCommand, OscController, OscSender},
-    particle::ParticleSystem,
+    particle::ParticleSystemNew,
     rendering::HeatmapRenderer,
     terminals::{TerminalParams, TerminalSystem},
     utils::IdGenerator,
     view::Voice,
 };
 
-const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
+const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
 // full brightness color for terminal
 const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
@@ -35,7 +35,7 @@ const TERMINAL_LINE_MARGIN: f32 = 8.0;
 const TERMINAL_CHARS_PER_SECOND: f32 = 0.6; // final is 0.6
 
 struct Model {
-    particle_system: ParticleSystem,
+    particle_system: ParticleSystemNew,
     particle_limit: u32,
 
     terminal_system: TerminalSystem,
@@ -115,7 +115,7 @@ fn model(app: &App) -> Model {
     // DPI scale is used to scale the size of draw objects to account for DPI scaling.
     let dpi_scale = config.rendering.dpi_scale;
 
-    let particle_system = ParticleSystem::new(
+    let particle_system = ParticleSystemNew::new(
         pt2(0.0, 0.0),
         render_size.x,
         render_size.y,
@@ -126,7 +126,6 @@ fn model(app: &App) -> Model {
             DEFAULT_PARTICLE_RGB.2,
         ),
         particle_limit,
-        dpi_scale,
     );
 
     // Create window
@@ -197,7 +196,9 @@ fn model(app: &App) -> Model {
     // Set up render texture
     // the device isn't tied to window, but it's nannou's way of getting the handle.
     let device = audience_window.device();
-    let draw = nannou::Draw::new();
+
+    // Scale draw coordinates to account for DPI scaling
+    let draw = nannou::Draw::new().scale(1.0 / dpi_scale);
 
     let rendering = Nnpipe::new(
         device,
