@@ -736,8 +736,8 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Feedback slider
                             let mut feedback = model
                                 .particle_system
-                                .feedback
-                                .get(&Voice::Voice1)
+                                .feedback_values
+                                .get(&Voice::Voice1.to_i32())
                                 .copied()
                                 .unwrap_or(0.0);
                             if ui
@@ -1022,8 +1022,8 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             // Feedback slider
                             let mut feedback = model
                                 .particle_system
-                                .feedback
-                                .get(&Voice::Voice4)
+                                .feedback_values
+                                .get(&Voice::Voice4.to_i32())
                                 .copied()
                                 .unwrap_or(0.0);
                             if ui

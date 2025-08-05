@@ -348,10 +348,10 @@ impl Particles {
     }
 
     /// Draw all particles
-    pub fn draw_all(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
+    pub fn draw_all(&self, draw: &Draw, feedback_values: &HashMap<i32, f32>) {
         self.pos_x.iter().enumerate().for_each(|(index, &pos_x)| {
             let position = Point2::new(pos_x, self.pos_y[index]);
-            let scaled_size = self.size[index] / dpi_scale;
+            let scaled_size = self.size[index];
 
             draw.line()
                 .xy(position)
@@ -362,6 +362,12 @@ impl Particles {
                     color: self.color[index],
                     alpha: self.alpha[index],
                 });
+
+            let feedback = if let Some(&feedback) = feedback_values.get(&self.voice[index]) {
+                feedback
+            } else {
+                0.0
+            };
 
             if feedback > 0.01 {
                 // Create trail by connecting feedback positions with scaled distances

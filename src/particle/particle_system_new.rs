@@ -34,7 +34,7 @@ pub struct ParticleSystemNew {
 
     // Global Params
     pub default_particle_limit: usize,
-    pub feedback_settings: HashMap<Voice, f32>,
+    pub feedback_values: HashMap<i32, f32>,
     pub global_max_spawn_rate: f32,
 
     // Default particle params
@@ -78,7 +78,7 @@ impl ParticleSystemNew {
             bounds_rect,
 
             default_particle_limit: default_particle_limit as usize,
-            feedback_settings: HashMap::new(),
+            feedback_values: HashMap::new(),
             global_max_spawn_rate: 40.0,
 
             default_particle_size,
@@ -176,8 +176,8 @@ impl ParticleSystemNew {
     /********************* Update methods ********************************** */
 
     pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
-        self.handle_particle_emission(rng);
         self.cull_excess_particles();
+        self.handle_particle_emission(rng);
 
         self.forces.update(show_forces);
 
@@ -270,6 +270,118 @@ impl ParticleSystemNew {
                 .copied()
                 .unwrap_or(self.default_particle_limit);
             self.particles.cull_by_voice(*voice, limit);
+        }
+    }
+
+    /********************* Accessor/Helper methods ********************************** */
+    pub fn change_bounds_size_to(&mut self, width: f32, height: f32) {
+        self.bounds_size = Vec2::new(width, height);
+        self.bounds_rect = self.make_bounds_rect();
+    }
+
+    pub fn get_particle_count(&self) -> usize {
+        self.particles.len()
+    }
+
+    pub fn kill_voice(&mut self, voice: &Voice) {
+        self.emitters
+            .retain(|emitter| emitter.parent_voice() != *voice);
+        self.forces.remove_wind_by_voice(voice);
+    }
+
+    pub fn set_alpha_limit(&mut self, voice: &Voice, alpha: f32) {
+        self.alpha_limits.insert(*voice, alpha);
+    }
+
+    pub fn set_feedback(&mut self, voice: &Voice, feedback: f32) {
+        self.feedback_values.insert(voice.to_i32(), feedback);
+    }
+
+    pub fn set_gravity(&mut self, voice: &Voice, gravity: f32) {
+        self.forces.set_circle_center_bias_by_voice(voice, gravity);
+    }
+
+    pub fn set_is_spawning(&mut self, voice: &Voice, is_spawning: bool) {
+        self.emitters.iter_mut().for_each(|emitter| {
+            if emitter.parent_voice() == *voice {
+                emitter.set_is_spawning(is_spawning);
+            }
+        });
+    }
+
+    pub fn set_strength(&mut self, voice: &Voice, strength: f32) {
+        self.forces.set_circle_strength_by_voice(voice, strength);
+    }
+
+    pub fn set_num_particles(&mut self, voice: &Voice, num_particles: f32) {
+        let limit = (self.default_particle_limit as f32 * num_particles) as usize;
+        self.particle_limits.insert(*voice, limit);
+
+        let spawn_rate_factor = self
+            .particle_num_factors
+            .insert(*voice, num_particles)
+            .unwrap_or(0.5);
+        self.emitters.iter_mut().for_each(|emitter| {
+            if emitter.parent_voice() == *voice {
+                emitter.set_spawn_rate_factor(spawn_rate_factor);
+            }
+        });
+    }
+
+    pub fn set_radius_outer(&mut self, voice: &Voice, val: f32) {
+        let Some(mask) = self.masks.get(voice) else {
+            println!("Can't set inner radius: No mask found for voice: {}", voice);
+            return;
+        };
+
+        // The maximum outer radius is half the largest side of the mask
+        let max_radius = (mask.size.x.max(mask.size.y) + 50.0) / 2.0;
+        let radius = max_radius * val;
+
+        self.forces.set_circle_outer_radius_by_voice(voice, radius);
+    }
+
+    pub fn set_radius_inner(&mut self, voice: &Voice, val: f32) {
+        self.forces.set_circle_inner_radius_by_voice(voice, val);
+    }
+
+    fn make_bounds_rect(&self) -> Rect {
+        Rect::from_x_y_w_h(
+            self.origin.x,
+            self.origin.y,
+            self.bounds_size.x,
+            self.bounds_size.y,
+        )
+    }
+
+    /******************** Draw methods ***************************************/
+
+    pub fn draw(&self, draw: &Draw) {
+        self.particles.draw_all(draw, &self.feedback_values);
+    }
+
+    /// Draw the forces and emitters
+    pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        self.draw_origin(draw, scale_x, scale_y);
+        self.forces.wind_field.draw(draw, scale_x, scale_y);
+        self.draw_emitters(draw, scale_x, scale_y);
+        for circle in self.forces.wind_circles.values() {
+            circle.draw_center(draw, scale_x, scale_y);
+        }
+    }
+
+    /// Draw the origin
+    pub fn draw_origin(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        draw.ellipse()
+            .xy(self.origin * vec2(scale_x, scale_y))
+            .w_h(10.0 * scale_x, 10.0 * scale_y)
+            .color(rgba(1.0, 0.0, 1.0, 0.2));
+    }
+
+    /// Draw the emitters
+    pub fn draw_emitters(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        for emitter in self.emitters.iter() {
+            emitter.draw(draw, scale_x, scale_y);
         }
     }
 }
