@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 use rayon::prelude::*;
+use serde::de::value::UsizeDeserializer;
 
 use crate::{
     forces::{ForceFields, WindCircle},
@@ -180,7 +181,7 @@ impl ParticleSystemNew {
 
     /********************* Update methods ********************************** */
 
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> (&Vec<f32>, &Vec<f32>) {
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
         //self.handle_particle_emission(rng);
         //self.cull_excess_particles();
 
@@ -219,7 +220,5 @@ impl ParticleSystemNew {
             particles.truncate(write_inx);
         }
          */
-
-        self.particles.positions()
     }
 }

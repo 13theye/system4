@@ -1,13 +1,13 @@
 /// src/particle/emitter.rs
 ///
-/// The thing that spits out particles
-use crate::{particle::Particle, view::Voice};
+/// The thing that spits out particles, refactored to spit out particle data
+use crate::{particle::Particles, view::Voice};
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
 /// The Emitter trait is implemented by different shapes of emitters.
 pub trait Emitter {
-    fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle>;
+    fn emit(&self, speed: f32, size: f32, rgba: Rgba, rng: &mut ThreadRng) -> Particles;
     fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool;
     fn is_spawning(&self) -> bool;
     fn set_is_spawning(&mut self, is_spawning: bool);
@@ -47,9 +47,9 @@ impl PointEmitter {
 }
 
 impl Emitter for PointEmitter {
-    /// Generate a Vec of particles based on the emitter's parameters
-    fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle> {
-        let mut particles = Vec::new();
+    /// Generate a Particles struct containing all particles emitted based on the emitter's parameters
+    fn emit(&self, speed: f32, size: f32, rgba: Rgba, rng: &mut ThreadRng) -> Particles {
+        let mut new_particles = Particles::new();
 
         // Use probabilistic emission instead of fixed rate for timing variation
         let adjusted_rate = self.max_spawn_rate * self.spawn_rate_factor;
@@ -78,17 +78,18 @@ impl Emitter for PointEmitter {
                     offset_angle.sin() * offset_distance,
                 );
 
-            particles.push(Particle::new_with_motion(
+            new_particles.add_new_particle_with_motion(
                 self.id,
+                self.parent_voice,
                 spawn_position,
                 size,
-                color,
+                rgba,
                 vec2(0.0, 0.0),
                 velocity,
-            ));
+            );
         }
 
-        particles
+        new_particles
     }
 
     fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool {
@@ -169,9 +170,9 @@ impl LinearEmitter {
 }
 
 impl Emitter for LinearEmitter {
-    // Generate a Vec of particles based on the emitter's parameters
-    fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle> {
-        let mut particles = Vec::new();
+    /// Generate a Particles struct containing all particles emitted based on the emitter's parameters
+    fn emit(&self, speed: f32, size: f32, rgba: Rgba, rng: &mut ThreadRng) -> Particles {
+        let mut new_particles = Particles::new();
 
         // Use probabilistic emission instead of fixed rate for timing variation
         let base_rate = self.max_spawn_rate * self.spawn_rate_factor;
@@ -216,17 +217,18 @@ impl Emitter for LinearEmitter {
                 }
             };
 
-            particles.push(Particle::new_with_motion(
+            new_particles.add_new_particle_with_motion(
                 self.id,
+                self.parent_voice,
                 position,
                 size,
-                color,
+                rgba,
                 vec2(0.0, 0.0),
                 velocity,
-            ));
+            );
         }
 
-        particles
+        new_particles
     }
 
     fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool {

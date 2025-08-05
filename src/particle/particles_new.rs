@@ -41,7 +41,7 @@ pub struct Particles {
 
     // Metadata
     parent_id: Vec<usize>, // id of the parent emitters
-    voices: Vec<Voice>,    // voice that the particle belongs to
+    voice: Vec<Voice>,     // voice that the particle belongs to
 }
 
 impl Particles {
@@ -66,7 +66,7 @@ impl Particles {
             color: Vec::new(),
             alpha: Vec::new(),
             parent_id: Vec::new(),
-            voices: Vec::new(),
+            voice: Vec::new(),
         }
     }
 
@@ -81,8 +81,7 @@ impl Particles {
         voice: Voice,
         position: Point2,
         size: f32,
-        color: Rgb,
-        alpha: f32,
+        rgba: Rgba,
         acceleration: Vec2,
         velocity: Vec2,
     ) {
@@ -99,10 +98,10 @@ impl Particles {
         self.killed.push(false);
         self.size.push(size);
         self.mass.push(PARTICLE_MASS);
-        self.color.push(color);
-        self.alpha.push(alpha);
+        self.color.push(rgba.color);
+        self.alpha.push(rgba.alpha);
         self.parent_id.push(parent_id);
-        self.voices.push(voice);
+        self.voice.push(voice);
     }
 
     /************** Per-cycle updates ***************/
@@ -263,7 +262,7 @@ impl Particles {
                     self.color[write_index] = self.color[read_index];
                     self.alpha[write_index] = self.alpha[read_index];
                     self.parent_id[write_index] = self.parent_id[read_index];
-                    self.voices[write_index] = self.voices[read_index];
+                    self.voice[write_index] = self.voice[read_index];
                 }
                 write_index += 1;
             }
@@ -286,7 +285,29 @@ impl Particles {
         self.color.truncate(write_index);
         self.alpha.truncate(write_index);
         self.parent_id.truncate(write_index);
-        self.voices.truncate(write_index);
+        self.voice.truncate(write_index);
+    }
+
+    /// Append particles from another Particles struct
+    pub fn append(&mut self, mut other: Particles) {
+        self.pos_x.append(&mut other.pos_x);
+        self.pos_y.append(&mut other.pos_y);
+        self.vel_x.append(&mut other.vel_x);
+        self.vel_y.append(&mut other.vel_y);
+        self.acc_x.append(&mut other.acc_x);
+        self.acc_y.append(&mut other.acc_y);
+        self.feedback_pos_x.append(&mut other.feedback_pos_x);
+        self.feedback_pos_y.append(&mut other.feedback_pos_y);
+        self.age.append(&mut other.age);
+        self.remaining_life_span
+            .append(&mut other.remaining_life_span);
+        self.killed.append(&mut other.killed);
+        self.size.append(&mut other.size);
+        self.mass.append(&mut other.mass);
+        self.color.append(&mut other.color);
+        self.alpha.append(&mut other.alpha);
+        self.parent_id.append(&mut other.parent_id);
+        self.voice.append(&mut other.voice);
     }
 
     /// Cull oldest particles if the number exceeds the limit
