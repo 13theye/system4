@@ -4,7 +4,7 @@
 ///
 use nannou::prelude::*;
 use rayon::prelude::*;
-use std::ops::Range;
+use std::{collections::HashMap, ops::Range};
 
 use crate::view::Voice;
 
@@ -107,7 +107,7 @@ impl Particles {
     /************** Per-cycle updates ***************/
 
     /// Update particles based on forces and age, given externally-determined color and alpha limits
-    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32, bounds_rect: Rect) {
+    pub fn update(&mut self, rgba_limits: HashMap<i32, Rgba>, bounds_rect: Rect) {
         // Delete dead particles
         self.delete_dead_particles();
 
@@ -121,7 +121,7 @@ impl Particles {
         self.update_positions_all(bounds_rect);
 
         // Update color and alpha
-        self.update_style_all(color_limit, alpha_limit);
+        self.update_style_all(rgba_limits);
 
         // Update lifespan
         self.increment_age_all();
@@ -187,16 +187,26 @@ impl Particles {
 
     /// - Update color as dictated by UI
     /// - Update alpha as dictated by UI and age
-    fn update_style_all(&mut self, color_limit: Rgb, alpha_limit: f32) {
+    fn update_style_all(&mut self, rgba_limits: HashMap<i32, Rgba>) {
         self.color
             .par_iter_mut()
             .zip(self.alpha.par_iter_mut())
+            .zip(self.voice.par_iter())
             .zip(self.age.par_iter())
             .zip(self.remaining_life_span.par_iter())
-            .for_each(|(((color, alpha), age), remaining_life_span)| {
+            .for_each(|((((color, alpha), voice), age), remaining_life_span)| {
                 // Update color
-                *color = if *color != color_limit {
-                    color_limit
+                let rgba_limit = if let Some(limit) = rgba_limits.get(voice) {
+                    *limit
+                } else {
+                    Rgba {
+                        color: rgb(0.0, 0.0, 0.0),
+                        alpha: 0.0,
+                    }
+                };
+
+                *color = if *color != rgba_limit.color {
+                    rgba_limit.color
                 } else {
                     *color
                 };
@@ -210,7 +220,7 @@ impl Particles {
                 };
 
                 //2. Calculate the maximum alpha this particle has reached so far
-                let max_alpha_reached = alpha_limit * fade_in_factor;
+                let max_alpha_reached = rgba_limit.alpha * fade_in_factor;
 
                 //3. Calculate fade-out factor based on remaining life span
                 let eol_alpha = if *remaining_life_span <= FADE_OUT_DURATION {

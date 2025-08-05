@@ -53,14 +53,14 @@ impl ForceFields {
     }
 
     /// Update all Winds in this ForceField
-    pub fn force_update_all(&mut self) {
-        self.wind_field.force_update_all();
+    pub fn force_recalculate_all(&mut self) {
+        self.wind_field.recalculate_all_cells();
     }
 
     /// Apply all applicable forces to a particle
-    pub fn apply_forces_to_particle(&mut self, particles: &mut Particles) {
+    pub fn apply_to_particles(&mut self, particles: &mut Particles) {
         // Apply wind
-        self.wind_field.apply_to_all(particles);
+        self.wind_field.apply_to_particles(particles);
     }
 
     /// Recalculate all applicable forces in this ForceField

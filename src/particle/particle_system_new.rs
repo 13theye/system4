@@ -181,39 +181,31 @@ impl ParticleSystemNew {
 
         self.forces.update(show_forces);
 
-        /*
-        for (voice, particles) in self.particles.iter_mut() {
-            let mut write_inx = 0;
-            for read_inx in 0..particles.len() {
-                let particle = &mut particles[read_inx];s
-                self.forces.apply_forces_to_particle(particle);
+        self.forces.apply_to_particles(&mut self.particles);
 
-                let Some(color_limit) = self.color_limits.get(voice) else {
-                    return live_positions;
-                };
+        let rgba_limits = self.get_rgba_limits();
 
-                let Some(alpha_limit) = self.alpha_limits.get(voice) else {
-                    return live_positions;
-                };
+        self.particles.update(rgba_limits, self.bounds_rect);
+    }
 
-                particle.update(*color_limit, *alpha_limit);
-                if particle.is_out_of_bounds(self.bounds_rect) {
-                    particle.kill();
-                }
-
-                if !particle.is_dead() {
-                    if particle.is_alive() {
-                        live_positions.push(particle.position());
-                    }
-                    if write_inx != read_inx {
-                        particles[write_inx] = particles[read_inx];
-                    }
-                    write_inx += 1;
-                }
-            }
-            particles.truncate(write_inx);
+    fn get_rgba_limits(&self) -> HashMap<i32, Rgba> {
+        let mut color_limits = HashMap::new();
+        for voice in Voice::all() {
+            let color_limit = self
+                .color_limits
+                .get(voice)
+                .copied()
+                .unwrap_or(self.default_particle_color);
+            let alpha_limit = self.alpha_limits.get(voice).copied().unwrap_or(1.0);
+            color_limits.insert(
+                voice.to_i32(),
+                Rgba {
+                    color: color_limit,
+                    alpha: alpha_limit,
+                },
+            );
         }
-         */
+        color_limits
     }
 
     fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {

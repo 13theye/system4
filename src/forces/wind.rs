@@ -193,7 +193,7 @@ impl WindField {
     }
 
     /// Given a particle, determines the WindCell that contains the particle, and then applies the WindCell's Wind on that particle.
-    pub fn apply_to_all(&mut self, particles: &mut Particles) {
+    pub fn apply_to_particles(&mut self, particles: &mut Particles) {
         // 1. Update cells that need updating
         self.cells
             .iter_mut()
@@ -220,7 +220,7 @@ impl WindField {
     }
 
     /// Force a recalculation of all cells in the WindField.
-    pub fn force_update_all(&mut self) {
+    pub fn recalculate_all_cells(&mut self) {
         for col in 0..self.grid_cols {
             for row in 0..self.grid_rows {
                 if let Some(cell) = self.get_mut_cell(col, row) {

@@ -1089,7 +1089,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
         });
 
     if show_forces_changed {
-        model.particle_system.forces.force_update_all();
+        model.particle_system.forces.force_recalculate_all();
     }
 }
 
