@@ -199,7 +199,7 @@ fn model(app: &App) -> Model {
     let device = audience_window.device();
     let draw = nannou::Draw::new();
 
-    let rendering = Nnpipe::new(
+    let mut rendering = Nnpipe::new(
         device,
         config.rendering.texture_width,
         config.rendering.texture_height,
@@ -221,6 +221,51 @@ fn model(app: &App) -> Model {
     let audience_draw = nannou::Draw::new();
     let performer_draw = nannou::Draw::new();
     let control_draw = nannou::Draw::new();
+
+    // Set up effects pipeline
+    /*
+        let bloom_effect = BloomEffect::new(
+            device,
+            config.rendering.texture_width,
+            config.rendering.texture_height,
+            0.6,
+            1,
+            3.0,
+            3.0,
+        )
+        .ok()
+        .unwrap();
+    */
+
+    let lo_config = TextureConfig {
+        width: config.rendering.texture_width / 2,
+        height: config.rendering.texture_height / 2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+    };
+
+    let med_config = TextureConfig {
+        width: config.rendering.texture_width,
+        height: config.rendering.texture_height,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+    };
+
+    let hi_config = TextureConfig {
+        width: config.rendering.texture_width,
+        height: config.rendering.texture_height,
+        format: wgpu::TextureFormat::Rgba16Float,
+    };
+
+    let bloom_effect = EffectBuilder::new()
+        .name("Bloom")
+        .brightness_extract(med_config, 0.55)
+        .downsample(lo_config)
+        .gaussian_blur_passes(lo_config, 1, 2.0, 10.0)
+        .bloom_composite_with_curve(hi_config, 8.0, 3.0) // Bloom composite is always additive
+        .build(device);
+
+    if let Ok(effect) = bloom_effect {
+        rendering.add_effect(effect);
+    }
 
     // Set up egui
     let egui = Egui::from_window(&control_window);
@@ -429,9 +474,7 @@ fn render_and_post(app: &App, model: &mut Model) {
     // Render the game to texture
     model.rendering.render_scene(device, queue, &model.draw);
 
-    // Post-process the texture and draw to screen
     model.rendering.post_process(device, queue);
-
     //model.rendering.direct_to_view(device, queue);
 }
 
