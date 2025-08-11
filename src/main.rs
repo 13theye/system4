@@ -26,6 +26,7 @@ use system4::{
 
 const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
+//const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.27, 0.27, 0.26);
 // full brightness color for terminal
 const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
 // dimmed brightness color for terminal
@@ -223,19 +224,6 @@ fn model(app: &App) -> Model {
     let control_draw = nannou::Draw::new();
 
     // Set up effects pipeline
-    /*
-        let bloom_effect = BloomEffect::new(
-            device,
-            config.rendering.texture_width,
-            config.rendering.texture_height,
-            0.6,
-            1,
-            3.0,
-            3.0,
-        )
-        .ok()
-        .unwrap();
-    */
 
     let lo_config = TextureConfig {
         width: config.rendering.texture_width / 2,
@@ -255,12 +243,12 @@ fn model(app: &App) -> Model {
         format: wgpu::TextureFormat::Rgba16Float,
     };
 
-    let bloom_effect = EffectBuilder::new()
+    let bloom_effect = PipelineBuilder::new()
         .name("Bloom")
-        .brightness_extract(med_config, 0.55)
+        .brightness_extract(med_config, 0.45)
         .downsample(lo_config)
-        .gaussian_blur_passes(lo_config, 1, 2.0, 10.0)
-        .bloom_composite_with_curve(hi_config, 8.0, 3.0) // Bloom composite is always additive
+        .gaussian_blur_passes(lo_config, 4, 2.0, 10.0)
+        .bloom_composite_with_curve(hi_config, 10.0, 3.0)
         .build(device);
 
     if let Ok(effect) = bloom_effect {
@@ -377,7 +365,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .update(&mut model.rng, model.show_forces);
 
     // Render heatmap
-    /*model.heatmap_renderer.render_heatmap(
+    /*
+    model.heatmap_renderer.render_heatmap(
         device,
         queue,
         &particle_positions,
@@ -385,10 +374,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.frame_count,
     );
 
+
     // Draw heatmap as texture
     let heatmap_view = model.heatmap_renderer.get_heatmap_view();
     model.draw.texture(heatmap_view).wh(model.render_size);
-    */
+     */
 
     // Draw particles
     model.particle_system.draw(&model.draw);

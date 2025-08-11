@@ -21,7 +21,7 @@ impl Mask {
         let origin = match voice {
             //Voice::Voice1 => vec2(-1280.0, 200.0),
             Voice::Voice1 => vec2(0.0, 0.0),
-            Voice::Voice4 => vec2(1280.0, 200.0),
+            //Voice::Voice4 => vec2(1280.0, 200.0),
             _ => vec2(0.0, 0.0),
         };
 
