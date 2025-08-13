@@ -37,6 +37,50 @@ pub enum OscCommand {
         id: i32,
         val: f32,
     },
+    
+    // GPU-specific advanced parameters
+    ParticlesColorTint {
+        id: i32,
+        r: f32,
+        g: f32,
+        b: f32,
+    },
+    ParticlesSizeMultiplier {
+        id: i32,
+        val: f32,
+    },
+    ParticlesPhysicsScale {
+        id: i32,
+        val: f32,
+    },
+    ParticlesGroupVisible {
+        id: i32,
+        visible: bool,
+    },
+    ParticlesSpawnRateFactor {
+        id: i32,
+        val: f32,
+    },
+    
+    // Batch parameter updates for efficiency
+    ParticlesBatchUpdate {
+        id: i32,
+        alpha: Option<f32>,
+        size_multiplier: Option<f32>,
+        trail: Option<f32>,
+        physics_scale: Option<f32>,
+        spawn_rate_factor: Option<f32>,
+        visible: Option<bool>,
+    },
+    
+    // Debug visualization commands
+    ParticlesDebugEnable {
+        enabled: bool,
+    },
+    ParticlesDebugToggle {
+        feature: String,
+        enabled: bool,
+    },
 
     EraseDrone {
         id: i32,
@@ -222,6 +266,89 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
                                 .push(OscCommand::ParticlesTrail { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/colorTint" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(r), osc::Type::Float(g), osc::Type::Float(b)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesColorTint { id: *id, r: *r, g: *g, b: *b });
+                        }
+                    }
+                    "/sys2/particles/sizeMultiplier" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesSizeMultiplier { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/physicsScale" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesPhysicsScale { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/visible" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(visible)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesGroupVisible { id: *id, visible: *visible != 0 });
+                        }
+                    }
+                    "/sys2/particles/spawnRateFactor" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesSpawnRateFactor { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/batchUpdate" => {
+                        if let [osc::Type::Int(id), args @ ..] = &message.args[..] {
+                            // Parse optional parameters for batch update
+                            let mut alpha = None;
+                            let mut size_multiplier = None;
+                            let mut trail = None;
+                            let mut physics_scale = None;
+                            let mut spawn_rate_factor = None;
+                            let mut visible = None;
+                            
+                            // Parse remaining args as pairs of (param_name, value)
+                            let mut i = 0;
+                            while i + 1 < args.len() {
+                                if let (osc::Type::String(param), value) = (&args[i], &args[i + 1]) {
+                                    match param.as_str() {
+                                        "alpha" => if let osc::Type::Float(val) = value { alpha = Some(*val); },
+                                        "sizeMultiplier" => if let osc::Type::Float(val) = value { size_multiplier = Some(*val); },
+                                        "trail" => if let osc::Type::Float(val) = value { trail = Some(*val); },
+                                        "physicsScale" => if let osc::Type::Float(val) = value { physics_scale = Some(*val); },
+                                        "spawnRateFactor" => if let osc::Type::Float(val) = value { spawn_rate_factor = Some(*val); },
+                                        "visible" => if let osc::Type::Int(val) = value { visible = Some(*val != 0); },
+                                        _ => {}
+                                    }
+                                }
+                                i += 2;
+                            }
+                            
+                            self.command_queue.push(OscCommand::ParticlesBatchUpdate {
+                                id: *id,
+                                alpha,
+                                size_multiplier,
+                                trail,
+                                physics_scale,
+                                spawn_rate_factor,
+                                visible,
+                            });
+                        }
+                    }
+                    "/sys2/particles/debugEnable" => {
+                        if let [osc::Type::Int(enabled)] = &message.args[..] {
+                            self.command_queue.push(OscCommand::ParticlesDebugEnable {
+                                enabled: *enabled != 0,
+                            });
+                        }
+                    }
+                    "/sys2/particles/debugToggle" => {
+                        if let [osc::Type::String(feature), osc::Type::Int(enabled)] = &message.args[..] {
+                            self.command_queue.push(OscCommand::ParticlesDebugToggle {
+                                feature: feature.clone(),
+                                enabled: *enabled != 0,
+                            });
                         }
                     }
                     /********************* Drone Commands *************************** */

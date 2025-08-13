@@ -1404,6 +1404,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "nannou",
+ "rand 0.8.5",
  "wgpu-types",
 ]
 
