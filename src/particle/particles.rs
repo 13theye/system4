@@ -1,6 +1,6 @@
 // src/particle/particles.rs
 //
-// Particle struct for the Particle System
+// Original CPU-based Particle struct for the Particle System
 
 use nannou::prelude::*;
 

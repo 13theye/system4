@@ -8,6 +8,8 @@ pub use particles::Particle;
 pub mod particle_system;
 pub use particle_system::ParticleSystem;
 
+pub mod gparticles;
+
 pub mod gpu_particle_system;
 pub use gpu_particle_system::GpuParticleSystem;
 

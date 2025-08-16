@@ -1,6 +1,7 @@
 /// particle_system_new.rs
 ///
 /// A new particle system that uses the new Particles struct-of-arrays
+/// Not currently used.
 ///
 use std::collections::HashMap;
 

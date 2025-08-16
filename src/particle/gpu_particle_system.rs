@@ -418,17 +418,6 @@ impl GpuParticleSystem {
 
             // Update emitters on GPU
             renderer.update_emitters(queue, &emitters);
-            
-            // Debug: Print emitter status
-            println!("Total emitters: {}", emitters.len());
-            let mut active_count = 0;
-            for (i, emitter) in emitters.iter().enumerate() {
-                if emitter.is_active == 1 {
-                    active_count += 1;
-                    println!("Emitter {} active: group_id={}, spawn_accumulator={:.2}", i, emitter.group_id, emitter.spawn_accumulator);
-                }
-            }
-            println!("Active emitters: {}", active_count);
         }
 
         // Mark parameters as synced
@@ -561,7 +550,10 @@ impl GpuParticleSystem {
 
         #[cfg(feature = "gpu-particles")]
         {
-            println!("set_is_spawning called for voice {:?}, is_spawning: {}", voice, is_spawning);
+            println!(
+                "set_is_spawning called for voice {:?}, is_spawning: {}",
+                voice, is_spawning
+            );
             if let Some(group_params) = self.group_params.get_mut(voice) {
                 group_params.is_spawning = if is_spawning { 1 } else { 0 };
                 self.params_dirty = true;
