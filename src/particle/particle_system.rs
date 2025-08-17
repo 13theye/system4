@@ -61,8 +61,8 @@ impl ParticleSystem {
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
-        let grid_cols = (width / 2.0) as usize;
-        let grid_rows = (height / 2.0) as usize;
+        let grid_cols = (width / 8.0) as usize;
+        let grid_rows = (height / 8.0) as usize;
 
         // pre-populate the first mask
         let masks = HashMap::new();

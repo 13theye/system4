@@ -5,10 +5,7 @@
 use crate::{forces::CellIdx, particle::Particle, view::Voice};
 use nannou::prelude::*;
 use rayon::prelude::*;
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::collections::HashMap;
 
 /// A wind is a simple vector force that is applied to a particle.
 /// It has a direction and a strength.
@@ -379,7 +376,7 @@ pub struct WindCircle {
     pub id: usize,
     pub parent_voice: Voice,
     cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
-    params: Arc<RwLock<WindCircleParams>>, // Params of the circle
+    params: WindCircleParams, // Params of the circle
 }
 
 impl WindCircle {
@@ -404,7 +401,7 @@ impl WindCircle {
             id,
             parent_voice,
             cell_idxs: Vec::new(),
-            params: Arc::new(RwLock::new(config)),
+            params: config,
         }
     }
 
@@ -434,14 +431,8 @@ impl WindCircle {
 
     /// Apply the circle's wind to the field, return the cells that were affected
     pub fn apply_to_field(&self, field: &mut WindField, show_forces: bool) -> Vec<CellIdx> {
-        // Get a copy of the config
-        let params = self.params.read().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-
-        // Calculate bounding box
-        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &params);
+        // Calculate bounding box using direct parameter access
+        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
 
         let mut affected_cells = Vec::new();
 
@@ -451,7 +442,7 @@ impl WindCircle {
                 let Some(cell) = field.get_mut_cell(col, row) else {
                     continue;
                 };
-                let Some(wind) = self.calculate_wind_for_cell(cell, &params) else {
+                let Some(wind) = self.calculate_wind_for_cell(cell, &self.params) else {
                     continue;
                 };
                 cell.add_wind(self.id, wind);
@@ -541,45 +532,27 @@ impl WindCircle {
 
     /// Returns true if the WindCircle has parameter changes that have not been applied.
     pub fn has_changes(&self) -> bool {
-        self.with_params_read(|params| params.needs_recalculation)
+        self.params.needs_recalculation
     }
 
     /// Clear the needs_recalculation flag, indicating that the parameters have been applied.
     pub fn clear_changes(&mut self) {
-        self.with_params_write(|params| params.needs_recalculation = false);
+        self.params.needs_recalculation = false;
     }
 
-    /// Return the WindCircleParams wrapped in an Arc<RwLock>
-    pub fn params_arc(&self) -> Arc<RwLock<WindCircleParams>> {
-        self.params.clone()
+    /// Return a reference to the WindCircleParams
+    pub fn params(&self) -> &WindCircleParams {
+        &self.params
     }
 
-    /// Abstracted function to read the parameters of the WindCircle.
-    pub fn with_params_read<R>(&self, f: impl FnOnce(&WindCircleParams) -> R) -> R {
-        let params = self.params.read().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-        f(&params)
-    }
-
-    /// Abstracted function to change parameters of the WindCircle.
-    pub fn with_params_write<R>(&self, f: impl FnOnce(&mut WindCircleParams) -> R) -> R {
-        let mut params = self.params.write().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-        f(&mut params)
+    /// Return a mutable reference to the WindCircleParams
+    pub fn params_mut(&mut self) -> &mut WindCircleParams {
+        &mut self.params
     }
 
     /// Draw the center of the WindCircle
     pub fn draw_center(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        let params = self.params.read().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-
-        let center = params.center;
+        let center = self.params.center;
         draw.ellipse()
             .xy(center * vec2(scale_x, scale_y))
             .w_h(40.0 * scale_x, 40.0 * scale_y)

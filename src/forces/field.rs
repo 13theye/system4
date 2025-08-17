@@ -96,7 +96,7 @@ impl ForceFields {
     pub fn get_circle_params_all(&self) -> BTreeMap<usize, WindCircleParams> {
         self.wind_circles
             .iter()
-            .map(|(id, circle)| (*id, circle.with_params_read(|params| params.clone())))
+            .map(|(id, circle)| (*id, circle.params().clone()))
             .collect()
     }
 
@@ -105,7 +105,7 @@ impl ForceFields {
         self.wind_circles
             .iter()
             .filter(|(_, circle)| circle.parent_voice == voice)
-            .map(|(id, circle)| (*id, circle.with_params_read(|params| params.clone())))
+            .map(|(id, circle)| (*id, circle.params().clone()))
             .collect()
     }
 
@@ -113,7 +113,7 @@ impl ForceFields {
     pub fn get_circle_params_by_id(&self, id: usize) -> Option<WindCircleParams> {
         self.wind_circles
             .get(&id)
-            .map(|circle| circle.with_params_read(|params| params.clone()))
+            .map(|circle| circle.params().clone())
     }
 
     /// Returns a Vec of all WindCircle IDs for a given Voice
@@ -160,9 +160,7 @@ impl ForceFields {
                 return;
             };
 
-            circle.with_params_write(|p| {
-                p.center_bias(bias);
-            });
+            circle.params_mut().center_bias(bias);
         }
     }
 
@@ -201,9 +199,7 @@ impl ForceFields {
                 return;
             };
 
-            circle.with_params_write(|p| {
-                p.strength(strength);
-            });
+            circle.params_mut().strength(strength);
         }
     }
 
@@ -221,9 +217,7 @@ impl ForceFields {
                 return;
             };
 
-            circle.with_params_write(|p| {
-                p.outer_radius(radius);
-            });
+            circle.params_mut().outer_radius(radius);
         }
     }
 
@@ -241,22 +235,17 @@ impl ForceFields {
                 return;
             };
 
-            let outer_radius = circle.with_params_read(|p| p.outer_radius);
+            let outer_radius = circle.params().outer_radius;
             let inner_radius = outer_radius * val;
-
-            circle.with_params_write(|p| {
-                p.inner_radius(inner_radius);
-            });
+            circle.params_mut().inner_radius(inner_radius);
         }
     }
 
     /// Set the outer and inner radius of a WindCircle by width
     pub fn set_circle_dims(&mut self, id: usize, radius: f32, width: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.with_params_write(|p| {
-                p.outer_radius(radius);
-                p.inner_radius(width);
-            });
+            circle.params_mut().outer_radius(radius);
+            circle.params_mut().inner_radius(width);
         } else {
             println!("Wind circle {} not found", id);
         }

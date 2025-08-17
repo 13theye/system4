@@ -666,7 +666,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.outer_radius(radius));
+                                    circle.params_mut().outer_radius(radius);
                                 }
                             }
 
@@ -686,7 +686,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.inner_radius(inner_radius));
+                                    circle.params_mut().inner_radius(inner_radius);
                                 }
                             }
 
@@ -744,7 +744,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.strength(strength));
+                                    circle.params_mut().strength(strength);
                                 }
                             }
 
@@ -764,7 +764,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.center_bias(center_bias));
+                                    circle.params_mut().center_bias(center_bias);
                                 }
                             }
 
@@ -801,9 +801,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| {
-                                        p.center(vec2(center_x, p.center.y))
-                                    });
+                                    {
+                                        let current_y = circle.params().center.y;
+                                        circle.params_mut().center(vec2(center_x, current_y));
+                                    }
                                 }
                             }
 
@@ -822,9 +823,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| {
-                                        p.center(vec2(p.center.x, center_y))
-                                    });
+                                    {
+                                        let current_x = circle.params().center.x;
+                                        circle.params_mut().center(vec2(current_x, center_y));
+                                    }
                                 }
                             }
                         } else {
@@ -952,7 +954,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.outer_radius(radius));
+                                    circle.params_mut().outer_radius(radius);
                                 }
                             }
 
@@ -972,7 +974,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.inner_radius(inner_radius));
+                                    circle.params_mut().inner_radius(inner_radius);
                                 }
                             }
 
@@ -1030,7 +1032,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.strength(strength));
+                                    circle.params_mut().strength(strength);
                                 }
                             }
 
@@ -1050,7 +1052,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| p.center_bias(center_bias));
+                                    circle.params_mut().center_bias(center_bias);
                                 }
                             }
 
@@ -1087,9 +1089,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| {
-                                        p.center(vec2(center_x, p.center.y))
-                                    });
+                                    {
+                                        let current_y = circle.params().center.y;
+                                        circle.params_mut().center(vec2(center_x, current_y));
+                                    }
                                 }
                             }
 
@@ -1108,9 +1111,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     .wind_circles
                                     .get_mut(&selected_id)
                                 {
-                                    circle.with_params_write(|p| {
-                                        p.center(vec2(p.center.x, center_y))
-                                    });
+                                    {
+                                        let current_x = circle.params().center.x;
+                                        circle.params_mut().center(vec2(current_x, center_y));
+                                    }
                                 }
                             }
                         } else {
