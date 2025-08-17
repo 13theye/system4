@@ -25,7 +25,7 @@ use system4::{
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
-const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
+const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.63, 0.63, 0.64);
 //const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.27, 0.27, 0.26);
 // full brightness color for terminal
 const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
@@ -243,15 +243,18 @@ fn model(app: &App) -> Model {
         format: wgpu::TextureFormat::Rgba16Float,
     };
 
-    let bloom_effect = PipelineBuilder::new()
-        .name("Bloom")
-        .brightness_extract(med_config, 0.45)
+    let effects = PipelineBuilder::new()
+        .name("Effects Pipeline")
+        .feedback(hi_config, 1.0, 1.0)
+        .update_scene()
+        .brightness_extract(med_config, 1.2)
         .downsample(lo_config)
-        .gaussian_blur_passes(lo_config, 4, 2.0, 10.0)
-        .bloom_composite_with_curve(hi_config, 10.0, 3.0)
+        .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
+        .bloom_composite_with_curve(hi_config, 2.0, 3.0)
+        .inversion(hi_config)
         .build(device);
 
-    if let Ok(effect) = bloom_effect {
+    if let Ok(effect) = effects {
         rendering.add_effect(effect);
     }
 

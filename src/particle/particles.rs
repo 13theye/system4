@@ -13,7 +13,7 @@ const FADE_OUT_DURATION: f32 = 100.0;
 pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     position: Point2,
-    feedback_positions: [Option<Point2>; 8],
+    feedback_positions: [Option<Point2>; 5],
     pub velocity: Vec2,
     pub acceleration: Vec2,
 
@@ -34,7 +34,7 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: [None; 8],
+            feedback_positions: [None; 5],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -58,7 +58,7 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            feedback_positions: [None; 8],
+            feedback_positions: [None; 5],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -117,7 +117,7 @@ impl Particle {
     }
 
     fn record_feedback_position(&mut self) {
-        for i in (1..7).rev() {
+        for i in (1..4).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
         self.feedback_positions[0] = Some(self.position);
@@ -137,7 +137,7 @@ impl Particle {
             // Create trail by connecting feedback positions with scaled distances
             let mut prev_pos = self.position;
 
-            for i in 1..(feedback * 7.0).round().min(7.0) as usize {
+            for i in 1..(feedback * 4.0).round().min(4.0) as usize {
                 if let Some(trail_pos) = self.feedback_positions[i] {
                     // Work entirely in world coordinates, let draw API handle scaling
                     let direction = trail_pos - self.position;

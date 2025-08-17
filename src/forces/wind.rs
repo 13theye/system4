@@ -4,6 +4,7 @@
 
 use crate::{forces::CellIdx, particle::Particle, view::Voice};
 use nannou::prelude::*;
+use rayon::prelude::*;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -138,8 +139,8 @@ impl WindCell {
 /// It is used to apply wind forces to particles.
 /// The grid is used to quickly find the wind force at a given position.
 pub struct WindField {
-    // Grid of winds in x,y order. (0,0) is top left.
-    cells: Vec<Vec<WindCell>>,
+    // Flattened grid of winds. Use get_cell_index() to convert (x,y) to 1D index.
+    cells: Vec<WindCell>,
 
     // Origin should align with ParticleSystem origin
     origin: Vec2,
@@ -150,6 +151,11 @@ pub struct WindField {
 }
 
 impl WindField {
+    /// Convert 2D grid coordinates to 1D index
+    fn get_cell_index(&self, x: usize, y: usize) -> usize {
+        y * self.grid_cols + x
+    }
+
     /// Create a new WindField with a center origin, x&y size, number of columns and number of rows.
     pub fn new(origin: Vec2, bounds_size: Vec2, grid_cols: usize, grid_rows: usize) -> Self {
         let cell_size = Vec2::new(
@@ -162,20 +168,18 @@ impl WindField {
             origin.y + bounds_size.y / 2.0, // Start from top (positive Y)
         );
 
-        let mut cells = Vec::new();
+        let mut cells = Vec::with_capacity(grid_cols * grid_rows);
 
-        for col in 0..grid_cols {
-            let mut row_of_cells = Vec::new();
-            for row in 0..grid_rows {
+        for row in 0..grid_rows {
+            for col in 0..grid_cols {
                 let cell_origin = top_left
                     + Vec2::new(
                         col as f32 * cell_size.x + cell_size.x / 2.0,
                         -(row as f32 * cell_size.y + cell_size.y / 2.0), // Negative Y to go downward
                     );
                 let cell = WindCell::new_from_origin(cell_origin, cell_size);
-                row_of_cells.push(cell);
+                cells.push(cell);
             }
-            cells.push(row_of_cells);
         }
 
         Self {
@@ -198,13 +202,17 @@ impl WindField {
 
     /// Force a recalculation of all cells in the WindField.
     pub fn force_update_all(&mut self) {
-        for col in 0..self.grid_cols {
-            for row in 0..self.grid_rows {
-                if let Some(cell) = self.get_mut_cell(col, row) {
-                    let _ = cell.get_combined_wind();
-                }
-            }
+        for cell in &mut self.cells {
+            let _ = cell.get_combined_wind();
         }
+    }
+
+    /// Force a recalculation of all cells in the WindField in parallel
+    /// - experimental.
+    pub fn par_force_update_all(&mut self) {
+        self.cells.par_iter_mut().for_each(|cell| {
+            let _ = cell.get_combined_wind();
+        });
     }
 
     /******************* Grid accessors *******************/
@@ -218,20 +226,29 @@ impl WindField {
 
     /// Get the cell at a grid position (0,0 is top left)
     pub fn get_cell(&self, x: usize, y: usize) -> Option<&WindCell> {
-        let col = self.cells.get(x)?;
-        col.get(y)
+        if x >= self.grid_cols || y >= self.grid_rows {
+            return None;
+        }
+        let index = self.get_cell_index(x, y);
+        self.cells.get(index)
     }
 
     /// Get a mutable reference to the cell at a grid position (0,0 is top left)
     pub fn get_mut_cell(&mut self, x: usize, y: usize) -> Option<&mut WindCell> {
-        let col = self.cells.get_mut(x)?;
-        col.get_mut(y)
+        if x >= self.grid_cols || y >= self.grid_rows {
+            return None;
+        }
+        let index = self.get_cell_index(x, y);
+        self.cells.get_mut(index)
     }
 
     /// Get the combined wind at a grid position (0,0 is top left)
     pub fn get_wind(&mut self, x: usize, y: usize) -> Option<Wind> {
-        let col = self.cells.get_mut(x)?;
-        let cell = col.get_mut(y)?;
+        if x >= self.grid_cols || y >= self.grid_rows {
+            return None;
+        }
+        let index = self.get_cell_index(x, y);
+        let cell = self.cells.get_mut(index)?;
         cell.get_combined_wind()
     }
 
@@ -276,23 +293,20 @@ impl WindField {
     /// Draw all the Wind vectors
     fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         // Draw wind vectors from each cell's origin
-        for col in 0..self.grid_cols {
-            for row in 0..self.grid_rows {
-                let cell = &self.cells[col][row];
-                let Some(wind) = &cell.combined_wind else {
-                    continue;
-                };
+        for cell in &self.cells {
+            let Some(wind) = &cell.combined_wind else {
+                continue;
+            };
 
-                // Draw wind vector from cell origin
-                let vector_scale = 3.0; // Increased scale for better visibility
-                let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
+            // Draw wind vector from cell origin
+            let vector_scale = 3.0; // Increased scale for better visibility
+            let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
 
-                draw.arrow()
-                    .start(cell.origin * vec2(scale_x, scale_y))
-                    .end(vector_end * vec2(scale_x, scale_y))
-                    .color(rgba(0.0, 0.8, 1.0, 0.2))
-                    .stroke_weight(0.5);
-            }
+            draw.arrow()
+                .start(cell.origin * vec2(scale_x, scale_y))
+                .end(vector_end * vec2(scale_x, scale_y))
+                .color(rgba(0.0, 0.8, 1.0, 0.2))
+                .stroke_weight(0.5);
         }
     }
 
@@ -332,18 +346,13 @@ impl WindField {
 
     /// Draw a grid of rectangles that represent the cells -- slow but more accurate
     pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        for col in 0..self.grid_cols {
-            for row in 0..self.grid_rows {
-                let Some(cell) = self.get_cell(col, row) else {
-                    return;
-                };
-                draw.rect()
-                    .xy(cell.origin * vec2(scale_x, scale_y))
-                    .w_h(self.cell_size.x * scale_x, self.cell_size.y * scale_y)
-                    .stroke_color(rgba(0.3, 0.3, 0.3, 0.3))
-                    .stroke_weight(1.0)
-                    .no_fill();
-            }
+        for cell in &self.cells {
+            draw.rect()
+                .xy(cell.origin * vec2(scale_x, scale_y))
+                .w_h(self.cell_size.x * scale_x, self.cell_size.y * scale_y)
+                .stroke_color(rgba(0.3, 0.3, 0.3, 0.3))
+                .stroke_weight(1.0)
+                .no_fill();
         }
     }
 

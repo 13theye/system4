@@ -61,7 +61,7 @@ impl ForceFields {
 
     /// Update all Winds in this ForceField
     pub fn force_update_all(&mut self) {
-        self.wind_field.force_update_all();
+        self.wind_field.par_force_update_all();
     }
 
     /// Apply all applicable forces to a particle
