@@ -363,12 +363,12 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     process_osc(model, commands);
 
     // Update particle system and get live positions
-    model
+    let particle_positions = model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
     // Render heatmap
-    /*
+
     model.heatmap_renderer.render_heatmap(
         device,
         queue,
@@ -377,11 +377,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.frame_count,
     );
 
-
     // Draw heatmap as texture
     let heatmap_view = model.heatmap_renderer.get_heatmap_view();
     model.draw.texture(heatmap_view).wh(model.render_size);
-     */
 
     // Draw particles
     model.particle_system.draw(&model.draw);

@@ -47,10 +47,12 @@ impl ForceFields {
 
     /// Update all circles in this ForceField
     pub fn update(&mut self, show_forces: bool) {
+        // Update the wind circle meta-force
         for circle in self.wind_circles.values_mut() {
             circle.update(&mut self.wind_field, show_forces);
         }
 
+        // Update each cell
         self.force_update_all();
     }
 
@@ -145,27 +147,6 @@ impl ForceFields {
             };
 
             circle.params_mut().center_bias(bias);
-        }
-    }
-
-    /// Currently unused. Needs to be reworked if used.
-    pub fn set_circle_volume_by_voice(&mut self, voice: &Voice, alpha: f32) {
-        let circle_ids: Vec<usize> = self.get_circle_ids_by_voice(voice);
-
-        if circle_ids.is_empty() {
-            println!("Wind circles not found for {}", voice);
-            return;
-        }
-
-        for id in circle_ids {
-            let Some(params) = self.get_circle_params_by_id(id) else {
-                return;
-            };
-
-            let radius = params.outer_radius;
-            let new_width = radius * alpha + 200.0;
-
-            self.set_circle_dims(id, radius, new_width);
         }
     }
 

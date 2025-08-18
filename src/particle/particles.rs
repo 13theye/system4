@@ -123,7 +123,7 @@ impl Particle {
         self.feedback_positions[0] = Some(self.position);
     }
 
-    pub fn draw(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
+    pub fn draw(&self, draw: &Draw, _feedback: f32, dpi_scale: f32) {
         let scaled_size = self.size / dpi_scale;
 
         draw.line()
@@ -133,6 +133,7 @@ impl Particle {
             .stroke_weight(scaled_size)
             .color(self.rgba);
 
+        /* Old Feedback/Trail functionality has been moved to GPU as a post-processing component
         if feedback > 0.01 {
             // Create trail by connecting feedback positions with scaled distances
             let mut prev_pos = self.position;
@@ -159,6 +160,7 @@ impl Particle {
                 }
             }
         }
+        */
     }
 
     pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {

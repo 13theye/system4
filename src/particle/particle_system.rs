@@ -174,33 +174,49 @@ impl ParticleSystem {
 
     /********************* Update methods ********************************** */
 
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
+    /// Emit particles, update forces, update particles, and cull particles
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> Vec<Point2> {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
+        let mut particle_positions = Vec::new();
+
         for (voice, particles) in self.particles.iter_mut() {
-            particles.par_iter_mut().for_each(|particle| {
-                self.forces.apply_forces_to_particle(particle);
+            let color_limit = self.color_limits.get(voice).copied();
+            let alpha_limit = self.alpha_limits.get(voice).copied();
 
-                let Some(color_limit) = self.color_limits.get(voice) else {
-                    return;
-                };
+            // Skip if no limits for this voice
+            if color_limit.is_none() || alpha_limit.is_none() {
+                continue;
+            }
 
-                let Some(alpha_limit) = self.alpha_limits.get(voice) else {
-                    return;
-                };
+            let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
 
-                particle.update(*color_limit, *alpha_limit);
+            // Parallel update, collect positions
+            let positions: Vec<Vec2> = particles
+                .par_iter_mut()
+                .map(|particle| {
+                    self.forces.apply_forces_to_particle(particle);
 
-                if particle.is_out_of_bounds(self.bounds_rect) {
-                    particle.kill();
-                }
-            });
+                    particle.update(color_limit, alpha_limit);
 
+                    if particle.is_out_of_bounds(self.bounds_rect) {
+                        particle.kill();
+                    }
+
+                    particle.position()
+                })
+                .collect();
+
+            particle_positions.extend(positions);
+
+            // Cull dead particles
             particles.retain(|particle| particle.is_alive());
         }
+
+        particle_positions
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {
