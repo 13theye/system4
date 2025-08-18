@@ -25,20 +25,12 @@ struct HeatmapParams {
 @group(0) @binding(4) var<uniform> params: HeatmapParams;
 @group(0) @binding(5) var<storage, read_write> bin_fill_counts: array<atomic<u32>>; // Separate counter for fill stage
 
-// First pass: count particles per bin
-@compute @workgroup_size(64, 1, 1)
-fn count_particles(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let particle_idx = global_id.x;
-    
-    if (particle_idx >= params.particle_count) {
-        return;
-    }
-    
-    let particle = particles[particle_idx];
-    
+// Helper function to calculate bin index for a particle
+// Returns bin_idx if valid, or u32(-1) if particle should be skipped
+fn calculate_bin_index(particle: Particle) -> u32 {
     // Skip invalid particles
     if (particle.position.x > 1e30 || particle.position.y > 1e30) {
-        return;
+        return 0xFFFFFFFFu; // u32(-1)
     }
     
     // Calculate which bin this particle belongs to
@@ -47,7 +39,7 @@ fn count_particles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     // Skip particles outside bounds
     if (normalized_pos.x < 0.0 || normalized_pos.x > 1.0 || normalized_pos.y < 0.0 || normalized_pos.y > 1.0) {
-        return;
+        return 0xFFFFFFFFu; // u32(-1)
     }
     
     // Direct bin coordinate calculation without precision-losing round trips
@@ -58,8 +50,25 @@ fn count_particles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (bin_x_f >= 0.0 && bin_x_f < f32(params.grid_size.x) && bin_y_f >= 0.0 && bin_y_f < f32(params.grid_size.y)) {
         let bin_x = u32(bin_x_f);
         let bin_y = u32(bin_y_f);
-        let bin_idx = bin_y * params.grid_size.x + bin_x;
-        
+        return bin_y * params.grid_size.x + bin_x;
+    }
+    
+    return 0xFFFFFFFFu; // u32(-1)
+}
+
+// First pass: count particles per bin
+@compute @workgroup_size(64, 1, 1)
+fn count_particles(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let particle_idx = global_id.x;
+    
+    if (particle_idx >= params.particle_count) {
+        return;
+    }
+    
+    let particle = particles[particle_idx];
+    let bin_idx = calculate_bin_index(particle);
+    
+    if (bin_idx != 0xFFFFFFFFu) {
         // Atomically increment the count for this bin
         atomicAdd(&bin_counts[bin_idx], 1u);
     }
@@ -93,31 +102,9 @@ fn fill_bins(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     
     let particle = particles[particle_idx];
+    let bin_idx = calculate_bin_index(particle);
     
-    // Skip invalid particles
-    if (particle.position.x > 1e30 || particle.position.y > 1e30) {
-        return;
-    }
-    
-    // Calculate which bin this particle belongs to
-    // Use direct coordinate transformation to match heatmap shader exactly
-    let normalized_pos = (particle.position - params.bounds_min) / (params.bounds_max - params.bounds_min);
-    
-    // Skip particles outside bounds
-    if (normalized_pos.x < 0.0 || normalized_pos.x > 1.0 || normalized_pos.y < 0.0 || normalized_pos.y > 1.0) {
-        return;
-    }
-    
-    // Direct bin coordinate calculation without precision-losing round trips
-    let bin_x_f = normalized_pos.x * f32(params.grid_size.x);
-    let bin_y_f = normalized_pos.y * f32(params.grid_size.y);
-    
-    // Final bounds check and conversion
-    if (bin_x_f >= 0.0 && bin_x_f < f32(params.grid_size.x) && bin_y_f >= 0.0 && bin_y_f < f32(params.grid_size.y)) {
-        let bin_x = u32(bin_x_f);
-        let bin_y = u32(bin_y_f);
-        let bin_idx = bin_y * params.grid_size.x + bin_x;
-        
+    if (bin_idx != 0xFFFFFFFFu) {
         // Get the current write position for this bin using separate fill counter
         let write_pos = bin_offsets[bin_idx] + atomicAdd(&bin_fill_counts[bin_idx], 1u);
         
