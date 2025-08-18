@@ -72,7 +72,7 @@ impl Particle {
     /// Update the particle based on forces and age, given externally-determined color and alpha limits
     pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32) {
         // Add the current position to the feedback positions
-        self.record_feedback_position();
+        //self.record_feedback_position();
 
         self.velocity += self.acceleration;
         self.position += self.velocity;

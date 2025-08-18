@@ -5,10 +5,7 @@ use nannou::prelude::*;
 use std::collections::BTreeMap;
 
 use crate::{
-    forces::{
-        wind::{WindCircle, WindCircleParams, WindField},
-        Gravity,
-    },
+    forces::wind::{WindCircle, WindCircleParams, WindField},
     particle::Particle,
     view::Voice,
 };
@@ -21,7 +18,6 @@ pub struct ForceFields {
 
     // Force objects
     pub wind_circles: BTreeMap<usize, WindCircle>,
-    pub gravity_sources: Vec<Gravity>,
 
     // Origin in the World Coordinate Space
     origin: Vec2,
@@ -41,7 +37,6 @@ impl ForceFields {
         Self {
             wind_field: WindField::new(origin, bounds_size, grid_cols, grid_rows),
             wind_circles: BTreeMap::new(),
-            gravity_sources: Vec::new(),
             origin,
             bounds_size,
             grid_cols,
