@@ -124,14 +124,20 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     
     // Skip pixels with very low intensity
-    if (total_intensity < 0.01) {
-        textureStore(heatmap_texture, pixel_coords, vec4<f32>(1.0, 1.0, 1.0, 0.0));
+    if (total_intensity < 0.001) {
+        textureStore(heatmap_texture, pixel_coords, vec4<f32>(0.0, 0.0, 0.0, 0.0));
         return;
     }
     
     // Normalize and apply color mapping
     let intensity = clamp(total_intensity * params.intensity_scale, 0.0, 1.0);
-    let color = color_from_intensity(intensity);
+    var color = color_from_intensity(intensity);
+
+    // Smooth alpha transition for very low intensities to reduce pop-in
+    if (total_intensity < 0.05) {
+        let alpha_multiplier = smoothstep(0.001, 0.05, total_intensity);
+        color.a *= alpha_multiplier;
+    }
     
     textureStore(heatmap_texture, pixel_coords, color);
 }
