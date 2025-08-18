@@ -101,10 +101,15 @@ impl WindCell {
     }
 
     /// Get the sum of all Winds in this WindCell, recalculating if necessary.
-    pub fn get_combined_wind(&mut self) -> Option<Wind> {
+    pub fn get_updated_combined_wind(&mut self) -> Option<Wind> {
         if self.needs_update {
             self.calculate_combined_wind();
         }
+        self.combined_wind
+    }
+
+    /// Get the sum of all Winds in this WindCell, without recalculating.
+    pub fn get_combined_wind(&self) -> Option<Wind> {
         self.combined_wind
     }
 
@@ -190,7 +195,7 @@ impl WindField {
     }
 
     /// Given a particle, determines the WindCell that contains the particle, and then applies the WindCell's Wind on that particle.
-    pub fn apply(&mut self, particle: &mut Particle) {
+    pub fn apply(&self, particle: &mut Particle) {
         let Some(wind) = self.get_wind_at_pos(particle.position()) else {
             return;
         };
@@ -200,7 +205,7 @@ impl WindField {
     /// Force a recalculation of all cells in the WindField.
     pub fn force_update_all(&mut self) {
         for cell in &mut self.cells {
-            let _ = cell.get_combined_wind();
+            let _ = cell.get_updated_combined_wind();
         }
     }
 
@@ -208,14 +213,14 @@ impl WindField {
     /// - experimental.
     pub fn par_force_update_all(&mut self) {
         self.cells.par_iter_mut().for_each(|cell| {
-            let _ = cell.get_combined_wind();
+            let _ = cell.get_updated_combined_wind();
         });
     }
 
     /******************* Grid accessors *******************/
 
     /// Get combined wind at a position in ParticleSystem coordinates
-    pub fn get_wind_at_pos(&mut self, position: Vec2) -> Option<Wind> {
+    pub fn get_wind_at_pos(&self, position: Vec2) -> Option<Wind> {
         let (x, y) = self.position_to_idx(position)?;
 
         self.get_wind(x, y)
@@ -240,12 +245,12 @@ impl WindField {
     }
 
     /// Get the combined wind at a grid position (0,0 is top left)
-    pub fn get_wind(&mut self, x: usize, y: usize) -> Option<Wind> {
+    pub fn get_wind(&self, x: usize, y: usize) -> Option<Wind> {
         if x >= self.grid_cols || y >= self.grid_rows {
             return None;
         }
         let index = self.get_cell_index(x, y);
-        let cell = self.cells.get_mut(index)?;
+        let cell = self.cells.get(index)?;
         cell.get_combined_wind()
     }
 
@@ -415,22 +420,26 @@ impl WindCircle {
     }
 
     /// Remove the circle's wind from the field
-    pub fn remove_from_field(&mut self, field: &mut WindField, show_forces: bool) {
+    pub fn remove_from_field(&mut self, field: &mut WindField, _show_forces: bool) {
         for cell_idx in self.cell_idxs.iter() {
             let Some(cell) = field.get_mut_cell(cell_idx.x, cell_idx.y) else {
                 continue;
             };
             cell.remove_wind(self.id);
 
+            // In debug mode, pre-calculate combined wind so we can draw the field
+            // no longer needed because we update all cells on every frame now
+            /*
             if show_forces {
-                let _ = cell.get_combined_wind();
+                let _ = cell.get_updated_combined_wind();
             }
+            */
         }
         self.cell_idxs.clear();
     }
 
     /// Apply the circle's wind to the field, return the cells that were affected
-    pub fn apply_to_field(&self, field: &mut WindField, show_forces: bool) -> Vec<CellIdx> {
+    pub fn apply_to_field(&self, field: &mut WindField, _show_forces: bool) -> Vec<CellIdx> {
         // Calculate bounding box using direct parameter access
         let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
 
@@ -448,9 +457,12 @@ impl WindCircle {
                 cell.add_wind(self.id, wind);
 
                 // In debug mode, pre-calculate combined wind so we can draw the field
+                // no longer needed because we update all cells on every frame now
+                /*
                 if show_forces {
-                    let _ = cell.get_combined_wind();
+                    let _ = cell.get_updated_combined_wind();
                 }
+                */
 
                 affected_cells.push(CellIdx { x: col, y: row });
             }

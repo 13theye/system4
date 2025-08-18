@@ -61,8 +61,8 @@ impl ParticleSystem {
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
-        let grid_cols = (width / 8.0) as usize;
-        let grid_rows = (height / 8.0) as usize;
+        let grid_cols = (width / 4.0) as usize;
+        let grid_rows = (height / 4.0) as usize;
 
         // pre-populate the first mask
         let masks = HashMap::new();
@@ -174,47 +174,33 @@ impl ParticleSystem {
 
     /********************* Update methods ********************************** */
 
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> Vec<Vec2> {
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
-        let mut live_positions = Vec::new();
-
         for (voice, particles) in self.particles.iter_mut() {
-            let mut write_inx = 0;
-            for read_inx in 0..particles.len() {
-                let particle = &mut particles[read_inx];
+            particles.par_iter_mut().for_each(|particle| {
                 self.forces.apply_forces_to_particle(particle);
 
                 let Some(color_limit) = self.color_limits.get(voice) else {
-                    return live_positions;
+                    return;
                 };
 
                 let Some(alpha_limit) = self.alpha_limits.get(voice) else {
-                    return live_positions;
+                    return;
                 };
 
                 particle.update(*color_limit, *alpha_limit);
+
                 if particle.is_out_of_bounds(self.bounds_rect) {
                     particle.kill();
                 }
+            });
 
-                if !particle.is_dead() {
-                    if particle.is_alive() {
-                        live_positions.push(particle.position());
-                    }
-                    if write_inx != read_inx {
-                        particles[write_inx] = particles[read_inx];
-                    }
-                    write_inx += 1;
-                }
-            }
-            particles.truncate(write_inx);
+            particles.retain(|particle| particle.is_alive());
         }
-
-        live_positions
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {

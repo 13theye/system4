@@ -18,7 +18,6 @@ use crate::{
 pub struct ForceFields {
     // Force fields
     pub wind_field: WindField,
-    pub gravity_field: Vec<Gravity>,
 
     // Force objects
     pub wind_circles: BTreeMap<usize, WindCircle>,
@@ -41,7 +40,6 @@ impl ForceFields {
 
         Self {
             wind_field: WindField::new(origin, bounds_size, grid_cols, grid_rows),
-            gravity_field: Vec::new(),
             wind_circles: BTreeMap::new(),
             gravity_sources: Vec::new(),
             origin,
@@ -57,6 +55,8 @@ impl ForceFields {
         for circle in self.wind_circles.values_mut() {
             circle.update(&mut self.wind_field, show_forces);
         }
+
+        self.force_update_all();
     }
 
     /// Update all Winds in this ForceField
@@ -65,14 +65,9 @@ impl ForceFields {
     }
 
     /// Apply all applicable forces to a particle
-    pub fn apply_forces_to_particle(&mut self, particle: &mut Particle) {
+    pub fn apply_forces_to_particle(&self, particle: &mut Particle) {
         // Apply wind
         self.wind_field.apply(particle);
-
-        // Apply gravity
-        for gravity_source in &self.gravity_field {
-            gravity_source.apply(particle);
-        }
     }
 
     /// Recalculate all applicable forces in this ForceField
@@ -84,12 +79,6 @@ impl ForceFields {
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
         println!("Added wind circle {}", circle.id);
         self.wind_circles.entry(circle.id).or_insert(circle);
-    }
-
-    /// Add a GravitySource to this ForceField
-    pub fn add_gravity_source(&mut self, origin: Vec2, mass: f32) {
-        let gravity = Gravity::new(origin, mass);
-        self.gravity_field.push(gravity);
     }
 
     /// Returns a BTreeMap of all WindCircleParms by WindCircle ID

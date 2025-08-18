@@ -363,7 +363,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     process_osc(model, commands);
 
     // Update particle system and get live positions
-    let particle_positions = model
+    model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
