@@ -18,7 +18,7 @@ use system4::{
     fps::FpsManager,
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
-    rendering::HeatmapRenderer,
+    rendering::HeatmapBinnedRenderer,
     terminals::{TerminalParams, TerminalSystem},
     utils::IdGenerator,
     view::Voice,
@@ -63,7 +63,7 @@ struct Model {
 
     // Rendering engine
     rendering: Nnpipe,
-    heatmap_renderer: HeatmapRenderer,
+    heatmap_renderer: HeatmapBinnedRenderer,
     dpi_scale: f32,
     font: Font,
 
@@ -208,7 +208,7 @@ fn model(app: &App) -> Model {
     );
 
     // Create heatmap renderer
-    let heatmap_renderer = HeatmapRenderer::new(
+    let heatmap_renderer = HeatmapBinnedRenderer::new(
         device,
         config.rendering.texture_width,
         config.rendering.texture_height,
@@ -368,19 +368,19 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .update(&mut model.rng, model.show_forces);
 
     // Render heatmap
+    /*
+       model.heatmap_renderer.render_heatmap(
+           device,
+           queue,
+           &particle_positions,
+           model.render_rect,
+           model.frame_count,
+       );
 
-    model.heatmap_renderer.render_heatmap(
-        device,
-        queue,
-        &particle_positions,
-        model.render_rect,
-        model.frame_count,
-    );
-
-    // Draw heatmap as texture
-    let heatmap_view = model.heatmap_renderer.get_heatmap_view();
-    model.draw.texture(heatmap_view).wh(model.render_size);
-
+       // Draw heatmap as texture
+       let heatmap_view = model.heatmap_renderer.get_heatmap_view();
+       model.draw.texture(heatmap_view).wh(model.render_size);
+    */
     // Draw particles
     model.particle_system.draw(&model.draw);
 
