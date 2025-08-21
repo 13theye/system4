@@ -3,6 +3,7 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
+use nnpipe::ParticleGpu;
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 3600.0;
@@ -222,5 +223,14 @@ impl Particle {
 
     pub fn fade_out_duration(&self) -> f32 {
         FADE_OUT_DURATION
+    }
+
+    /********************* Convert to GPU *********************/
+    pub fn to_gpu(&self) -> ParticleGpu {
+        ParticleGpu::new(
+            [self.position.x, self.position.y],
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha,
+        )
     }
 }

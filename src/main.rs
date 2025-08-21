@@ -24,7 +24,7 @@ use system4::{
     view::Voice,
 };
 
-const DEFAULT_PARTICLE_SIZE: f32 = 8.0;
+const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.63, 0.63, 0.64);
 //const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.27, 0.27, 0.26);
 // full brightness color for terminal
@@ -56,10 +56,12 @@ struct Model {
     performer_reshaper: TextureReshaper,
 
     // Nannou API
-    draw: nannou::Draw,           // for drawing to the main texture
-    audience_draw: nannou::Draw,  // for drawing UI elements to audience_window only
-    performer_draw: nannou::Draw, // for drawing UI elements to performer_window only
-    control_draw: nannou::Draw,   // for drawing UI elements to ui_window only
+    /// Draw context for UI elements to audience_window only
+    audience_draw: nannou::Draw,
+    /// Draw context for UI elements to performer_window only
+    performer_draw: nannou::Draw,
+    /// Draw context for drawing UI elements to ui_window only
+    control_draw: nannou::Draw,
 
     // Rendering engine
     rendering: Nnpipe,
@@ -198,8 +200,8 @@ fn model(app: &App) -> Model {
     // Set up render texture
     // the device isn't tied to window, but it's nannou's way of getting the handle.
     let device = audience_window.device();
-    let draw = nannou::Draw::new();
 
+    // Create Nnpipe
     let mut rendering = Nnpipe::new(
         device,
         config.rendering.texture_width,
@@ -302,7 +304,6 @@ fn model(app: &App) -> Model {
         control_window_id,
         audience_reshaper,
         performer_reshaper,
-        draw,
         audience_draw,
         performer_draw,
         control_draw,
@@ -336,7 +337,10 @@ fn main() {
             thread_priority, result
         );
     }
-    nannou::app(model).update(update).run();
+    nannou::app(model)
+        .loop_mode(nannou::LoopMode::rate_fps(120.0)) // Run at 120fps regardless of display refresh rate
+        .update(update)
+        .run();
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
@@ -349,7 +353,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let queue = window.queue();
 
     // Set background
-    model.draw.background().color(BLACK);
+    //model.draw.background().color(BLACK);
 
     // Update FPS counter
     model.fps.update();
@@ -362,8 +366,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let commands = model.osc.take_commands();
     process_osc(model, commands);
 
-    // Update particle system and get live positions
-    let particle_positions = model
+    // Update particle system and get a Vec containing all particles for GPU to draw
+    let gpu_particles = model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
@@ -377,15 +381,21 @@ fn update(app: &App, model: &mut Model, _update: Update) {
            model.frame_count,
        );
 
-       // Draw heatmap as texture
-       let heatmap_view = model.heatmap_renderer.get_heatmap_view();
-       model.draw.texture(heatmap_view).wh(model.render_size);
+    // Draw heatmap as texture
+    let heatmap_view = model.heatmap_renderer.get_heatmap_view();
+    model.draw.texture(heatmap_view).wh(model.render_size);
     */
-    // Draw particles
-    model.particle_system.draw(&model.draw);
+
+    // Draw particles - using Nannou Draw method
+    //model.particle_system.draw(&model.draw);
+
+    // Clear and draw particles in a single optimized render pass
+    model
+        .rendering
+        .clear_and_draw_particles(device, queue, gpu_particles);
 
     // Update terminals
-    let finish_signals = model.terminal_system.update(&model.draw);
+    let finish_signals = model.terminal_system.update(&model.rendering.draw);
 
     // When a terminal start sequence is finished, send the OSC command to turn on the drone
     for (voice, finish_signal) in finish_signals {
@@ -463,9 +473,12 @@ fn render_and_post(app: &App, model: &mut Model) {
     let queue = window.queue();
 
     // Render the game to texture
-    model.rendering.render_scene(device, queue, &model.draw);
+    model.rendering.render_scene(device, queue);
 
+    // Apply post processing
     model.rendering.post_process(device, queue);
+
+    // Draw to screen while skipping post processing
     //model.rendering.direct_to_view(device, queue);
 }
 

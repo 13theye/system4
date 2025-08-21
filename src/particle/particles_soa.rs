@@ -2,6 +2,7 @@
 ///
 /// More efficient particles using Struct-of-Arrays
 ///
+/// Currently unused
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::ops::Range;

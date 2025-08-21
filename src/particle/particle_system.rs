@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
+use nnpipe::ParticleGpu;
 use rayon::prelude::*;
 
 use crate::{
@@ -47,6 +48,9 @@ pub struct ParticleSystem {
 
     // DPI scale
     dpi_scale: f32,
+
+    // Reusable GPU particle buffer to avoid allocations
+    gpu_particle_buffer: Vec<ParticleGpu>,
 }
 
 impl ParticleSystem {
@@ -88,6 +92,7 @@ impl ParticleSystem {
             trail: 0.0,
 
             dpi_scale,
+            gpu_particle_buffer: Vec::new(),
         }
     }
 
@@ -175,13 +180,14 @@ impl ParticleSystem {
     /********************* Update methods ********************************** */
 
     /// Emit particles, update forces, update particles, and cull particles
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> Vec<Point2> {
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> &[ParticleGpu] {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
-        let mut particle_positions = Vec::new();
+        // Reuse existing buffer to avoid allocations
+        self.gpu_particle_buffer.clear();
 
         for (voice, particles) in self.particles.iter_mut() {
             let color_limit = self.color_limits.get(voice).copied();
@@ -195,7 +201,7 @@ impl ParticleSystem {
             let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
 
             // Parallel update, collect positions
-            let positions: Vec<Vec2> = particles
+            let gpu_particle_group: Vec<ParticleGpu> = particles
                 .par_iter_mut()
                 .map(|particle| {
                     self.forces.apply_forces_to_particle(particle);
@@ -206,17 +212,17 @@ impl ParticleSystem {
                         particle.kill();
                     }
 
-                    particle.position()
+                    particle.to_gpu()
                 })
                 .collect();
 
-            particle_positions.extend(positions);
+            self.gpu_particle_buffer.extend(gpu_particle_group);
 
             // Cull dead particles
             particles.retain(|particle| particle.is_alive());
         }
 
-        particle_positions
+        &self.gpu_particle_buffer
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {
