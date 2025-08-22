@@ -3,7 +3,7 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
-use nnpipe::ParticleGpu;
+use nnpipe::{ParticleGpu, ParticleTrailGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 3600.0;
@@ -14,7 +14,7 @@ const FADE_OUT_DURATION: f32 = 100.0;
 pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     position: Point2,
-    feedback_positions: [Option<Point2>; 5],
+    feedback_positions: [Option<Point2>; 15],
     pub velocity: Vec2,
     pub acceleration: Vec2,
 
@@ -35,7 +35,7 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: [None; 5],
+            feedback_positions: [None; 15],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -59,7 +59,7 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            feedback_positions: [None; 5],
+            feedback_positions: [None; 15],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -73,7 +73,7 @@ impl Particle {
     /// Update the particle based on forces and age, given externally-determined color and alpha limits
     pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32) {
         // Add the current position to the feedback positions
-        //self.record_feedback_position();
+        self.record_feedback_position();
 
         self.velocity += self.acceleration;
         self.position += self.velocity;
@@ -118,7 +118,7 @@ impl Particle {
     }
 
     fn record_feedback_position(&mut self) {
-        for i in (1..4).rev() {
+        for i in (1..15).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
         self.feedback_positions[0] = Some(self.position);
@@ -231,6 +231,28 @@ impl Particle {
             [self.position.x, self.position.y],
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,
+        )
+    }
+
+    /// Convert particle with trail history to GPU format for trail rendering
+    pub fn to_gpu_with_trails(&self) -> ParticleTrailGpu {
+        // Convert feedback positions to history array
+        let mut history_positions = [[0.0f32; 2]; 15];
+
+        for i in 0..15 {
+            if let Some(pos) = self.feedback_positions[i] {
+                history_positions[i] = [pos.x, pos.y];
+            } else {
+                // Use current position as fallback for missing history
+                history_positions[i] = [self.position.x, self.position.y];
+            }
+        }
+
+        ParticleTrailGpu::new(
+            [self.position.x, self.position.y],
+            history_positions,
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha, // Current particle uses its calculated alpha (includes aging/fade)
         )
     }
 }

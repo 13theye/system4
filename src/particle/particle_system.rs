@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
-use nnpipe::ParticleGpu;
+use nnpipe::{ParticleGpu, ParticleTrailGpu};
 use rayon::prelude::*;
 
 use crate::{
@@ -51,6 +51,7 @@ pub struct ParticleSystem {
 
     // Reusable GPU particle buffer to avoid allocations
     gpu_particle_buffer: Vec<ParticleGpu>,
+    gpu_trail_particle_buffer: Vec<ParticleTrailGpu>,
 }
 
 impl ParticleSystem {
@@ -93,6 +94,7 @@ impl ParticleSystem {
 
             dpi_scale,
             gpu_particle_buffer: Vec::new(),
+            gpu_trail_particle_buffer: Vec::new(),
         }
     }
 
@@ -180,7 +182,7 @@ impl ParticleSystem {
     /********************* Update methods ********************************** */
 
     /// Emit particles, update forces, update particles, and cull particles
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> &[ParticleGpu] {
+    pub fn _update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> &[ParticleGpu] {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
@@ -223,6 +225,53 @@ impl ParticleSystem {
         }
 
         &self.gpu_particle_buffer
+    }
+
+    /// Emit particles, update forces, update particles, and cull particles - returns trail particles
+    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> &[ParticleTrailGpu] {
+        self.handle_particle_emission(rng);
+        self.cull_excess_particles();
+
+        self.forces.update(show_forces);
+
+        // Reuse existing buffer to avoid allocations
+        self.gpu_trail_particle_buffer.clear();
+
+        for (voice, particles) in self.particles.iter_mut() {
+            let color_limit = self.color_limits.get(voice).copied();
+            let alpha_limit = self.alpha_limits.get(voice).copied();
+
+            // Skip if no limits for this voice
+            if color_limit.is_none() || alpha_limit.is_none() {
+                continue;
+            }
+
+            let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
+
+            // Parallel update, collect positions with trail data
+            let gpu_trail_particle_group: Vec<ParticleTrailGpu> = particles
+                .par_iter_mut()
+                .map(|particle| {
+                    self.forces.apply_forces_to_particle(particle);
+
+                    particle.update(color_limit, alpha_limit);
+
+                    if particle.is_out_of_bounds(self.bounds_rect) {
+                        particle.kill();
+                    }
+
+                    particle.to_gpu_with_trails()
+                })
+                .collect();
+
+            self.gpu_trail_particle_buffer
+                .extend(gpu_trail_particle_group);
+
+            // Cull dead particles
+            particles.retain(|particle| particle.is_alive());
+        }
+
+        &self.gpu_trail_particle_buffer
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {

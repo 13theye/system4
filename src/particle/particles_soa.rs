@@ -24,8 +24,8 @@ pub struct Particles {
     vel_y: Vec<f32>,                       // y velocity
     acc_x: Vec<f32>,                       // x acceleration
     acc_y: Vec<f32>,                       // y acceleration
-    feedback_pos_x: Vec<[Option<f32>; 4]>, // x position of last 4 frames
-    feedback_pos_y: Vec<[Option<f32>; 4]>, // y position of last 4 frames
+    feedback_pos_x: Vec<[Option<f32>; 7]>, // x position of last 7 frames
+    feedback_pos_y: Vec<[Option<f32>; 7]>, // y position of last 7 frames
 
     // Lifespan
     age: Vec<f32>,                 // age of particles
@@ -93,8 +93,8 @@ impl Particles {
         self.acc_y.push(acceleration.y);
         self.vel_x.push(velocity.x);
         self.vel_y.push(velocity.y);
-        self.feedback_pos_x.push([None; 4]);
-        self.feedback_pos_y.push([None; 4]);
+        self.feedback_pos_x.push([None; 7]);
+        self.feedback_pos_y.push([None; 7]);
         self.age.push(0.0);
         self.remaining_life_span.push(PARTICLE_LIFE_SPAN);
         self.killed.push(false);
@@ -140,11 +140,11 @@ impl Particles {
             .for_each(|(((feedback_x, feedback_y), &pos_x), &pos_y)| {
                 // Update x feedback
                 feedback_x.rotate_left(1);
-                feedback_x[3] = Some(pos_x);
+                feedback_x[6] = Some(pos_x);
 
                 // Update y feedback
                 feedback_y.rotate_left(1);
-                feedback_y[3] = Some(pos_y);
+                feedback_y[6] = Some(pos_y);
             });
     }
 

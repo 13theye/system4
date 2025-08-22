@@ -247,12 +247,12 @@ fn model(app: &App) -> Model {
 
     let effects = PipelineBuilder::new()
         .name("Effects Pipeline")
-        .feedback(hi_config, 1.0, 1.0)
-        .update_scene()
-        .brightness_extract(med_config, 1.2)
+        //.feedback(hi_config, 1.0, 1.0)
+        //.update_scene()
+        .brightness_extract(med_config, 0.65)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
-        .bloom_composite_with_curve(hi_config, 2.0, 3.0)
+        .bloom_composite_with_curve(hi_config, 3.0, 3.0)
         .inversion(hi_config)
         .build(device);
 
@@ -392,7 +392,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Clear and draw particles in a single optimized render pass
     model
         .rendering
-        .clear_and_draw_particles(device, queue, gpu_particles);
+        .clear_and_draw_trail_particles(device, queue, gpu_particles);
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.rendering.draw);
@@ -1137,10 +1137,6 @@ fn update_control_ui(app: &App, model: &mut Model) {
                 }); // end Voice 4
             });
         });
-
-    if show_forces_changed {
-        model.particle_system.forces.force_update_all();
-    }
 }
 
 fn adjust_style_from(style: egui::Style) -> egui::Style {

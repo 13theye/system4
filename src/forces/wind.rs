@@ -400,7 +400,7 @@ impl WindCircle {
             inner_radius: width,
             strength,
             center_bias,
-            needs_recalculation: true,
+            dirty: true,
         };
         Self {
             id,
@@ -438,7 +438,8 @@ impl WindCircle {
         self.cell_idxs.clear();
     }
 
-    /// Apply the circle's wind to the field, return the cells that were affected
+    /// Add the circle's wind to the field, return the cells that were affected.
+    /// The total numerical force for each cell is calculated once per frame in a later step.
     pub fn apply_to_field(&self, field: &mut WindField, _show_forces: bool) -> Vec<CellIdx> {
         // Calculate bounding box using direct parameter access
         let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
@@ -544,12 +545,12 @@ impl WindCircle {
 
     /// Returns true if the WindCircle has parameter changes that have not been applied.
     pub fn has_changes(&self) -> bool {
-        self.params.needs_recalculation
+        self.params.dirty
     }
 
     /// Clear the needs_recalculation flag, indicating that the parameters have been applied.
     pub fn clear_changes(&mut self) {
-        self.params.needs_recalculation = false;
+        self.params.dirty = false;
     }
 
     /// Return a reference to the WindCircleParams
@@ -578,15 +579,21 @@ impl WindCircle {
 /// - Inner radius: The radius of the hole in the center of the circle
 /// - Strength: The strength of the wind applied within the circle
 /// - Center bias: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
-/// - Needs recalculation: Flag to indicate that one or more parameters have changed so that WindField will recalculate
+/// - Dirty: Flag to indicate that one or more parameters have changed so that WindField will recalculate
 #[derive(Clone)]
 pub struct WindCircleParams {
-    pub center: Vec2, // center of the circle in the ParticleSystem space
+    /// center of the circle in the ParticleSystem space
+    pub center: Vec2,
+    /// outer circle radius
     pub outer_radius: f32,
-    pub inner_radius: f32,         // inner hole radius
-    pub strength: f32,             // strength of the wind
-    pub center_bias: f32,          // 0.0 = purely tangential, 1.0 = purely radial inward
-    pub needs_recalculation: bool, // if settings changed, we need to recalculate the cells
+    /// inner hole radius
+    pub inner_radius: f32,
+    /// strength of the wind
+    pub strength: f32,
+    /// 0.0 = purely tangential, 1.0 = purely radial inward, 2.0 = tangential in the opposite direction
+    pub center_bias: f32,
+    /// True if settings changed and cells need recalculation
+    pub dirty: bool,
 }
 
 impl WindCircleParams {
@@ -594,7 +601,7 @@ impl WindCircleParams {
     pub fn center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
@@ -602,7 +609,7 @@ impl WindCircleParams {
     pub fn outer_radius(&mut self, radius: f32) {
         if self.outer_radius != radius {
             self.outer_radius = radius;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
@@ -610,7 +617,7 @@ impl WindCircleParams {
     pub fn inner_radius(&mut self, radius: f32) {
         if self.inner_radius != radius {
             self.inner_radius = radius;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
@@ -618,7 +625,7 @@ impl WindCircleParams {
     pub fn strength(&mut self, strength: f32) {
         if self.strength != strength {
             self.strength = strength;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
@@ -626,7 +633,7 @@ impl WindCircleParams {
     pub fn center_bias(&mut self, center_bias: f32) {
         if self.center_bias != center_bias {
             self.center_bias = center_bias;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 }
