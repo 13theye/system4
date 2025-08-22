@@ -3,7 +3,7 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
-use nnpipe::{ParticleGpu, ParticleTrailGpu};
+use nnpipe::ParticleGpu;
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 3600.0;
@@ -234,25 +234,4 @@ impl Particle {
         )
     }
 
-    /// Convert particle with trail history to GPU format for trail rendering
-    pub fn to_gpu_with_trails(&self) -> ParticleTrailGpu {
-        // Convert feedback positions to history array
-        let mut history_positions = [[0.0f32; 2]; 15];
-
-        for i in 0..15 {
-            if let Some(pos) = self.feedback_positions[i] {
-                history_positions[i] = [pos.x, pos.y];
-            } else {
-                // Use current position as fallback for missing history
-                history_positions[i] = [self.position.x, self.position.y];
-            }
-        }
-
-        ParticleTrailGpu::new(
-            [self.position.x, self.position.y],
-            history_positions,
-            [self.rgba.red, self.rgba.green, self.rgba.blue],
-            self.rgba.alpha, // Current particle uses its calculated alpha (includes aging/fade)
-        )
-    }
 }

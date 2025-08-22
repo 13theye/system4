@@ -392,7 +392,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Clear and draw particles in a single optimized render pass
     model
         .rendering
-        .clear_and_draw_trail_particles(device, queue, gpu_particles);
+        .clear_and_draw_particles(device, queue, gpu_particles);
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.rendering.draw);
