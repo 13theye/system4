@@ -382,14 +382,16 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .update(&mut model.rng, model.show_forces);
 
     // Render heatmap
-
+    /*
     model.heatmap_renderer.render_heatmap(
         device,
+        &mut encoder,
         queue,
         gpu_particles,
         model.render_rect,
         model.frame_count,
     );
+
 
     // Draw heatmap as texture
     let heatmap_view = model.heatmap_renderer.get_heatmap_view();
@@ -398,12 +400,24 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .draw
         .texture(heatmap_view)
         .wh(model.render_size);
+     */
 
     // Set background
     model.rendering.draw.background().color(BLACK);
 
     // Encode render passes
     model.rendering.encode_draw_commands(device, &mut encoder);
+
+    // Encode heatmap
+    model.heatmap_renderer.encode_heatmap_into(
+        device,
+        &mut encoder,
+        queue,
+        gpu_particles,
+        model.render_rect,
+        model.frame_count,
+        model.rendering.scene_view(),
+    );
     model.particle_renderer.encode_into(
         &mut encoder,
         queue,

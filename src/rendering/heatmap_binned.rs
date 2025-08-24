@@ -1,6 +1,7 @@
 use nannou::prelude::*;
 use nannou::wgpu;
 use nnpipe::renderers::ParticleGpu;
+use std::collections::HashMap;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -45,6 +46,11 @@ pub struct HeatmapBinnedRenderer {
     // Bind groups
     binning_bind_group: wgpu::BindGroup,
     heatmap_bind_group: wgpu::BindGroup,
+    
+    // Cached bind group layout for target textures (following Nnpipe pattern)
+    target_bind_group_layout: wgpu::BindGroupLayout,
+    // Cache bind groups per target texture view to avoid recreation
+    target_bind_groups: std::cell::RefCell<HashMap<*const wgpu::TextureView, wgpu::BindGroup>>,
 
     // Parameters
     max_particles: usize,
@@ -58,10 +64,9 @@ pub struct HeatmapBinnedRenderer {
 
 impl HeatmapBinnedRenderer {
     pub fn new(device: &wgpu::Device, width: u32, height: u32, max_particles: usize) -> Self {
-        // Use reduced resolution for better performance at 4K
-        let heatmap_scale = 0.5; // Render heatmap at 1/2 resolution
-        let heatmap_width = (width as f32 * heatmap_scale) as u32;
-        let heatmap_height = (height as f32 * heatmap_scale) as u32;
+        // Use full resolution since we're writing to scene texture
+        let heatmap_width = width;
+        let heatmap_height = height;
 
         // Calculate grid size for binning based on world space, accounting for resolution scaling
         // This ensures consistency between binning and rendering phases
@@ -73,7 +78,7 @@ impl HeatmapBinnedRenderer {
         let heatmap_texture = wgpu::TextureBuilder::new()
             .size([heatmap_width, heatmap_height])
             .usage(wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING)
-            .format(wgpu::TextureFormat::Rgba8Unorm)
+            .format(wgpu::TextureFormat::Rgba16Float)
             .build(device);
 
         let heatmap_view = heatmap_texture.view().build();
@@ -104,7 +109,7 @@ impl HeatmapBinnedRenderer {
 
         // Calculate worst-case bin data buffer size with safety factor
         let bin_data_size = Self::calculate_bin_data_size(max_particles);
-        
+
         let bin_data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Bin Data Buffer"),
             size: (bin_data_size * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
@@ -138,150 +143,226 @@ impl HeatmapBinnedRenderer {
         });
 
         // Create bind group layout for binning
-        let binning_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Binning Bind Group Layout"),
-            entries: &[
-                // Particles (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+        let binning_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Binning Bind Group Layout"),
+                entries: &[
+                    // Particles (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin counts (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin counts (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin data (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin data (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin offsets (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin offsets (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Parameters (uniform)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Parameters (uniform)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin fill counts (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin fill counts (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        });
+                ],
+            });
 
         // Create bind group layout for heatmap
-        let heatmap_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Heatmap Binned Bind Group Layout"),
-            entries: &[
-                // Output texture (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+        let heatmap_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Heatmap Binned Bind Group Layout"),
+                entries: &[
+                    // Output texture (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Particles (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Particles (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin counts (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin counts (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin data (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin data (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Bin offsets (storage)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Bin offsets (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // Parameters (uniform)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    // Parameters (uniform)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        });
+                ],
+            });
+
+        // Create target bind group layout (for writing to scene texture)
+        let target_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Heatmap Target Bind Group Layout"),
+                entries: &[
+                    // Output texture (storage) - target view
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    // Particles (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Bin counts (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Bin data (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Bin offsets (storage)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Parameters (uniform)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
 
         // Create bind groups
         let binning_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -347,38 +428,43 @@ impl HeatmapBinnedRenderer {
         });
 
         // Create compute pipelines
-        let binning_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Binning Pipeline Layout"),
-            bind_group_layouts: &[&binning_bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let binning_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Binning Pipeline Layout"),
+                bind_group_layouts: &[&binning_bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
-        let heatmap_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Heatmap Binned Pipeline Layout"),
-            bind_group_layouts: &[&heatmap_bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let heatmap_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Heatmap Binned Pipeline Layout"),
+                bind_group_layouts: &[&heatmap_bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
-        let binning_count_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Binning Count Pipeline"),
-            layout: Some(&binning_pipeline_layout),
-            module: &binning_shader,
-            entry_point: "count_particles",
-        });
+        let binning_count_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Binning Count Pipeline"),
+                layout: Some(&binning_pipeline_layout),
+                module: &binning_shader,
+                entry_point: "count_particles",
+            });
 
-        let binning_offset_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Binning Offset Pipeline"),
-            layout: Some(&binning_pipeline_layout),
-            module: &binning_shader,
-            entry_point: "calculate_offsets",
-        });
+        let binning_offset_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Binning Offset Pipeline"),
+                layout: Some(&binning_pipeline_layout),
+                module: &binning_shader,
+                entry_point: "calculate_offsets",
+            });
 
-        let binning_fill_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Binning Fill Pipeline"),
-            layout: Some(&binning_pipeline_layout),
-            module: &binning_shader,
-            entry_point: "fill_bins",
-        });
+        let binning_fill_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Binning Fill Pipeline"),
+                layout: Some(&binning_pipeline_layout),
+                module: &binning_shader,
+                entry_point: "fill_bins",
+            });
 
         let heatmap_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Heatmap Binned Compute Pipeline"),
@@ -402,6 +488,8 @@ impl HeatmapBinnedRenderer {
             bin_fill_counts_buffer,
             binning_bind_group,
             heatmap_bind_group,
+            target_bind_group_layout,
+            target_bind_groups: std::cell::RefCell::new(HashMap::new()),
             max_particles,
             width: heatmap_width,
             height: heatmap_height,
@@ -410,24 +498,28 @@ impl HeatmapBinnedRenderer {
         }
     }
 
-    pub fn render_heatmap(
+    pub fn encode_heatmap_into(
         &self,
         device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
         queue: &wgpu::Queue,
         particles: &[ParticleGpu],
         bounds: Rect,
-        frame_count: u64,
+        _frame_count: u64,
+        target_view: &wgpu::TextureView,
     ) {
+        /*
         // Limit heatmap updates to every other frame for better performance
         let last_frame = self.last_update_frame.get();
         if frame_count - last_frame < 2 {
             return;
         }
         self.last_update_frame.set(frame_count);
+        */
 
         // Skip rendering if no particles
         if particles.is_empty() {
-            self.clear_heatmap(device, queue);
+            self.clear_heatmap_into(encoder);
             return;
         }
 
@@ -482,13 +574,23 @@ impl HeatmapBinnedRenderer {
         // Clear binning buffers
         let total_bins = self.grid_size.0 * self.grid_size.1;
         let zero_counts = vec![0u32; total_bins as usize];
-        queue.write_buffer(&self.bin_counts_buffer, 0, bytemuck::cast_slice(&zero_counts));
-        queue.write_buffer(&self.bin_fill_counts_buffer, 0, bytemuck::cast_slice(&zero_counts));
+        queue.write_buffer(
+            &self.bin_counts_buffer,
+            0,
+            bytemuck::cast_slice(&zero_counts),
+        );
+        queue.write_buffer(
+            &self.bin_fill_counts_buffer,
+            0,
+            bytemuck::cast_slice(&zero_counts),
+        );
 
+        /*
         // Execute binning and heatmap generation
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Heatmap Binned Compute Encoder"),
         });
+         */
 
         // Phase 1: Count particles per bin
         {
@@ -532,12 +634,15 @@ impl HeatmapBinnedRenderer {
 
         // Phase 4: Generate heatmap using binned data
         {
+            // Get or create cached bind group for target texture
+            let bind_group = self.get_or_create_bind_group_for_target(device, target_view);
+
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Heatmap Binned Compute Pass"),
             });
 
             compute_pass.set_pipeline(&self.heatmap_pipeline);
-            compute_pass.set_bind_group(0, &self.heatmap_bind_group, &[]);
+            compute_pass.set_bind_group(0, &bind_group, &[]);
 
             // Dispatch in 8x8 work groups
             let workgroup_size = 8;
@@ -547,15 +652,11 @@ impl HeatmapBinnedRenderer {
             compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
         }
 
-        queue.submit(Some(encoder.finish()));
-        device.poll(wgpu::Maintain::Wait);
+        //queue.submit(Some(encoder.finish()));
+        //device.poll(wgpu::Maintain::Wait);
     }
 
-    fn clear_heatmap(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Clear Heatmap Binned Encoder"),
-        });
-
+    fn clear_heatmap_into(&self, encoder: &mut wgpu::CommandEncoder) {
         // Clear the heatmap texture to black
         let compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Clear Heatmap Binned Pass"),
@@ -563,9 +664,6 @@ impl HeatmapBinnedRenderer {
 
         // Just dispatch to clear the texture (could use a clear shader, but this is simpler)
         drop(compute_pass);
-
-        queue.submit(Some(encoder.finish()));
-        device.poll(wgpu::Maintain::Wait);
     }
 
     pub fn get_heatmap_view(&self) -> &wgpu::TextureView {
@@ -612,6 +710,65 @@ impl HeatmapBinnedRenderer {
     pub fn is_valid_bin_coord(bin_x: i32, bin_y: i32, grid_width: u32, grid_height: u32) -> bool {
         bin_x >= 0 && bin_x < grid_width as i32 && bin_y >= 0 && bin_y < grid_height as i32
     }
+
+    fn get_or_create_bind_group_for_target(
+        &self,
+        device: &wgpu::Device,
+        target_view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        let view_ptr = target_view as *const wgpu::TextureView;
+        
+        // Check if we already have a cached bind group for this target view
+        {
+            let cache = self.target_bind_groups.borrow();
+            if let Some(_bind_group) = cache.get(&view_ptr) {
+                // Found cached bind group, but we can't return a reference from RefCell
+                // So we need to recreate it. In a real optimization, we'd use a different approach
+                // but for now, let's fall through to create a new one each time
+                // TODO: Consider using Arc<BindGroup> or similar for true caching
+            }
+        }
+        
+        // Create bind group using cached layout (no more layout creation!)
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Cached Heatmap Bind Group"),
+            layout: &self.target_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(target_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.particle_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.bin_counts_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.bin_data_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.bin_offsets_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: self.params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        
+        // Cache the bind group for future use (commented out due to RefCell lifetime issues)
+        // {
+        //     let mut cache = self.target_bind_groups.borrow_mut();
+        //     cache.insert(view_ptr, bind_group);
+        // }
+        
+        bind_group
+    }
 }
 
 #[cfg(test)]
@@ -628,15 +785,30 @@ mod tests {
     #[test]
     fn test_calculate_grid_size() {
         // Test normal cases
-        assert_eq!(HeatmapBinnedRenderer::calculate_grid_size(1920, 1080, 100.0), (20, 11));
-        assert_eq!(HeatmapBinnedRenderer::calculate_grid_size(800, 600, 50.0), (16, 12));
-        
+        assert_eq!(
+            HeatmapBinnedRenderer::calculate_grid_size(1920, 1080, 100.0),
+            (20, 11)
+        );
+        assert_eq!(
+            HeatmapBinnedRenderer::calculate_grid_size(800, 600, 50.0),
+            (16, 12)
+        );
+
         // Test edge cases
-        assert_eq!(HeatmapBinnedRenderer::calculate_grid_size(10, 10, 100.0), (1, 1));
-        assert_eq!(HeatmapBinnedRenderer::calculate_grid_size(0, 0, 100.0), (1, 1));
-        
+        assert_eq!(
+            HeatmapBinnedRenderer::calculate_grid_size(10, 10, 100.0),
+            (1, 1)
+        );
+        assert_eq!(
+            HeatmapBinnedRenderer::calculate_grid_size(0, 0, 100.0),
+            (1, 1)
+        );
+
         // Test exact divisions
-        assert_eq!(HeatmapBinnedRenderer::calculate_grid_size(1000, 500, 100.0), (10, 5));
+        assert_eq!(
+            HeatmapBinnedRenderer::calculate_grid_size(1000, 500, 100.0),
+            (10, 5)
+        );
     }
 
     #[test]
@@ -646,7 +818,7 @@ mod tests {
         assert_eq!(HeatmapBinnedRenderer::bin_coord_to_index(5, 0, 10), 5);
         assert_eq!(HeatmapBinnedRenderer::bin_coord_to_index(0, 1, 10), 10);
         assert_eq!(HeatmapBinnedRenderer::bin_coord_to_index(5, 2, 10), 25);
-        
+
         // Test with different grid widths
         assert_eq!(HeatmapBinnedRenderer::bin_coord_to_index(3, 4, 5), 23);
     }
@@ -655,18 +827,58 @@ mod tests {
     fn test_is_valid_bin_coord() {
         let grid_width = 10;
         let grid_height = 8;
-        
+
         // Test valid coordinates
-        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(0, 0, grid_width, grid_height));
-        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(5, 3, grid_width, grid_height));
-        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(9, 7, grid_width, grid_height));
-        
+        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(
+            0,
+            0,
+            grid_width,
+            grid_height
+        ));
+        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(
+            5,
+            3,
+            grid_width,
+            grid_height
+        ));
+        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(
+            9,
+            7,
+            grid_width,
+            grid_height
+        ));
+
         // Test invalid coordinates
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(-1, 0, grid_width, grid_height));
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(0, -1, grid_width, grid_height));
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(10, 0, grid_width, grid_height));
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(0, 8, grid_width, grid_height));
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(15, 15, grid_width, grid_height));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            -1,
+            0,
+            grid_width,
+            grid_height
+        ));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            0,
+            -1,
+            grid_width,
+            grid_height
+        ));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            10,
+            0,
+            grid_width,
+            grid_height
+        ));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            0,
+            8,
+            grid_width,
+            grid_height
+        ));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            15,
+            15,
+            grid_width,
+            grid_height
+        ));
     }
 
     #[test]
@@ -675,10 +887,10 @@ mod tests {
         let size_1k = HeatmapBinnedRenderer::calculate_bin_data_size(1000);
         let size_2k = HeatmapBinnedRenderer::calculate_bin_data_size(2000);
         let size_10k = HeatmapBinnedRenderer::calculate_bin_data_size(10000);
-        
+
         assert_eq!(size_2k, size_1k * 2);
         assert_eq!(size_10k, size_1k * 10);
-        
+
         // Verify safety factor is applied
         assert!(size_1k > 1000);
         assert!(size_1k <= 3000); // Should be reasonable upper bound
@@ -689,13 +901,14 @@ mod tests {
         let width = 1920u32;
         let height = 1080u32;
         let bin_size = 100.0f32;
-        
-        let (grid_width, grid_height) = HeatmapBinnedRenderer::calculate_grid_size(width, height, bin_size);
-        
+
+        let (grid_width, grid_height) =
+            HeatmapBinnedRenderer::calculate_grid_size(width, height, bin_size);
+
         // Verify grid covers the entire screen area
         assert!((grid_width as f32 * bin_size) >= width as f32);
         assert!((grid_height as f32 * bin_size) >= height as f32);
-        
+
         // Verify grid isn't oversized (should be within one bin size of exact)
         assert!((grid_width as f32 * bin_size) < (width as f32 + bin_size));
         assert!((grid_height as f32 * bin_size) < (height as f32 + bin_size));
@@ -706,16 +919,34 @@ mod tests {
         let grid_width = 20u32;
         let grid_height = 15u32;
         let max_index = grid_width * grid_height - 1;
-        
+
         // Test maximum valid coordinates
         let max_x = grid_width - 1;
         let max_y = grid_height - 1;
-        
-        assert_eq!(HeatmapBinnedRenderer::bin_coord_to_index(max_x, max_y, grid_width), max_index);
-        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(max_x as i32, max_y as i32, grid_width, grid_height));
-        
+
+        assert_eq!(
+            HeatmapBinnedRenderer::bin_coord_to_index(max_x, max_y, grid_width),
+            max_index
+        );
+        assert!(HeatmapBinnedRenderer::is_valid_bin_coord(
+            max_x as i32,
+            max_y as i32,
+            grid_width,
+            grid_height
+        ));
+
         // Test that out-of-bounds coordinates are properly rejected
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(grid_width as i32, 0, grid_width, grid_height));
-        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(0, grid_height as i32, grid_width, grid_height));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            grid_width as i32,
+            0,
+            grid_width,
+            grid_height
+        ));
+        assert!(!HeatmapBinnedRenderer::is_valid_bin_coord(
+            0,
+            grid_height as i32,
+            grid_width,
+            grid_height
+        ));
     }
 }

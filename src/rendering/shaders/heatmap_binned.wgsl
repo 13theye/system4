@@ -18,7 +18,7 @@ struct HeatmapBinnedParams {
     padding: u32,
 }
 
-@group(0) @binding(0) var heatmap_texture: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(0) var heatmap_texture: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var<storage, read> particles: array<Particle>;
 @group(0) @binding(2) var<storage, read> bin_counts: array<u32>;
 @group(0) @binding(3) var<storage, read> bin_data: array<u32>;
@@ -67,11 +67,12 @@ fn magenta_range_from_intensity(intensity: f32) -> vec4<f32> {
     }
 }
 
-// Grayscale gradient function
+// Grayscale gradient function for HDR
 fn color_from_intensity(intensity: f32) -> vec4<f32> {
-    let clamped_intensity = clamp(intensity, 0.0, 1.0);
-    let gray_value = 1.0 - clamped_intensity;
-    return vec4<f32>(gray_value, gray_value, gray_value, 0.7 + clamped_intensity * 0.2);
+    // Allow intensity to go beyond 1.0 for HDR
+    let gray_value = max(0.0, 1.0 - intensity);
+    let alpha = min(1.0, 0.7 + intensity * 0.2);
+    return vec4<f32>(gray_value, gray_value, gray_value, alpha);
 }
 
 
@@ -184,8 +185,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
     
-    // Normalize and apply color mapping
-    let intensity = clamp(total_intensity * params.intensity_scale, 0.0, 1.0);
+    // For HDR, don't clamp intensity - let it go above 1.0
+    let intensity = total_intensity * params.intensity_scale;
     var color = color_from_intensity(intensity);
 
     // Smooth alpha transition for very low intensities to reduce pop-in
