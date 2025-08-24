@@ -1,5 +1,6 @@
 use nannou::prelude::*;
 use nannou::wgpu;
+use nnpipe::renderers::ParticleGpu;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -413,7 +414,7 @@ impl HeatmapBinnedRenderer {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        particles: &[Vec2],
+        particles: &[ParticleGpu],
         bounds: Rect,
         frame_count: u64,
     ) {
@@ -434,8 +435,8 @@ impl HeatmapBinnedRenderer {
         let gpu_particles: Vec<GpuParticle> = particles
             .iter()
             .take(self.max_particles)
-            .map(|pos| GpuParticle {
-                position: [pos.x, pos.y],
+            .map(|particle| GpuParticle {
+                position: particle.position,
                 _padding: [0.0, 0.0],
             })
             .collect();
