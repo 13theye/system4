@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
-use nnpipe::ParticleGpu;
+use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 use rayon::prelude::*;
 
 use crate::{
@@ -51,6 +51,7 @@ pub struct ParticleSystem {
 
     // Reusable GPU particle buffer to avoid allocations
     gpu_particle_buffer: Vec<ParticleGpu>,
+    gpu_segment_buffer: Vec<SegmentGpu>,
 }
 
 impl ParticleSystem {
@@ -93,6 +94,7 @@ impl ParticleSystem {
 
             dpi_scale,
             gpu_particle_buffer: Vec::new(),
+            gpu_segment_buffer: Vec::new(),
         }
     }
 
@@ -225,8 +227,12 @@ impl ParticleSystem {
         &self.gpu_particle_buffer
     }
 
-    /// Emit particles, update forces, update particles, and cull particles - returns simple particles
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) -> &[ParticleGpu] {
+    /// Emit particles, update forces, update particles, and cull particles - returns simple particles and accompanying trails
+    pub fn update(
+        &mut self,
+        rng: &mut ThreadRng,
+        show_forces: bool,
+    ) -> (&[ParticleGpu], &[SegmentGpu]) {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
@@ -234,6 +240,7 @@ impl ParticleSystem {
 
         // Reuse existing buffer to avoid allocations
         self.gpu_particle_buffer.clear();
+        self.gpu_segment_buffer.clear();
 
         for (voice, particles) in self.particles.iter_mut() {
             let color_limit = self.color_limits.get(voice).copied();
@@ -246,30 +253,31 @@ impl ParticleSystem {
 
             let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
 
-            // Parallel update, collect simple particle data
-            let gpu_particle_group: Vec<ParticleGpu> = particles
-                .par_iter_mut()
-                .map(|particle| {
-                    self.forces.apply_forces_to_particle(particle);
+            // Parallel update, collect simple particle data and segments
+            let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
+                particles
+                    .par_iter_mut()
+                    .map(|particle| {
+                        self.forces.apply_forces_to_particle(particle);
 
-                    particle.update(color_limit, alpha_limit);
+                        particle.update(color_limit, alpha_limit);
 
-                    if particle.is_out_of_bounds(self.bounds_rect) {
-                        particle.kill();
-                    }
+                        if particle.is_out_of_bounds(self.bounds_rect) {
+                            particle.kill();
+                        }
 
-                    particle.to_gpu()
-                })
-                .collect();
+                        (particle.to_gpu(), particle.to_segment_gpu())
+                    })
+                    .unzip();
 
-            self.gpu_particle_buffer
-                .extend(gpu_particle_group);
+            self.gpu_particle_buffer.extend(gpu_particle_group);
+            self.gpu_segment_buffer.extend(gpu_segment_group);
 
             // Cull dead particles
             particles.retain(|particle| particle.is_alive());
         }
 
-        &self.gpu_particle_buffer
+        (&self.gpu_particle_buffer, &self.gpu_segment_buffer)
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {

@@ -3,7 +3,7 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
-use nnpipe::ParticleGpu;
+use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 3600.0;
@@ -234,4 +234,26 @@ impl Particle {
         )
     }
 
+    pub fn to_segment_gpu(&self) -> SegmentGpu {
+        let mut points = [[0.0f32; 2]; 16];
+
+        // First point is current position
+        points[0] = [self.position.x, self.position.y];
+
+        // Fill remaining points from feedback positions
+        for i in 0..15 {
+            if let Some(feedback_pos) = self.feedback_positions[i] {
+                points[i + 1] = [feedback_pos.x, feedback_pos.y];
+            } else {
+                // If no feedback position, use the current position
+                points[i + 1] = [self.position.x, self.position.y];
+            }
+        }
+
+        SegmentGpu::new(
+            points,
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha,
+        )
+    }
 }

@@ -7,6 +7,7 @@
 
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
+use nnpipe::renderers::{ParticleRenderer, SegmentParams, SegmentRenderer};
 use nnpipe::*;
 use thread_priority::*;
 
@@ -25,7 +26,7 @@ use system4::{
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
-const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.63, 0.63, 0.64);
+const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
 //const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.27, 0.27, 0.26);
 // full brightness color for terminal
 const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
@@ -66,6 +67,8 @@ struct Model {
     // Rendering engine
     rendering: Nnpipe,
     heatmap_renderer: HeatmapBinnedRenderer,
+    particle_renderer: ParticleRenderer,
+    segment_renderer: SegmentRenderer,
     dpi_scale: f32,
     font: Font,
 
@@ -245,6 +248,13 @@ fn model(app: &App) -> Model {
         format: wgpu::TextureFormat::Rgba16Float,
     };
 
+    // Create particle renderer
+    let particle_renderer = ParticleRenderer::new(device, hi_config, 50000);
+
+    // Create segment renderer
+    let segment_params = SegmentParams::new(1.0, 2.0);
+    let segment_renderer = SegmentRenderer::new(device, hi_config, 50000, segment_params);
+
     let effects = PipelineBuilder::new()
         .name("Effects Pipeline")
         //.feedback(hi_config, 1.0, 1.0)
@@ -309,6 +319,8 @@ fn model(app: &App) -> Model {
         control_draw,
         rendering,
         heatmap_renderer,
+        particle_renderer,
+        segment_renderer,
         egui,
         rng,
         fps,
@@ -350,10 +362,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // First, render GPU heatmap with current particle positions
     let window = app.main_window();
     let device = window.device();
+    let mut encoder = model.rendering.create_command_encoder(device);
     let queue = window.queue();
-
-    // Set background
-    //model.draw.background().color(BLACK);
 
     // Update FPS counter
     model.fps.update();
@@ -367,7 +377,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     process_osc(model, commands);
 
     // Update particle system and get a Vec containing all particles for GPU to draw
-    let gpu_particles = model
+    let (gpu_particles, gpu_segments) = model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
@@ -386,13 +396,23 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.draw.texture(heatmap_view).wh(model.render_size);
     */
 
-    // Draw particles - using Nannou Draw method
-    //model.particle_system.draw(&model.draw);
+    // Set background
+    model.rendering.draw.background().color(BLACK);
 
-    // Clear and draw particles in a single optimized render pass
-    model
-        .rendering
-        .clear_and_draw_particles(device, queue, gpu_particles);
+    // Encode render passes
+    model.rendering.encode_draw_commands(device, &mut encoder);
+    model.particle_renderer.encode_into(
+        &mut encoder,
+        queue,
+        gpu_particles,
+        model.rendering.scene_view(),
+    );
+    model.segment_renderer.encode_into(
+        &mut encoder,
+        queue,
+        gpu_segments,
+        model.rendering.scene_view(),
+    );
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.rendering.draw);
@@ -406,7 +426,12 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         }
     }
 
-    render_and_post(app, model);
+    // Encode post processing
+    model.rendering.encode_post_process(device, &mut encoder);
+
+    model
+        .rendering
+        .submit_command_encoder(device, queue, encoder);
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
