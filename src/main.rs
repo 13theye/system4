@@ -7,7 +7,7 @@
 
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
-use nnpipe::renderers::{ParticleRenderer, SegmentParams, SegmentRenderer};
+use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, SegmentRenderer};
 use nnpipe::*;
 use thread_priority::*;
 
@@ -19,7 +19,6 @@ use system4::{
     fps::FpsManager,
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
-    rendering::HeatmapBinnedRenderer,
     terminals::{TerminalParams, TerminalSystem},
     utils::IdGenerator,
     view::Voice,
@@ -66,7 +65,7 @@ struct Model {
 
     // Rendering engine
     rendering: Nnpipe,
-    heatmap_renderer: HeatmapBinnedRenderer,
+    heatmap_renderer: HeatmapRenderer,
     particle_renderer: ParticleRenderer,
     segment_renderer: SegmentRenderer,
     dpi_scale: f32,
@@ -213,7 +212,7 @@ fn model(app: &App) -> Model {
     );
 
     // Create heatmap renderer
-    let heatmap_renderer = HeatmapBinnedRenderer::new(
+    let heatmap_renderer = HeatmapRenderer::new(
         device,
         config.rendering.texture_width,
         config.rendering.texture_height,
@@ -257,8 +256,8 @@ fn model(app: &App) -> Model {
 
     let effects = PipelineBuilder::new()
         .name("Effects Pipeline")
-        //.feedback(hi_config, 1.0, 1.0)
-        //.update_scene()
+        .feedback(hi_config, 1.0, 1.0)
+        .update_scene()
         .brightness_extract(med_config, 0.65)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
