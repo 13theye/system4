@@ -2314,7 +2314,6 @@ dependencies = [
 name = "system4"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "egui",
  "nannou",
  "nannou_egui",

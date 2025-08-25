@@ -254,10 +254,64 @@ fn model(app: &App) -> Model {
     let segment_params = SegmentParams::new(1.0, 2.0);
     let segment_renderer = SegmentRenderer::new(device, hi_config, 50000, segment_params);
 
-    let effects = PipelineBuilder::new()
-        .name("Effects Pipeline")
+    // Create pipeline textures
+    rendering.create_named_texture(device, "particles", hi_config);
+    rendering.create_named_texture(device, "heatmap", hi_config);
+    rendering.create_named_texture(device, "particle_processed", hi_config);
+    rendering.create_named_texture(device, "heatmap_processed", hi_config);
+    rendering.create_named_texture(device, "processed_composited", hi_config);
+
+    /*
+    let particle_effects = PipelineBuilder::new()
+        .name("Particle Effects Pipeline")
+        .input_texture("particles")
+        .output_texture("particle_processed")
+        .build(device);
+        if let Ok(effect) = particle_effects {
+        rendering.add_multi_pipeline("particle_effects", effect);
+    }
+     */
+
+    let heatmap_effects = PipelineBuilder::new()
+        .name("Heatmap Effects Pipeline")
+        .input_texture("heatmap")
         .feedback(hi_config, 1.0, 1.0)
-        .update_scene()
+        .output_texture("heatmap_processed")
+        .build(device);
+
+    if let Ok(effect) = heatmap_effects {
+        rendering.add_multi_pipeline("heatmap_effects", effect);
+    }
+
+    let composite_step = PipelineBuilder::new()
+        .name("Composite Step Pipeline")
+        .input_textures(&["particles", "heatmap_processed"])
+        .output_texture("processed_composited")
+        .simple_additive_composite(hi_config, 1.0)
+        .build(device);
+
+    if let Ok(effect) = composite_step {
+        rendering.add_multi_pipeline("composite_step", effect);
+    }
+
+    let effects = PipelineBuilder::new()
+        .name("Particle Effects Pipeline")
+        .input_texture("processed_composited")
+        .brightness_extract(med_config, 0.65)
+        .downsample(lo_config)
+        .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
+        .bloom_composite_with_curve(hi_config, 3.0, 3.0)
+        .inversion(hi_config)
+        .build(device);
+
+    if let Ok(effect) = effects {
+        rendering.add_multi_pipeline("effects", effect);
+    }
+
+    /*
+    // Old simple pipeline
+    let effects = PipelineBuilder::new()
+        .name("Particle Effects Pipeline")
         .brightness_extract(med_config, 0.65)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
@@ -268,6 +322,7 @@ fn model(app: &App) -> Model {
     if let Ok(effect) = effects {
         rendering.add_effect(effect);
     }
+    */
 
     // Set up egui
     let egui = Egui::from_window(&control_window);
@@ -380,29 +435,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
-    // Render heatmap
-    /*
-    model.heatmap_renderer.render_heatmap(
-        device,
-        &mut encoder,
-        queue,
-        gpu_particles,
-        model.render_rect,
-        model.frame_count,
-    );
-
-
-    // Draw heatmap as texture
-    let heatmap_view = model.heatmap_renderer.get_heatmap_view();
+    // Clear all textures
+    model.rendering.draw.background().color(BLACK);
     model
         .rendering
-        .draw
-        .texture(heatmap_view)
-        .wh(model.render_size);
-     */
-
-    // Set background
-    model.rendering.draw.background().color(BLACK);
+        .encode_clear_all_textures(&mut encoder, wgpu::Color::BLACK);
 
     // Encode render passes
     model.rendering.encode_draw_commands(device, &mut encoder);
@@ -415,19 +452,19 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         gpu_particles,
         model.render_rect,
         model.frame_count,
-        model.rendering.scene_view(),
+        model.rendering.get_named_texture("heatmap").unwrap(),
     );
     model.particle_renderer.encode_into(
         &mut encoder,
         queue,
         gpu_particles,
-        model.rendering.scene_view(),
+        model.rendering.get_named_texture("particles").unwrap(),
     );
     model.segment_renderer.encode_into(
         &mut encoder,
         queue,
         gpu_segments,
-        model.rendering.scene_view(),
+        model.rendering.get_named_texture("particles").unwrap(),
     );
 
     // Update terminals
@@ -442,8 +479,28 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         }
     }
 
-    // Encode post processing
-    model.rendering.encode_post_process(device, &mut encoder);
+    //Encode post processing
+    //model.rendering.encode_post_process(device, &mut encoder);
+    if let Err(e) = model
+        .rendering
+        .execute_named_pipeline("heatmap_effects", device, &mut encoder)
+    {
+        eprintln!("Error executing heatmap_effects pipeline: {}", e);
+    }
+
+    if let Err(e) = model
+        .rendering
+        .execute_named_pipeline("composite_step", device, &mut encoder)
+    {
+        eprintln!("Error executing composite_step pipeline: {}", e);
+    }
+
+    if let Err(e) = model
+        .rendering
+        .execute_named_pipeline("effects", device, &mut encoder)
+    {
+        eprintln!("Error executing effects pipeline: {}", e);
+    }
 
     model
         .rendering
