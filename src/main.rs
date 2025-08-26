@@ -430,6 +430,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let commands = model.osc.take_commands();
     process_osc(model, commands);
 
+    // Read feedback value for segment length before updating particle system
+    let voice1_feedback = model
+        .particle_system
+        .feedback
+        .get(&Voice::Voice1)
+        .copied()
+        .unwrap_or(0.0);
+
     // Update particle system and get a Vec containing all particles for GPU to draw
     let (gpu_particles, gpu_segments) = model
         .particle_system
@@ -460,6 +468,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         gpu_particles,
         model.rendering.get_named_texture("particles").unwrap(),
     );
+    // Update segment length based on Voice1 feedback slider
+    model.segment_renderer.set_segment_length(device, queue, voice1_feedback);
+
     model.segment_renderer.encode_into(
         &mut encoder,
         queue,
