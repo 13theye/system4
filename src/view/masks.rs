@@ -19,14 +19,14 @@ pub struct Mask {
 impl Mask {
     pub fn make_drone(voice: Voice) -> Self {
         let origin = match voice {
-            //Voice::Voice1 => vec2(-1280.0, 200.0),
-            Voice::Voice1 => vec2(0.0, 0.0),
-            //Voice::Voice4 => vec2(1280.0, 200.0),
+            Voice::Voice1 => vec2(-1280.0, 200.0),
+            //Voice::Voice1 => vec2(0.0, 0.0),
+            Voice::Voice4 => vec2(1280.0, 200.0),
             _ => vec2(0.0, 0.0),
         };
 
-        //let size = vec2(800.0, 1200.0);
-        let size = vec2(3840.0, 2160.0);
+        let size = vec2(800.0, 1200.0);
+        //let size = vec2(3840.0, 2160.0);
         let rect = Rect::from_x_y_w_h(origin.x, origin.y, size.x, size.y);
         Self {
             voice,

@@ -19,7 +19,7 @@ use system4::{
     fps::FpsManager,
     model::Model,
     osc::{OscCommand, OscController, OscSender},
-    particle::ParticleSystem,
+    particle::{ParticleSystem, EMPTY_GPU_BUFFER},
     terminals::{TerminalParams, TerminalSystem},
     utils::IdGenerator,
     voice::{controller::VoiceParameterChange, Voice},
@@ -190,11 +190,13 @@ fn model(app: &App) -> Model {
     };
 
     // Create particle renderer
-    let particle_renderer = ParticleRenderer::new(device, hi_config, 50000);
+    let particle_renderer1: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
+    let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
 
     // Create segment renderer
     let segment_params = SegmentParams::new(1.0, 2.0);
-    let segment_renderer = SegmentRenderer::new(device, hi_config, 50000, segment_params);
+    let segment_renderer1 = SegmentRenderer::new(device, hi_config, 25000, segment_params);
+    let segment_renderer4 = SegmentRenderer::new(device, hi_config, 25000, segment_params);
 
     // Create pipeline textures
     rendering.create_named_texture(device, "particles", hi_config);
@@ -238,7 +240,7 @@ fn model(app: &App) -> Model {
 
     let effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
-        .input_texture("processed_composited")
+        .input_texture("particles")
         .brightness_extract(med_config, 0.65)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
@@ -298,8 +300,12 @@ fn model(app: &App) -> Model {
         control_draw,
         rendering,
         heatmap_renderer,
-        particle_renderer,
-        segment_renderer,
+        particle_renderer1,
+        particle_renderer4,
+
+        segment_renderer1,
+        segment_renderer4,
+
         egui,
         rng,
         fps,
@@ -350,15 +356,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     process_osc(model, commands);
 
     // Read feedback value for segment length before updating particle system
-    let voice1_feedback = model
-        .particle_system
-        .feedback
-        .get(&Voice::Voice1)
-        .copied()
-        .unwrap_or(0.0);
+    let voice1_feedback = model.get_feedback(Voice::Voice1);
+    let voice4_feedback = model.get_feedback(Voice::Voice4);
 
     // Update particle system and get a Vec containing all particles for GPU to draw
-    let (gpu_particles, gpu_segments) = model
+    let gpu_buffer = model
         .particle_system
         .update(&mut model.rng, model.show_forces);
 
@@ -368,9 +370,53 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .rendering
         .encode_clear_all_textures(&mut encoder, wgpu::Color::BLACK);
 
-    // Encode render passes
+    // Encode Nannou Draw
     model.rendering.encode_draw_commands(device, &mut encoder);
 
+    // Retrieve buffer or use empty buffer
+    let gpu_buffer1 = gpu_buffer.get(&Voice::Voice1).unwrap_or(&EMPTY_GPU_BUFFER);
+    let gpu_buffer4 = gpu_buffer.get(&Voice::Voice4).unwrap_or(&EMPTY_GPU_BUFFER);
+
+    // Encode particles
+    model.particle_renderer1.encode_into(
+        &mut encoder,
+        queue,
+        gpu_buffer1.0,
+        model.rendering.get_named_texture("particles").unwrap(),
+    );
+
+    model.particle_renderer4.encode_into(
+        &mut encoder,
+        queue,
+        gpu_buffer4.0,
+        model.rendering.get_named_texture("particles").unwrap(),
+    );
+
+    // Update segment length based on Voice1 feedback slider
+    model
+        .segment_renderer1
+        .set_segment_length(device, queue, voice1_feedback);
+
+    model.segment_renderer1.encode_into(
+        &mut encoder,
+        queue,
+        gpu_buffer1.1,
+        model.rendering.get_named_texture("particles").unwrap(),
+    );
+
+    // Update segment length based on Voice1 feedback slider
+    model
+        .segment_renderer4
+        .set_segment_length(device, queue, voice4_feedback);
+
+    model.segment_renderer4.encode_into(
+        &mut encoder,
+        queue,
+        gpu_buffer4.1,
+        model.rendering.get_named_texture("particles").unwrap(),
+    );
+
+    /*
     // Encode heatmap
     model.heatmap_renderer.encode_heatmap_into(
         device,
@@ -381,23 +427,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.frame_count,
         model.rendering.get_named_texture("heatmap").unwrap(),
     );
-    model.particle_renderer.encode_into(
-        &mut encoder,
-        queue,
-        gpu_particles,
-        model.rendering.get_named_texture("particles").unwrap(),
-    );
-    // Update segment length based on Voice1 feedback slider
-    model
-        .segment_renderer
-        .set_segment_length(device, queue, voice1_feedback);
-
-    model.segment_renderer.encode_into(
-        &mut encoder,
-        queue,
-        gpu_segments,
-        model.rendering.get_named_texture("particles").unwrap(),
-    );
+     */
 
     // Update terminals
     let finish_signals = model.terminal_system.update(&model.rendering.draw);
@@ -410,6 +440,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             model.particle_system.set_is_spawning(&voice, true);
         }
     }
+
+    /*
 
     //Encode post processing
     //model.rendering.encode_post_process(device, &mut encoder);
@@ -426,6 +458,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     {
         eprintln!("Error executing composite_step pipeline: {}", e);
     }
+
+    */
 
     if let Err(e) = model
         .rendering

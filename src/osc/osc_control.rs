@@ -196,8 +196,9 @@ impl OscController {
                     }
                     "/sys2/particles/force" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            let val = val * 30.0;
                             self.command_queue
-                                .push(OscCommand::ParticlesForce { id: *id, val: *val });
+                                .push(OscCommand::ParticlesForce { id: *id, val });
                         }
                     }
                     "/sys2/particles/innerRadius" => {

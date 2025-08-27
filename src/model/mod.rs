@@ -49,8 +49,12 @@ pub struct Model {
     // Rendering engine
     pub rendering: Nnpipe,
     pub heatmap_renderer: HeatmapRenderer,
-    pub particle_renderer: ParticleRenderer,
-    pub segment_renderer: SegmentRenderer,
+    pub particle_renderer1: ParticleRenderer,
+    pub particle_renderer4: ParticleRenderer,
+
+    pub segment_renderer1: SegmentRenderer,
+    pub segment_renderer4: SegmentRenderer,
+
     pub dpi_scale: f32,
     pub font: Font,
 
@@ -68,7 +72,6 @@ pub struct Model {
 
     // Frame counter for optimization
     pub frame_count: u64,
-
 
     // Debug stuff
     pub show_bounds: bool,

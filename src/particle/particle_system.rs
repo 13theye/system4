@@ -17,6 +17,9 @@ use crate::{
     voice::Voice,
 };
 
+const NEW_GPU_BUFFER: (Vec<ParticleGpu>, Vec<SegmentGpu>) = (Vec::new(), Vec::new());
+pub const EMPTY_GPU_BUFFER: (&[ParticleGpu], &[SegmentGpu]) = (&[], &[]);
+
 pub struct ParticleSystem {
     // Particles
     pub particles: HashMap<Voice, Vec<Particle>>,
@@ -51,8 +54,7 @@ pub struct ParticleSystem {
     dpi_scale: f32,
 
     // Reusable GPU particle buffer to avoid allocations
-    gpu_particle_buffer: Vec<ParticleGpu>,
-    gpu_segment_buffer: Vec<SegmentGpu>,
+    gpu_buffers: HashMap<Voice, (Vec<ParticleGpu>, Vec<SegmentGpu>)>,
 }
 
 impl ParticleSystem {
@@ -94,8 +96,7 @@ impl ParticleSystem {
             trail: 0.0,
 
             dpi_scale,
-            gpu_particle_buffer: Vec::new(),
-            gpu_segment_buffer: Vec::new(),
+            gpu_buffers: HashMap::new(),
         }
     }
 
@@ -155,9 +156,9 @@ impl ParticleSystem {
         );
 
         // Add the emitters
-        //self.emitters.push(Box::new(emitter_left)); //emitter_left);
-        //self.emitters.push(Box::new(emitter_right));
-        self.emitters.push(Box::new(emitter_center));
+        self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        self.emitters.push(Box::new(emitter_right));
+        //self.emitters.push(Box::new(emitter_center));
 
         // Set the particle system params
         let alpha_limit = (alpha as f32) / 100.0;
@@ -187,15 +188,17 @@ impl ParticleSystem {
         &mut self,
         rng: &mut ThreadRng,
         show_forces: bool,
-    ) -> (&[ParticleGpu], &[SegmentGpu]) {
+    ) -> HashMap<Voice, (&[ParticleGpu], &[SegmentGpu])> {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
         // Reuse existing buffer to avoid allocations
-        self.gpu_particle_buffer.clear();
-        self.gpu_segment_buffer.clear();
+        for (_, (p_gpu, s_gpu)) in self.gpu_buffers.iter_mut() {
+            p_gpu.clear();
+            s_gpu.clear();
+        }
 
         for (voice, particles) in self.particles.iter_mut() {
             let color_limit = self.color_limits.get(voice).copied();
@@ -207,12 +210,19 @@ impl ParticleSystem {
             }
 
             let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
+            let mask = self.masks.get(voice).unwrap();
+
+            // Ensure buffer exists for this voice
+            let (pgpu_buf, sgpu_buf) = self
+                .gpu_buffers
+                .entry(*voice)
+                .or_insert_with(|| NEW_GPU_BUFFER);
 
             // Parallel update, collect simple particle data and segments
             let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
                 particles
                     .par_iter_mut()
-                    .map(|particle| {
+                    .filter_map(|particle| {
                         self.forces.apply_forces_to_particle(particle);
 
                         particle.update(color_limit, alpha_limit);
@@ -221,19 +231,27 @@ impl ParticleSystem {
                             particle.kill();
                         }
 
-                        (particle.to_gpu(), particle.to_segment_gpu())
+                        if particle.is_alive() && particle.is_within_rect(mask.rect) {
+                            Some((particle.to_gpu(), particle.to_segment_gpu()))
+                        } else {
+                            None
+                        }
                     })
                     .unzip();
 
             // Append to buffers
-            self.gpu_particle_buffer.extend(gpu_particle_group);
-            self.gpu_segment_buffer.extend(gpu_segment_group);
+            pgpu_buf.extend(gpu_particle_group);
+            sgpu_buf.extend(gpu_segment_group);
 
             // Cull dead particles
             particles.retain(|particle| particle.is_alive());
         }
 
-        (&self.gpu_particle_buffer, &self.gpu_segment_buffer)
+        // Build a HashMap of slices
+        self.gpu_buffers
+            .iter()
+            .map(|(voice, (pgpu, sgpu))| (*voice, (pgpu.as_slice(), sgpu.as_slice())))
+            .collect()
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {

@@ -174,9 +174,7 @@ impl ForceFields {
     /// Set the inner radius of WindCircle for a given Voice
     pub fn set_inner_radius(&mut self, voice: &Voice, val: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            let outer_radius = circle.params().outer_radius;
-            let inner_radius = outer_radius * val;
-            circle.params_mut().set_inner_radius(inner_radius);
+            circle.params_mut().set_inner_radius(val);
         } else {
             println!("Wind circle not found for {:?}", voice);
         }

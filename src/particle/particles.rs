@@ -7,7 +7,7 @@ use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 3600.0;
-const FADE_IN_DURATION: f32 = 400.0; // frames to fade in
+const FADE_IN_DURATION: f32 = 20.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
 
 #[derive(Clone, Copy)]
@@ -168,12 +168,17 @@ impl Particle {
         */
     }
 
+    /// True if the particle is out of bounds, with a buffer of 1000 pixels
     pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {
         let buffer = 1000.0;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer
             || self.position.y < bounds_rect.bottom() - buffer
             || self.position.y > bounds_rect.top() + buffer
+    }
+
+    pub fn is_within_rect(&self, rect: Rect) -> bool {
+        rect.contains(self.position)
     }
 
     pub fn kill(&mut self) {

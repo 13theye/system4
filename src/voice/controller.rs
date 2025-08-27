@@ -44,7 +44,7 @@ impl Model {
             .particle_num_factors
             .get(&voice)
             .copied()
-            .unwrap_or(0.2)
+            .unwrap_or(1.0)
     }
 
     pub fn get_feedback(&self, voice: Voice) -> f32 {
@@ -74,7 +74,7 @@ impl Model {
                 self.particle_system.forces.set_inner_radius(&voice, value);
             }
             VoiceParameterChange::Strength { voice, value } => {
-                let strength = value * 30.0; // 30 is the max strength of the wind circle
+                let strength = value.min(30.0); // 30 is the max strength of the wind circle
                 self.particle_system.forces.set_strength(&voice, strength);
             }
             VoiceParameterChange::CenterBias { voice, value } => {
