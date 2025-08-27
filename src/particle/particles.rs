@@ -124,6 +124,10 @@ impl Particle {
         self.feedback_positions[0] = Some(self.position);
     }
 
+    /// Deprecated draw command that uses Nannou::draw to draw the particle as a short line.
+    /// FOR REFERENCE ONLY!
+    /// Particle drawing is now handled by Nnpipe::ParticleRenderer
+    /// Trails are now handled by Nnpipe::SegmentRenderer
     pub fn draw(&self, draw: &Draw, _feedback: f32, dpi_scale: f32) {
         let scaled_size = self.size / dpi_scale;
 

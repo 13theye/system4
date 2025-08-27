@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::{
     terminals::{Terminal, TerminalParams},
-    view::Voice,
+    voice::Voice,
 };
 
 #[derive(Default)]

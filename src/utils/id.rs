@@ -1,6 +1,6 @@
 // src/utils/id.rs
 //
-// Simple ID generator
+// Simple ID generator that just counts up from 0
 
 pub struct IdGenerator {
     id_counter: usize,

@@ -2,7 +2,7 @@
 //
 // This module defines the masks that can be used with the ParticleSystem.
 
-use crate::view::Voice;
+use crate::voice::Voice;
 use nannou::prelude::*;
 
 const SIDE_MARGIN: f32 = 100.0;

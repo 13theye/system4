@@ -13,7 +13,8 @@ use crate::{
     forces::{ForceFields, WindCircle},
     particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
     utils::IdGenerator,
-    view::{Mask, Voice},
+    view::Mask,
+    voice::Voice,
 };
 
 pub struct ParticleSystem {
@@ -224,6 +225,7 @@ impl ParticleSystem {
                     })
                     .unzip();
 
+            // Append to buffers
             self.gpu_particle_buffer.extend(gpu_particle_group);
             self.gpu_segment_buffer.extend(gpu_segment_group);
 
@@ -322,7 +324,7 @@ impl ParticleSystem {
     pub fn kill_voice(&mut self, voice: &Voice) {
         self.emitters
             .retain(|emitter| emitter.parent_voice() != *voice);
-        self.forces.remove_wind_by_voice(voice);
+        self.forces.remove_wind(voice);
     }
 
     pub fn set_alpha_limit(&mut self, voice: &Voice, alpha: f32) {
@@ -333,10 +335,6 @@ impl ParticleSystem {
         self.feedback.insert(*voice, feedback);
     }
 
-    pub fn set_gravity(&mut self, voice: &Voice, gravity: f32) {
-        self.forces.set_circle_center_bias_by_voice(voice, gravity);
-    }
-
     pub fn set_is_spawning(&mut self, voice: &Voice, is_spawning: bool) {
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice() == *voice {
@@ -345,40 +343,19 @@ impl ParticleSystem {
         });
     }
 
-    pub fn set_strength(&mut self, voice: &Voice, strength: f32) {
-        self.forces.set_circle_strength_by_voice(voice, strength);
-    }
-
-    pub fn set_num_particles(&mut self, voice: &Voice, num_particles: f32) {
-        let limit = (self.default_particle_limit as f32 * num_particles) as usize;
+    pub fn set_volume(&mut self, voice: &Voice, volume: f32) {
+        let limit = (self.default_particle_limit as f32 * volume) as usize;
         self.particle_limits.insert(*voice, limit);
 
         let spawn_rate_factor = self
             .particle_num_factors
-            .insert(*voice, num_particles)
+            .insert(*voice, volume)
             .unwrap_or(0.5);
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice() == *voice {
                 emitter.set_spawn_rate_factor(spawn_rate_factor);
             }
         });
-    }
-
-    pub fn set_radius_outer(&mut self, voice: &Voice, val: f32) {
-        let Some(mask) = self.masks.get(voice) else {
-            println!("Can't set inner radius: No mask found for voice: {}", voice);
-            return;
-        };
-
-        // The maximum outer radius is half the largest side of the mask
-        let max_radius = (mask.size.x.max(mask.size.y) + 50.0) / 2.0;
-        let radius = max_radius * val;
-
-        self.forces.set_circle_outer_radius_by_voice(voice, radius);
-    }
-
-    pub fn set_radius_inner(&mut self, voice: &Voice, val: f32) {
-        self.forces.set_circle_inner_radius_by_voice(voice, val);
     }
 
     fn make_bounds_rect(&self) -> Rect {
@@ -415,7 +392,7 @@ impl ParticleSystem {
         self.draw_origin(draw, scale_x, scale_y);
         self.forces.wind_field.draw(draw, scale_x, scale_y);
         self.draw_emitters(draw, scale_x, scale_y);
-        for circle in self.forces.wind_circles.values() {
+        for circle in self.forces.wind_circles.iter() {
             circle.draw_center(draw, scale_x, scale_y);
         }
     }

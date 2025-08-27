@@ -1,7 +1,7 @@
 /// src/particle/emitter.rs
 ///
 /// The thing that spits out particles
-use crate::{particle::Particle, view::Voice};
+use crate::{particle::Particle, voice::Voice};
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 

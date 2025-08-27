@@ -2,7 +2,7 @@
 //
 // Rhythm
 
-use crate::view::Voice;
+use crate::voice::Voice;
 use nannou::{
     prelude::*,
     rand::{rngs::ThreadRng, Rng},

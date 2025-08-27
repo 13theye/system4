@@ -5,23 +5,24 @@
 //
 // src/main.rs
 
-use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
+use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, SegmentRenderer};
 use nnpipe::*;
 use thread_priority::*;
 
-use std::{collections::HashMap, fs};
+use std::fs;
 
 use system4::{
     config::*,
     forces::WindCircle,
     fps::FpsManager,
+    model::Model,
     osc::{OscCommand, OscController, OscSender},
     particle::ParticleSystem,
     terminals::{TerminalParams, TerminalSystem},
     utils::IdGenerator,
-    view::Voice,
+    voice::{controller::VoiceParameterChange, Voice},
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
@@ -34,65 +35,6 @@ const TERMINAL_END_RGBA: (f32, f32, f32, f32) = (0.0, 0.3, 0.0, 1.0);
 const TERMINAL_NUM_LINES: usize = 8;
 const TERMINAL_LINE_MARGIN: f32 = 8.0;
 const TERMINAL_CHARS_PER_SECOND: f32 = 0.6; // final is 0.6
-
-struct Model {
-    particle_system: ParticleSystem,
-    particle_limit: u32,
-
-    terminal_system: TerminalSystem,
-
-    // OSC
-    osc: OscController,
-    osc_send: OscSender,
-    osc_loop: OscSender,
-
-    // Windows' texture reshapers
-    render_size: Vec2,
-    render_rect: Rect,
-    audience_window_id: WindowId,
-    performer_window_id: WindowId,
-    control_window_id: WindowId,
-    audience_reshaper: TextureReshaper,
-    performer_reshaper: TextureReshaper,
-
-    // Nannou API
-    /// Draw context for UI elements to audience_window only
-    audience_draw: nannou::Draw,
-    /// Draw context for UI elements to performer_window only
-    performer_draw: nannou::Draw,
-    /// Draw context for drawing UI elements to ui_window only
-    control_draw: nannou::Draw,
-
-    // Rendering engine
-    rendering: Nnpipe,
-    heatmap_renderer: HeatmapRenderer,
-    particle_renderer: ParticleRenderer,
-    segment_renderer: SegmentRenderer,
-    dpi_scale: f32,
-    font: Font,
-
-    // Simple ID counter
-    id_generator: IdGenerator,
-
-    // Egui
-    egui: Egui,
-
-    // Random
-    rng: ThreadRng,
-
-    // FPS display
-    fps: FpsManager,
-
-    // Frame counter for optimization
-    frame_count: u64,
-
-    // UI state
-    selected_circle_id: HashMap<Voice, Option<usize>>,
-
-    // Debug stuff
-    show_bounds: bool,
-    show_forces: bool,
-}
 
 fn model(app: &App) -> Model {
     // Load config
@@ -308,22 +250,6 @@ fn model(app: &App) -> Model {
         rendering.add_multi_pipeline("effects", effect);
     }
 
-    /*
-    // Old simple pipeline
-    let effects = PipelineBuilder::new()
-        .name("Particle Effects Pipeline")
-        .brightness_extract(med_config, 0.65)
-        .downsample(lo_config)
-        .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
-        .bloom_composite_with_curve(hi_config, 3.0, 3.0)
-        .inversion(hi_config)
-        .build(device);
-
-    if let Ok(effect) = effects {
-        rendering.add_effect(effect);
-    }
-    */
-
     // Set up egui
     let egui = Egui::from_window(&control_window);
 
@@ -353,7 +279,6 @@ fn model(app: &App) -> Model {
 
     Model {
         particle_system,
-        particle_limit,
         terminal_system,
         osc,
         osc_send,
@@ -379,12 +304,6 @@ fn model(app: &App) -> Model {
         rng,
         fps,
         frame_count: 0,
-        selected_circle_id: HashMap::from([
-            (Voice::Voice1, None),
-            (Voice::Voice2, None),
-            (Voice::Voice3, None),
-            (Voice::Voice4, None),
-        ]),
         show_bounds: false,
         show_forces: false,
     }
@@ -413,7 +332,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Increment frame counter
     model.frame_count += 1;
 
-    // First, render GPU heatmap with current particle positions
+    // Get GPU resources
     let window = app.main_window();
     let device = window.device();
     let mut encoder = model.rendering.create_command_encoder(device);
@@ -469,7 +388,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.rendering.get_named_texture("particles").unwrap(),
     );
     // Update segment length based on Voice1 feedback slider
-    model.segment_renderer.set_segment_length(device, queue, voice1_feedback);
+    model
+        .segment_renderer
+        .set_segment_length(device, queue, voice1_feedback);
 
     model.segment_renderer.encode_into(
         &mut encoder,
@@ -575,7 +496,7 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
 }
 
 // ******************************* Rendering and Capture *****************************
-fn render_and_post(app: &App, model: &mut Model) {
+fn _render_and_post(app: &App, model: &mut Model) {
     // Get the window device and queue
     let window = app.main_window();
     let device = window.device();
@@ -636,6 +557,17 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let height = rect.h() - 5.0;
     let width = rect.w() - 5.0;
 
+    // Extract all parameters before creating egui context to avoid borrowing conflicts
+    let voice1_circle_params = model.get_wind_circle_params(Voice::Voice1).cloned();
+    let voice1_alpha = model.get_alpha_limit(Voice::Voice1);
+    let voice1_volume = model.get_volume(Voice::Voice1);
+    let voice1_feedback = model.get_feedback(Voice::Voice1);
+
+    let voice4_circle_params = model.get_wind_circle_params(Voice::Voice4).cloned();
+    let voice4_alpha = model.get_alpha_limit(Voice::Voice4);
+    let voice4_volume = model.get_volume(Voice::Voice4);
+    let voice4_feedback = model.get_feedback(Voice::Voice4);
+
     let ctx = model.egui.begin_frame();
 
     // Set text style settings
@@ -643,6 +575,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     ctx.set_style(adjust_style_from(style));
 
     let mut show_forces_changed = false;
+    let mut parameter_changes = Vec::<VoiceParameterChange>::new();
 
     egui::Window::new("Control Panel")
         .fixed_pos(egui::pos2(0.0, 0.0))
@@ -681,279 +614,156 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     ui.label("P: Debug view");
                 });
 
-                // Wind Circle Settings - use horizontal layout for two vertical sections
-
                 // Voice 1 (col 2)
                 ui.vertical(|ui| {
+                    // Wind Circle Settings - use horizontal layout for two vertical sections
+                    let current_params = voice1_circle_params;
+
                     ui.set_min_width(350.0);
                     ui.heading("Voice 1: Drone");
                     ui.add_space(2.0);
 
-                    let settings = model
-                        .particle_system
-                        .forces
-                        .get_circle_params_by_voice(Voice::Voice1);
-                    if settings.is_empty() {
+                    if let Some(params) = current_params {
+                        ui.add_space(10.0);
+
+                        // Outer Radius slider
+                        let mut radius = params.outer_radius;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut radius, 0.0..=1100.0)
+                                    .text("OR")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::OuterRadius {
+                                voice: Voice::Voice1,
+                                value: radius,
+                            });
+                        }
+
+                        // Inner Radius slider
+                        let mut inner_radius = params.inner_radius;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
+                                    .text("IR")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::InnerRadius {
+                                voice: Voice::Voice1,
+                                value: inner_radius,
+                            });
+                        }
+
+                        // Alpha slider
+                        let mut alpha = voice1_alpha;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut alpha, 0.0..=1.0)
+                                    .text("Brightness")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Alpha {
+                                voice: Voice::Voice1,
+                                value: alpha,
+                            });
+                        }
+
+                        // Volume slider
+                        let mut volume = voice1_volume;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut volume, 0.0..=1.0)
+                                    .text("Volume")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Volume {
+                                voice: Voice::Voice1,
+                                value: volume,
+                            });
+                        }
+
+                        // Strength slider
+                        let mut strength = params.strength;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut strength, 0.0..=30.0)
+                                    .text("Force")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Strength {
+                                voice: Voice::Voice1,
+                                value: strength,
+                            });
+                        }
+
+                        // Center bias slider
+                        let mut center_bias = params.center_bias;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut center_bias, 0.0..=2.0)
+                                    .text("Gravity")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::CenterBias {
+                                voice: Voice::Voice1,
+                                value: center_bias,
+                            });
+                        }
+
+                        // Feedback slider
+                        let mut feedback = voice1_feedback;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut feedback, 0.0..=1.0)
+                                    .text("Feedback")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Feedback {
+                                voice: Voice::Voice1,
+                                value: feedback,
+                            });
+                        }
+
+                        // Center X slider
+                        let mut center_x = params.center.x;
+                        if ui
+                            .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("Ctr X"))
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::CenterX {
+                                voice: Voice::Voice1,
+                                value: center_x,
+                            });
+                        }
+
+                        // Center Y slider
+                        let mut center_y = params.center.y;
+                        if ui
+                            .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Ctr Y"))
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::CenterY {
+                                voice: Voice::Voice1,
+                                value: center_y,
+                            });
+                        }
+                    } else {
                         ui.label("No wind circles found");
                         ui.label("1: Create wind circle");
-                    } else {
-                        // Handle circle selection - set default if none selected
-                        let current_selection = model
-                            .selected_circle_id
-                            .get(&Voice::Voice1)
-                            .copied()
-                            .flatten();
-                        if current_selection.is_none()
-                            || !settings.contains_key(&current_selection.unwrap())
-                        {
-                            let new_selection = settings.keys().next().copied();
-                            model
-                                .selected_circle_id
-                                .insert(Voice::Voice1, new_selection);
-                        }
-
-                        if let Some(selected_id) = model
-                            .selected_circle_id
-                            .get(&Voice::Voice1)
-                            .copied()
-                            .flatten()
-                        {
-                            // Dropdown to select circle
-                            let current_voice_selection = model
-                                .selected_circle_id
-                                .get(&Voice::Voice1)
-                                .copied()
-                                .flatten();
-                            /*
-                            egui::ComboBox::from_id_source("voice1_circle_selector")
-                                .selected_text(format!("Circle {}", selected_id))
-                                .show_ui(ui, |ui| {
-                                    for (id, _) in settings.iter() {
-                                        ui.selectable_value(
-                                            &mut current_voice_selection,
-                                            Some(*id),
-                                            format!("Circle {}", id),
-                                        );
-                                    }
-                                });
-                                 */
-
-                            // Update the selection if it changed
-                            if current_voice_selection
-                                != model
-                                    .selected_circle_id
-                                    .get(&Voice::Voice1)
-                                    .copied()
-                                    .flatten()
-                            {
-                                model
-                                    .selected_circle_id
-                                    .insert(Voice::Voice1, current_voice_selection);
-                            }
-                        }
-                    }
-
-                    ui.add_space(10.0);
-
-                    if let Some(selected_id) = model
-                        .selected_circle_id
-                        .get(&Voice::Voice1)
-                        .copied()
-                        .flatten()
-                    {
-                        // Get current parameter values by cloning them
-                        let current_params = model
-                            .particle_system
-                            .forces
-                            .get_circle_params_all()
-                            .get(&selected_id)
-                            .cloned();
-
-                        if let Some(params) = current_params {
-                            // Radius slider
-                            let mut radius = params.outer_radius;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut radius, 0.0..=1100.0)
-                                        .text("OR")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().outer_radius(radius);
-                                }
-                            }
-
-                            // Inner Radius slider
-                            let mut inner_radius = params.inner_radius;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
-                                        .text("IR")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().inner_radius(inner_radius);
-                                }
-                            }
-
-                            // Alpha slider
-                            let mut alpha = model
-                                .particle_system
-                                .alpha_limits
-                                .get(&Voice::Voice1)
-                                .copied()
-                                .unwrap_or(1.0);
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut alpha, 0.0..=1.0)
-                                        .text("Brightness")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                model.particle_system.set_alpha_limit(&Voice::Voice1, alpha);
-                            }
-
-                            // Volume slider
-                            let mut volume = model
-                                .particle_system
-                                .particle_num_factors
-                                .get(&Voice::Voice1)
-                                .copied()
-                                .unwrap_or(0.2);
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut volume, 0.0..=1.0)
-                                        .text("Volume")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                model
-                                    .particle_system
-                                    .set_num_particles(&Voice::Voice1, volume);
-                            }
-
-                            // Strength slider
-                            let mut strength = params.strength;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut strength, 0.0..=30.0)
-                                        .text("Force")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().strength(strength);
-                                }
-                            }
-
-                            // Center bias slider
-                            let mut center_bias = params.center_bias;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut center_bias, 0.0..=2.0)
-                                        .text("Gravity")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().center_bias(center_bias);
-                                }
-                            }
-
-                            // Feedback slider
-                            let mut feedback = model
-                                .particle_system
-                                .feedback
-                                .get(&Voice::Voice1)
-                                .copied()
-                                .unwrap_or(0.0);
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut feedback, 0.0..=1.0)
-                                        .text("Feedback")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                model.particle_system.set_feedback(&Voice::Voice1, feedback);
-                            }
-
-                            // Center X slider
-                            let mut center_x = params.center.x;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut center_x, -2000.0..=2000.0)
-                                        .text("Ctr X"),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    {
-                                        let current_y = circle.params().center.y;
-                                        circle.params_mut().center(vec2(center_x, current_y));
-                                    }
-                                }
-                            }
-
-                            // Center Y slider
-                            let mut center_y = params.center.y;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut center_y, -1100.0..=1100.0)
-                                        .text("Ctr Y"),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    {
-                                        let current_x = circle.params().center.x;
-                                        circle.params_mut().center(vec2(current_x, center_y));
-                                    }
-                                }
-                            }
-                        } else {
-                            ui.label("No parameters available");
-                        }
-                    } else {
-                        ui.label("No circle selected");
                     }
                 }); // end Voice 1
 
@@ -977,275 +787,160 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     ui.heading("Voice 4: Drone");
                     ui.add_space(2.0);
 
-                    let settings = model
-                        .particle_system
-                        .forces
-                        .get_circle_params_by_voice(Voice::Voice4);
-                    if settings.is_empty() {
+                    let current_params = voice4_circle_params;
+
+                    if let Some(params) = current_params {
+                        ui.add_space(10.0);
+
+                        // Outer Radius slider
+                        let mut radius = params.outer_radius;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut radius, 0.0..=1100.0)
+                                    .text("OR")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::OuterRadius {
+                                voice: Voice::Voice4,
+                                value: radius,
+                            });
+                        }
+
+                        // Inner Radius slider
+                        let mut inner_radius = params.inner_radius;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
+                                    .text("IR")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::InnerRadius {
+                                voice: Voice::Voice4,
+                                value: inner_radius,
+                            });
+                        }
+
+                        // Alpha slider
+                        let mut alpha = voice4_alpha;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut alpha, 0.0..=1.0)
+                                    .text("Brightness")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Alpha {
+                                voice: Voice::Voice4,
+                                value: alpha,
+                            });
+                        }
+
+                        // Volume slider
+                        let mut volume = voice4_volume;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut volume, 0.0..=1.0)
+                                    .text("Volume")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Volume {
+                                voice: Voice::Voice4,
+                                value: volume,
+                            });
+                        }
+
+                        // Strength slider
+                        let mut strength = params.strength;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut strength, 0.0..=30.0)
+                                    .text("Force")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Strength {
+                                voice: Voice::Voice4,
+                                value: strength,
+                            });
+                        }
+
+                        // Center bias slider
+                        let mut center_bias = params.center_bias;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut center_bias, 0.0..=2.0)
+                                    .text("Gravity")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::CenterBias {
+                                voice: Voice::Voice4,
+                                value: center_bias,
+                            });
+                        }
+
+                        // Feedback slider
+                        let mut feedback = voice4_feedback;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut feedback, 0.0..=1.0)
+                                    .text("Feedback")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::Feedback {
+                                voice: Voice::Voice4,
+                                value: feedback,
+                            });
+                        }
+
+                        // Center X slider
+                        let mut center_x = params.center.x;
+                        if ui
+                            .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("Ctr X"))
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::CenterX {
+                                voice: Voice::Voice4,
+                                value: center_x,
+                            });
+                        }
+
+                        // Center Y slider
+                        let mut center_y = params.center.y;
+                        if ui
+                            .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Ctr Y"))
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::CenterY {
+                                voice: Voice::Voice4,
+                                value: center_y,
+                            });
+                        }
+                    } else {
                         ui.label("No wind circles found");
                         ui.label("4: Create wind circle");
-                    } else {
-                        // Handle circle selection - set default if none selected
-                        let current_selection = model
-                            .selected_circle_id
-                            .get(&Voice::Voice4)
-                            .copied()
-                            .flatten();
-                        if current_selection.is_none()
-                            || !settings.contains_key(&current_selection.unwrap())
-                        {
-                            let new_selection = settings.keys().next().copied();
-                            model
-                                .selected_circle_id
-                                .insert(Voice::Voice4, new_selection);
-                        }
-
-                        if let Some(selected_id) = model
-                            .selected_circle_id
-                            .get(&Voice::Voice4)
-                            .copied()
-                            .flatten()
-                        {
-                            // Dropdown to select circle
-                            let current_voice_selection = model
-                                .selected_circle_id
-                                .get(&Voice::Voice4)
-                                .copied()
-                                .flatten();
-                            /* Leaving this out because only one circle per voice
-                            egui::ComboBox::from_id_source("voice4_circle_selector")
-                                .selected_text(format!("Circle {}", selected_id))
-                                .show_ui(ui, |ui| {
-                                    for (id, _) in settings.iter() {
-                                        ui.selectable_value(
-                                            &mut current_voice_selection,
-                                            Some(*id),
-                                            format!("Circle {}", id),
-                                        );
-                                    }
-                                });
-                                 */
-
-                            // Update the selection if it changed
-                            if current_voice_selection
-                                != model
-                                    .selected_circle_id
-                                    .get(&Voice::Voice4)
-                                    .copied()
-                                    .flatten()
-                            {
-                                model
-                                    .selected_circle_id
-                                    .insert(Voice::Voice4, current_voice_selection);
-                            }
-                        }
-                    }
-
-                    ui.add_space(10.0);
-
-                    if let Some(selected_id) = model
-                        .selected_circle_id
-                        .get(&Voice::Voice4)
-                        .copied()
-                        .flatten()
-                    {
-                        // Get current parameter values by cloning them
-                        let current_params = model
-                            .particle_system
-                            .forces
-                            .get_circle_params_all()
-                            .get(&selected_id)
-                            .cloned();
-
-                        if let Some(params) = current_params {
-                            // Radius slider
-                            let mut radius = params.outer_radius;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut radius, 0.0..=1100.0)
-                                        .text("OR")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().outer_radius(radius);
-                                }
-                            }
-
-                            // Inner radius slider
-                            let mut inner_radius = params.inner_radius;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
-                                        .text("IR")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().inner_radius(inner_radius);
-                                }
-                            }
-
-                            // Alpha slider
-                            let mut alpha = model
-                                .particle_system
-                                .alpha_limits
-                                .get(&Voice::Voice4)
-                                .copied()
-                                .unwrap_or(1.0);
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut alpha, 0.0..=1.0)
-                                        .text("Brightness")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                model.particle_system.set_alpha_limit(&Voice::Voice4, alpha);
-                            }
-
-                            // Volume slider
-                            let mut volume = model
-                                .particle_system
-                                .particle_num_factors
-                                .get(&Voice::Voice4)
-                                .copied()
-                                .unwrap_or(0.2);
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut volume, 0.0..=1.0)
-                                        .text("Volume")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                model
-                                    .particle_system
-                                    .set_num_particles(&Voice::Voice4, volume);
-                            }
-
-                            // Strength slider
-                            let mut strength = params.strength;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut strength, 0.0..=30.0)
-                                        .text("Force")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().strength(strength);
-                                }
-                            }
-
-                            // Center bias slider
-                            let mut center_bias = params.center_bias;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut center_bias, 0.0..=2.0)
-                                        .text("Gravity")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    circle.params_mut().center_bias(center_bias);
-                                }
-                            }
-
-                            // Feedback slider
-                            let mut feedback = model
-                                .particle_system
-                                .feedback
-                                .get(&Voice::Voice4)
-                                .copied()
-                                .unwrap_or(0.0);
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut feedback, 0.0..=1.0)
-                                        .text("Feedback")
-                                        .custom_formatter(|n, _| format!("{:.3}", n)),
-                                )
-                                .changed()
-                            {
-                                model.particle_system.set_feedback(&Voice::Voice4, feedback);
-                            }
-
-                            // Center X slider
-                            let mut center_x = params.center.x;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut center_x, -2000.0..=2000.0)
-                                        .text("Ctr X"),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    {
-                                        let current_y = circle.params().center.y;
-                                        circle.params_mut().center(vec2(center_x, current_y));
-                                    }
-                                }
-                            }
-
-                            // Center Y slider
-                            let mut center_y = params.center.y;
-                            if ui
-                                .add(
-                                    egui::Slider::new(&mut center_y, -1100.0..=1100.0)
-                                        .text("Ctr Y"),
-                                )
-                                .changed()
-                            {
-                                if let Some(circle) = model
-                                    .particle_system
-                                    .forces
-                                    .wind_circles
-                                    .get_mut(&selected_id)
-                                {
-                                    {
-                                        let current_x = circle.params().center.x;
-                                        circle.params_mut().center(vec2(current_x, center_y));
-                                    }
-                                }
-                            }
-                        } else {
-                            ui.label("No parameters available");
-                        }
-                    } else {
-                        ui.label("No circle selected");
                     }
                 }); // end Voice 4
             });
         });
+
+    drop(ctx);
+
+    // Apply all parameter changes outside the UI closure - no borrowing conflicts!
+    for change in parameter_changes {
+        model.apply_voice_parameter_change(change);
+    }
 }
 
 fn adjust_style_from(style: egui::Style) -> egui::Style {
@@ -1317,6 +1012,8 @@ fn draw_bounds(app: &App, model: &Model) {
 // ************************ OSC   *************************************
 
 fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
+    let mut parameter_changes = Vec::<VoiceParameterChange>::new();
+
     for command in commands {
         match command {
             OscCommand::MakeDrone {
@@ -1330,39 +1027,44 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                 make_drone(model, id, alpha, num_particles, force, gravity, trail);
             }
             OscCommand::ParticlesGravity { id, val } => {
-                set_gravity(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::CenterBias { voice, value: val });
             }
             OscCommand::ParticlesTrail { id, val } => {
-                set_feedback(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::Feedback { voice, value: val });
             }
             OscCommand::ParticlesNumParticles { id, val } => {
-                set_num_particles(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::Volume { voice, value: val });
             }
             OscCommand::EraseDrone { id } => {
                 erase_drone(model, id);
             }
             OscCommand::ParticlesAlpha { id, val } => {
-                set_alpha(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::Alpha { voice, value: val });
             }
             OscCommand::ParticlesForce { id, val } => {
-                set_force(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::Strength { voice, value: val });
             }
             OscCommand::ParticlesInnerRadius { id, val } => {
-                set_radius_inner(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::InnerRadius { voice, value: val });
             }
             OscCommand::ParticlesOuterRadius { id, val } => {
-                set_radius_outer(model, id, val);
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::OuterRadius { voice, value: val });
             }
             _ => {}
         }
     }
-}
 
-fn erase_drone(model: &mut Model, id: i32) {
-    let voice = Voice::from_i32(id);
-    model.particle_system.kill_voice(&voice);
-    model.particle_system.forces.update(model.show_forces);
-    model.osc_send.send_drone_on_off(id, 0);
+    // Apply all OSC parameter changes using the same unified system as UI
+    for change in parameter_changes {
+        model.apply_voice_parameter_change(change);
+    }
 }
 
 /// Start the Voice and begin "make drone" automated display
@@ -1458,52 +1160,11 @@ fn make_drone(
     terminal.begin_start_sequence(brightness, volume, strength, center_bias, trail);
 }
 
-fn set_alpha(model: &mut Model, id: i32, alpha: f32) {
+fn erase_drone(model: &mut Model, id: i32) {
     let voice = Voice::from_i32(id);
-    model.particle_system.set_alpha_limit(&voice, alpha);
-}
-
-fn set_gravity(model: &mut Model, id: i32, gravity: f32) {
-    let voice = Voice::from_i32(id);
-    model.particle_system.set_gravity(&voice, gravity);
-}
-
-fn set_force(model: &mut Model, id: i32, force: f32) {
-    let voice = Voice::from_i32(id);
-    let strength = force * 30.0; // 30 is the max strength of the wind circle
-    model.particle_system.set_strength(&voice, strength);
-}
-
-fn set_radius_inner(model: &mut Model, id: i32, val: f32) {
-    let voice = Voice::from_i32(id);
-    model.particle_system.set_radius_inner(&voice, val);
-}
-
-fn set_radius_outer(model: &mut Model, id: i32, val: f32) {
-    let voice = Voice::from_i32(id);
-    model.particle_system.set_radius_outer(&voice, val);
-}
-
-fn set_num_particles(model: &mut Model, id: i32, num_particles: f32) {
-    let voice = Voice::from_i32(id);
-
-    model
-        .particle_system
-        .set_num_particles(&voice, num_particles);
-}
-
-fn set_feedback(model: &mut Model, id: i32, feedback: f32) {
-    let voice = Voice::from_i32(id);
-    model.particle_system.set_feedback(&voice, feedback);
-}
-
-impl Drop for Model {
-    fn drop(&mut self) {
-        println!("\n\nApp terminating, sending kill drone signals...");
-        erase_drone(self, 1);
-        erase_drone(self, 4);
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+    model.particle_system.kill_voice(&voice);
+    model.particle_system.forces.update(model.show_forces);
+    model.osc_send.send_drone_on_off(id, 0);
 }
 
 /// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.

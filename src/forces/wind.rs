@@ -2,7 +2,7 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, particle::Particle, view::Voice};
+use crate::{forces::CellIdx, particle::Particle, voice::Voice};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -598,7 +598,7 @@ pub struct WindCircleParams {
 
 impl WindCircleParams {
     /// Set the center of the WindCircle
-    pub fn center(&mut self, center: Vec2) {
+    pub fn set_center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
             self.dirty = true;
@@ -606,7 +606,7 @@ impl WindCircleParams {
     }
 
     /// Set the OR of the WindCircle
-    pub fn outer_radius(&mut self, radius: f32) {
+    pub fn set_outer_radius(&mut self, radius: f32) {
         if self.outer_radius != radius {
             self.outer_radius = radius;
             self.dirty = true;
@@ -614,7 +614,7 @@ impl WindCircleParams {
     }
 
     /// Set the IR of the WindCircle
-    pub fn inner_radius(&mut self, radius: f32) {
+    pub fn set_inner_radius(&mut self, radius: f32) {
         if self.inner_radius != radius {
             self.inner_radius = radius;
             self.dirty = true;
@@ -622,7 +622,7 @@ impl WindCircleParams {
     }
 
     /// Set the strength of the WindCircle
-    pub fn strength(&mut self, strength: f32) {
+    pub fn set_strength(&mut self, strength: f32) {
         if self.strength != strength {
             self.strength = strength;
             self.dirty = true;
@@ -630,7 +630,7 @@ impl WindCircleParams {
     }
 
     /// Set the center bias of the WindCircle
-    pub fn center_bias(&mut self, center_bias: f32) {
+    pub fn set_center_bias(&mut self, center_bias: f32) {
         if self.center_bias != center_bias {
             self.center_bias = center_bias;
             self.dirty = true;
