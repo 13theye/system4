@@ -11,7 +11,13 @@ use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, Segmen
 use nnpipe::*;
 use thread_priority::*;
 
-use std::fs;
+use std::cell::RefCell;
+use std::{
+    collections::HashMap,
+    fs,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Instant,
+};
 
 use system4::{
     config::*,
@@ -146,6 +152,8 @@ fn model(app: &App) -> Model {
     let device = audience_window.device();
 
     // Create Nnpipe
+    let gpu_buffers = HashMap::new();
+
     let mut rendering = Nnpipe::new(
         device,
         config.rendering.texture_width,
@@ -205,16 +213,14 @@ fn model(app: &App) -> Model {
     rendering.create_named_texture(device, "heatmap_processed", hi_config);
     rendering.create_named_texture(device, "processed_composited", hi_config);
 
-    /*
     let particle_effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
         .input_texture("particles")
         .output_texture("particle_processed")
         .build(device);
-        if let Ok(effect) = particle_effects {
+    if let Ok(effect) = particle_effects {
         rendering.add_multi_pipeline("particle_effects", effect);
     }
-     */
 
     let heatmap_effects = PipelineBuilder::new()
         .name("Heatmap Effects Pipeline")
@@ -240,7 +246,7 @@ fn model(app: &App) -> Model {
 
     let effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
-        .input_texture("particles")
+        .input_texture("processed_composited")
         .brightness_extract(med_config, 0.65)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
@@ -298,7 +304,8 @@ fn model(app: &App) -> Model {
         audience_draw,
         performer_draw,
         control_draw,
-        rendering,
+        gpu_buffers,
+        rendering: RefCell::new(rendering),
         heatmap_renderer,
         particle_renderer1,
         particle_renderer4,
@@ -310,6 +317,8 @@ fn model(app: &App) -> Model {
         rng,
         fps,
         frame_count: 0,
+        update_ticks: 0,
+        last_update: Instant::now(),
         show_bounds: false,
         show_forces: false,
     }
@@ -335,17 +344,26 @@ fn main() {
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
+    // Quick and dirty way to limit update rate.
+    // Approximates 60Hz
+    let now = Instant::now();
+    if model.last_update.elapsed().as_millis() < 10 {
+        return;
+    } else {
+        model.last_update = now;
+    }
+
     // Increment frame counter
     model.frame_count += 1;
+    model.update_ticks += 1;
+
+    // Update FPS counter
+    model.fps.update();
 
     // Get GPU resources
     let window = app.main_window();
     let device = window.device();
-    let mut encoder = model.rendering.create_command_encoder(device);
     let queue = window.queue();
-
-    // Update FPS counter
-    model.fps.update();
 
     // Update control UI
     update_control_ui(app, model);
@@ -359,78 +377,25 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let voice1_feedback = model.get_feedback(Voice::Voice1);
     let voice4_feedback = model.get_feedback(Voice::Voice4);
 
-    // Update particle system and get a Vec containing all particles for GPU to draw
-    let gpu_buffer = model
-        .particle_system
-        .update(&mut model.rng, model.show_forces);
-
-    // Clear all textures
-    model.rendering.draw.background().color(BLACK);
-    model
-        .rendering
-        .encode_clear_all_textures(&mut encoder, wgpu::Color::BLACK);
-
-    // Encode Nannou Draw
-    model.rendering.encode_draw_commands(device, &mut encoder);
-
-    // Retrieve buffer or use empty buffer
-    let gpu_buffer1 = gpu_buffer.get(&Voice::Voice1).unwrap_or(&EMPTY_GPU_BUFFER);
-    let gpu_buffer4 = gpu_buffer.get(&Voice::Voice4).unwrap_or(&EMPTY_GPU_BUFFER);
-
-    // Encode particles
-    model.particle_renderer1.encode_into(
-        &mut encoder,
-        queue,
-        gpu_buffer1.0,
-        model.rendering.get_named_texture("particles").unwrap(),
-    );
-
-    model.particle_renderer4.encode_into(
-        &mut encoder,
-        queue,
-        gpu_buffer4.0,
-        model.rendering.get_named_texture("particles").unwrap(),
-    );
-
     // Update segment length based on Voice1 feedback slider
     model
         .segment_renderer1
         .set_segment_length(device, queue, voice1_feedback);
-
-    model.segment_renderer1.encode_into(
-        &mut encoder,
-        queue,
-        gpu_buffer1.1,
-        model.rendering.get_named_texture("particles").unwrap(),
-    );
 
     // Update segment length based on Voice1 feedback slider
     model
         .segment_renderer4
         .set_segment_length(device, queue, voice4_feedback);
 
-    model.segment_renderer4.encode_into(
-        &mut encoder,
-        queue,
-        gpu_buffer4.1,
-        model.rendering.get_named_texture("particles").unwrap(),
-    );
-
-    /*
-    // Encode heatmap
-    model.heatmap_renderer.encode_heatmap_into(
-        device,
-        &mut encoder,
-        queue,
-        gpu_particles,
-        model.render_rect,
-        model.frame_count,
-        model.rendering.get_named_texture("heatmap").unwrap(),
-    );
-     */
+    // Update particle system and get a Vec containing all particles for GPU to draw
+    model
+        .particle_system
+        .update(&mut model.rng, model.show_forces, &mut model.gpu_buffers);
 
     // Update terminals
-    let finish_signals = model.terminal_system.update(&model.rendering.draw);
+    let finish_signals = model
+        .terminal_system
+        .update(&model.rendering.borrow_mut().draw);
 
     // When a terminal start sequence is finished, send the OSC command to turn on the drone
     for (voice, finish_signal) in finish_signals {
@@ -440,72 +405,124 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             model.particle_system.set_is_spawning(&voice, true);
         }
     }
-
-    /*
-
-    //Encode post processing
-    //model.rendering.encode_post_process(device, &mut encoder);
-    if let Err(e) = model
-        .rendering
-        .execute_named_pipeline("heatmap_effects", device, &mut encoder)
-    {
-        eprintln!("Error executing heatmap_effects pipeline: {}", e);
-    }
-
-    if let Err(e) = model
-        .rendering
-        .execute_named_pipeline("composite_step", device, &mut encoder)
-    {
-        eprintln!("Error executing composite_step pipeline: {}", e);
-    }
-
-    */
-
-    if let Err(e) = model
-        .rendering
-        .execute_named_pipeline("effects", device, &mut encoder)
-    {
-        eprintln!("Error executing effects pipeline: {}", e);
-    }
-
-    model
-        .rendering
-        .submit_command_encoder(device, queue, encoder);
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
-    // Get the post-processed texture view
-    let _scene_view = model.rendering.get_scene_view();
+    if !should_render(model) {
+        return;
+    }
 
-    // Update reshaper if needed (could be cached in Model)
-    model
-        .rendering
-        .draw_to_frame(&model.audience_reshaper, &frame);
+    // Begin Rendering context
+    {
+        let mut rendering = model.rendering.borrow_mut();
+
+        // Get GPU resources
+        let window = app.main_window();
+        let device = window.device();
+        let mut encoder = rendering.create_command_encoder(device);
+        let queue = window.queue();
+
+        // Clear all textures
+        rendering.draw.background().color(BLACK);
+        rendering.encode_clear_all_textures(&mut encoder, wgpu::Color::BLACK);
+
+        // Encode Nannou Draw
+        rendering.encode_draw_commands(device, &mut encoder);
+
+        // Retrieve buffer or use empty buffer
+        let empty_gpu_buffer = &EMPTY_GPU_BUFFER;
+        let gpu_buffer1 = model
+            .gpu_buffers
+            .get(&Voice::Voice1)
+            .unwrap_or(empty_gpu_buffer);
+        let gpu_buffer4 = model
+            .gpu_buffers
+            .get(&Voice::Voice4)
+            .unwrap_or(empty_gpu_buffer);
+
+        // Encode particles
+        model.particle_renderer1.encode_into(
+            &mut encoder,
+            queue,
+            &gpu_buffer1.0,
+            rendering.get_named_texture("particles").unwrap(),
+        );
+
+        model.particle_renderer4.encode_into(
+            &mut encoder,
+            queue,
+            &gpu_buffer4.0,
+            rendering.get_named_texture("particles").unwrap(),
+        );
+
+        model.segment_renderer1.encode_into(
+            &mut encoder,
+            queue,
+            &gpu_buffer1.1,
+            rendering.get_named_texture("particles").unwrap(),
+        );
+
+        model.segment_renderer4.encode_into(
+            &mut encoder,
+            queue,
+            &gpu_buffer4.1,
+            rendering.get_named_texture("particles").unwrap(),
+        );
+
+        // Encode heatmap
+        model.heatmap_renderer.encode_heatmap_into(
+            device,
+            &mut encoder,
+            queue,
+            &gpu_buffer1.0,
+            model.render_rect,
+            model.frame_count,
+            rendering.get_named_texture("heatmap").unwrap(),
+        );
+
+        //Encode post processing
+        if let Err(e) = rendering.execute_named_pipeline("heatmap_effects", device, &mut encoder) {
+            eprintln!("Error executing heatmap_effects pipeline: {}", e);
+        }
+
+        if let Err(e) = rendering.execute_named_pipeline("composite_step", device, &mut encoder) {
+            eprintln!("Error executing composite_step pipeline: {}", e);
+        }
+
+        if let Err(e) = rendering.execute_named_pipeline("effects", device, &mut encoder) {
+            eprintln!("Error executing effects pipeline: {}", e);
+        }
+
+        rendering.submit_command_encoder(device, queue, encoder);
+
+        // Update reshaper if needed (could be cached in Model)
+        rendering.draw_to_frame(&model.audience_reshaper, &frame);
+    }
+    // End Rendering context
 
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
-
         // Then draw over the texture
         let _ = model.audience_draw.to_frame(app, &frame);
     }
 }
 
 fn performer_view(app: &App, model: &Model, frame: Frame) {
+    let rendering = model.rendering.borrow_mut();
+
     // Get the raw scene texture view
-    let _scene_view = model.rendering.get_scene_view();
+    let _scene_view = rendering.get_scene_view();
 
     // Draw game content to the frame
-    model
-        .rendering
-        .draw_to_frame(&model.performer_reshaper, &frame);
+    rendering.draw_to_frame(&model.performer_reshaper, &frame);
 
     // Show force vectors if enabled
     if model.show_forces {
         let performer_rect = app.window(model.performer_window_id).unwrap().rect();
 
         // Create a scaled draw context that matches texture coordinates
-        let texture_size = model.rendering.scene_texture.size();
+        let texture_size = rendering.scene_texture.size();
 
         // Calculate scale factor from texture to window
         let scale_x = performer_rect.w() / texture_size[0] as f32;
@@ -527,23 +544,6 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
     let _ = model.control_draw.to_frame(app, &frame);
     // Then draw egui UI on top
     model.egui.draw_to_frame(&frame).unwrap();
-}
-
-// ******************************* Rendering and Capture *****************************
-fn _render_and_post(app: &App, model: &mut Model) {
-    // Get the window device and queue
-    let window = app.main_window();
-    let device = window.device();
-    let queue = window.queue();
-
-    // Render the game to texture
-    model.rendering.render_scene(device, queue);
-
-    // Apply post processing
-    model.rendering.post_process(device, queue);
-
-    // Draw to screen while skipping post processing
-    //model.rendering.direct_to_view(device, queue);
 }
 
 // ******************************* Input Capture *****************************
@@ -1038,8 +1038,8 @@ fn draw_bounds(app: &App, model: &Model) {
     draw.rect()
         .xy(pt2(0.0, 0.0))
         .wh(pt2(rect.w(), rect.h()))
-        .stroke(rgba(0.5, 1.0, 0.5, 0.5)) // Green outline
-        .stroke_weight(2.0)
+        .stroke(rgba(0.4, 1.0, 0.4, 0.75)) // Green outline
+        .stroke_weight(5.0)
         .no_fill();
 }
 
@@ -1226,4 +1226,17 @@ fn set_macos_window_behavior(window: &Window) {
         (*ns_window)
             .setCollectionBehavior(NSWindowCollectionBehavior::from_bits_truncate(behavior));
     }
+}
+
+/// Static variable that ticks whenever a render happens
+static RENDER_TICKS: AtomicU64 = AtomicU64::new(0);
+
+/// A helper to decouple simulation with rendering.
+fn should_render(model: &Model) -> bool {
+    let render_ticks = RENDER_TICKS.load(Ordering::SeqCst);
+    let should_render = model.update_ticks != render_ticks;
+    if should_render {
+        RENDER_TICKS.fetch_add(model.update_ticks - render_ticks, Ordering::SeqCst);
+    }
+    should_render
 }

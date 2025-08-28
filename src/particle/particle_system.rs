@@ -11,14 +11,14 @@ use rayon::prelude::*;
 
 use crate::{
     forces::{ForceFields, WindCircle},
+    model::GpuBuffers,
     particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
     utils::IdGenerator,
     view::Mask,
     voice::Voice,
 };
 
-const NEW_GPU_BUFFER: (Vec<ParticleGpu>, Vec<SegmentGpu>) = (Vec::new(), Vec::new());
-pub const EMPTY_GPU_BUFFER: (&[ParticleGpu], &[SegmentGpu]) = (&[], &[]);
+pub const EMPTY_GPU_BUFFER: GpuBuffers = (Vec::new(), Vec::new());
 
 pub struct ParticleSystem {
     // Particles
@@ -52,9 +52,6 @@ pub struct ParticleSystem {
 
     // DPI scale
     dpi_scale: f32,
-
-    // Reusable GPU particle buffer to avoid allocations
-    gpu_buffers: HashMap<Voice, (Vec<ParticleGpu>, Vec<SegmentGpu>)>,
 }
 
 impl ParticleSystem {
@@ -96,7 +93,6 @@ impl ParticleSystem {
             trail: 0.0,
 
             dpi_scale,
-            gpu_buffers: HashMap::new(),
         }
     }
 
@@ -188,14 +184,15 @@ impl ParticleSystem {
         &mut self,
         rng: &mut ThreadRng,
         show_forces: bool,
-    ) -> HashMap<Voice, (&[ParticleGpu], &[SegmentGpu])> {
+        gpu_buffers: &mut HashMap<Voice, GpuBuffers>,
+    ) {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
         self.forces.update(show_forces);
 
         // Reuse existing buffer to avoid allocations
-        for (_, (p_gpu, s_gpu)) in self.gpu_buffers.iter_mut() {
+        for (_, (p_gpu, s_gpu)) in gpu_buffers.iter_mut() {
             p_gpu.clear();
             s_gpu.clear();
         }
@@ -213,10 +210,9 @@ impl ParticleSystem {
             let mask = self.masks.get(voice).unwrap();
 
             // Ensure buffer exists for this voice
-            let (pgpu_buf, sgpu_buf) = self
-                .gpu_buffers
+            let (pgpu_buf, sgpu_buf) = gpu_buffers
                 .entry(*voice)
-                .or_insert_with(|| NEW_GPU_BUFFER);
+                .or_insert_with(|| EMPTY_GPU_BUFFER);
 
             // Parallel update, collect simple particle data and segments
             let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
@@ -246,12 +242,6 @@ impl ParticleSystem {
             // Cull dead particles
             particles.retain(|particle| particle.is_alive());
         }
-
-        // Build a HashMap of slices
-        self.gpu_buffers
-            .iter()
-            .map(|(voice, (pgpu, sgpu))| (*voice, (pgpu.as_slice(), sgpu.as_slice())))
-            .collect()
     }
 
     pub fn handle_particle_emission(&mut self, rng: &mut ThreadRng) {

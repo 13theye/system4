@@ -14,10 +14,14 @@ use crate::{
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
-use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, SegmentRenderer};
+use nnpipe::renderers::{
+    HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
+};
 use nnpipe::*;
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, time::Instant};
+
+pub type GpuBuffers = (Vec<ParticleGpu>, Vec<SegmentGpu>);
 
 pub struct Model {
     pub particle_system: ParticleSystem,
@@ -47,7 +51,8 @@ pub struct Model {
     pub control_draw: nannou::Draw,
 
     // Rendering engine
-    pub rendering: Nnpipe,
+    pub gpu_buffers: HashMap<Voice, GpuBuffers>,
+    pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
     pub particle_renderer1: ParticleRenderer,
     pub particle_renderer4: ParticleRenderer,
@@ -70,8 +75,10 @@ pub struct Model {
     // FPS display
     pub fps: FpsManager,
 
-    // Frame counter for optimization
+    // Timing for render and updates
     pub frame_count: u64,
+    pub update_ticks: u64,
+    pub last_update: Instant,
 
     // Debug stuff
     pub show_bounds: bool,
