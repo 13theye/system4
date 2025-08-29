@@ -52,6 +52,10 @@ pub struct ParticleSystem {
 
     // DPI scale
     dpi_scale: f32,
+
+    // Mass variation parameters
+    pub mass_variation_enabled: bool,
+    pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
 }
 
 impl ParticleSystem {
@@ -93,6 +97,10 @@ impl ParticleSystem {
             trail: 0.0,
 
             dpi_scale,
+
+            // Initialize mass variation parameters
+            mass_variation_enabled: true,
+            mass_variation_amount: 0.05, // 5% variation by default
         }
     }
 
@@ -212,12 +220,24 @@ impl ParticleSystem {
                 .entry(*voice)
                 .or_insert_with(|| EMPTY_GPU_BUFFER);
 
+            // Pre-compute mass variation factors for all particles in this voice
+            let mass_variations: Vec<f32> = if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
+                use nannou::rand::Rng;
+                particles.iter().map(|_| {
+                    rng.gen_range(-self.mass_variation_amount..=self.mass_variation_amount)
+                }).collect()
+            } else {
+                vec![0.0; particles.len()]
+            };
+
             // Parallel update, collect simple particle data and segments
             let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
                 particles
                     .par_iter_mut()
-                    .filter_map(|particle| {
-                        self.forces.apply_forces_to_particle(particle);
+                    .enumerate()
+                    .filter_map(|(index, particle)| {
+                        let mass_variation_factor = mass_variations[index];
+                        self.forces.apply_forces_to_particle(particle, mass_variation_factor);
 
                         particle.update(color_limit, alpha_limit);
 
@@ -358,6 +378,28 @@ impl ParticleSystem {
                 }
             }
         }
+    }
+
+    /********************* Mass Variation methods ********************************** */
+
+    /// Enable or disable mass variation for all particles
+    pub fn set_mass_variation_enabled(&mut self, enabled: bool) {
+        self.mass_variation_enabled = enabled;
+    }
+
+    /// Set the amount of mass variation (as percentage of base mass)
+    /// e.g., 0.1 means particles can vary by ±10% of their base mass
+    pub fn set_mass_variation_amount(&mut self, amount: f32) {
+        self.mass_variation_amount = amount.max(0.0); // Ensure non-negative
+    }
+
+    /// Get current mass variation settings
+    pub fn get_mass_variation_enabled(&self) -> bool {
+        self.mass_variation_enabled
+    }
+
+    pub fn get_mass_variation_amount(&self) -> f32 {
+        self.mass_variation_amount
     }
 
     /********************* Accessor/Helper methods ********************************** */

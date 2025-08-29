@@ -35,8 +35,8 @@ impl Wind {
         }
     }
 
-    /// Apply the Wind to a Particle
-    pub fn apply(&self, particle: &mut Particle) {
+    /// Apply the Wind to a Particle with mass variation factor
+    pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
         // Calculate the x and y components of particle's current velocity
         let particle_vx = particle.velocity.x;
         let particle_vy = particle.velocity.y;
@@ -49,17 +49,20 @@ impl Wind {
         let diff_x = wind_vx - particle_vx;
         let diff_y = wind_vy - particle_vy;
 
-        // Calculate inertial resistance based on current momentum
+        // Calculate effective mass with variation factor
+        let effective_mass = particle.mass * (1.0 + mass_variation_factor);
+
+        // Calculate inertial resistance based on current momentum using effective mass
         let current_speed = particle.velocity.length();
-        let momentum_magnitude = particle.mass * current_speed;
+        let momentum_magnitude = effective_mass * current_speed;
 
         // Inertial resistance: particles with higher momentum resist changes more
         let inertia_coefficient = 0.1; // Adjust this to control resistance strength
         let inertia_factor = 1.0 / (1.0 + momentum_magnitude * inertia_coefficient);
 
-        // Apply the force with inertial resistance
+        // Apply the force with inertial resistance using effective mass
         let force = vec2(diff_x, diff_y) * inertia_factor;
-        particle.acceleration += force / particle.mass;
+        particle.acceleration += force / effective_mass;
     }
 }
 
@@ -195,11 +198,11 @@ impl WindField {
     }
 
     /// Given a particle, determines the WindCell that contains the particle, and then applies the WindCell's Wind on that particle.
-    pub fn apply(&self, particle: &mut Particle) {
+    pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
         let Some(wind) = self.get_wind_at_pos(particle.position()) else {
             return;
         };
-        wind.apply(particle);
+        wind.apply(particle, mass_variation_factor);
     }
 
     /// Force a recalculation of all cells in the WindField.

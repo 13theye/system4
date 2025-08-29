@@ -83,7 +83,7 @@ fn model(app: &App) -> Model {
     );
 
     particle_system.set_mass_variation_enabled(true);
-    particle_system.set_mass_variation_amount(15.0);
+    particle_system.set_mass_variation_amount(0.5);
 
     // Create window
     let audience_window_id = app
@@ -1042,6 +1042,9 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
             } => {
                 make_drone(model, id, alpha, num_particles, force, gravity, trail);
             }
+            OscCommand::EraseDrone { id } => {
+                erase_drone(model, id);
+            }
             OscCommand::ParticlesGravity { id, val } => {
                 let voice = Voice::from_i32(id);
                 parameter_changes.push(VoiceParameterChange::CenterBias { voice, value: val });
@@ -1053,9 +1056,6 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
             OscCommand::ParticlesNumParticles { id, val } => {
                 let voice = Voice::from_i32(id);
                 parameter_changes.push(VoiceParameterChange::Volume { voice, value: val });
-            }
-            OscCommand::EraseDrone { id } => {
-                erase_drone(model, id);
             }
             OscCommand::ParticlesAlpha { id, val } => {
                 let voice = Voice::from_i32(id);
@@ -1073,6 +1073,7 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                 let voice = Voice::from_i32(id);
                 parameter_changes.push(VoiceParameterChange::OuterRadius { voice, value: val });
             }
+            OscCommand::MaskChangeBounds { id, x, y, w, h } => {}
             _ => {}
         }
     }

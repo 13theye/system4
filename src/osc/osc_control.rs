@@ -49,6 +49,13 @@ pub enum OscCommand {
         gravity: i32,
         trail: i32,
     },
+    MaskChangeBounds {
+        id: i32,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    },
 
     TermBrightness {
         id: i32,
@@ -225,6 +232,21 @@ impl OscController {
                                 .push(OscCommand::ParticlesTrail { id: *id, val: *val });
                         }
                     }
+                    /********************* Mask Commands *************************** */
+                    "/sys2/mask/changeBounds" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(x), osc::Type::Int(y), osc::Type::Int(w), osc::Type::Int(h)] =
+                            &message.args[..]
+                        {
+                            self.command_queue.push(OscCommand::MaskChangeBounds {
+                                id: *id,
+                                x: *x,
+                                y: *y,
+                                w: *w,
+                                h: *h,
+                            });
+                        }
+                    }
+
                     /********************* Drone Commands *************************** */
                     "/sys2/makeDrone" => {
                         if let [osc::Type::Int(id), osc::Type::Int(alpha), osc::Type::Int(num_particles), osc::Type::Int(force), osc::Type::Int(gravity), osc::Type::Int(trail)] =

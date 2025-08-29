@@ -61,10 +61,10 @@ impl ForceFields {
         self.wind_field.par_force_update_all();
     }
 
-    /// Apply all applicable forces to a particle
-    pub fn apply_forces_to_particle(&self, particle: &mut Particle) {
-        // Apply wind
-        self.wind_field.apply(particle);
+    /// Apply all applicable forces to a particle with mass variation factor
+    pub fn apply_forces_to_particle(&self, particle: &mut Particle, mass_variation_factor: f32) {
+        // Apply wind with mass variation
+        self.wind_field.apply(particle, mass_variation_factor);
     }
 
     /// Recalculate all applicable forces in this ForceField
