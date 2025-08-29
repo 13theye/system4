@@ -85,9 +85,6 @@ fn model(app: &App) -> Model {
     particle_system.set_mass_variation_enabled(true);
     particle_system.set_mass_variation_amount(0.5);
 
-    particle_system.set_wind_angle_variation_enabled(true);
-    particle_system.set_wind_angle_variation_amount(1.0);
-
     // Create window
     let audience_window_id = app
         .new_window()
@@ -581,11 +578,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice1_alpha = model.get_alpha_limit(Voice::Voice1);
     let voice1_volume = model.get_volume(Voice::Voice1);
     let voice1_feedback = model.get_feedback(Voice::Voice1);
+    let voice1_angle_variation = model.get_angle_variation(Voice::Voice1);
+    let voice1_position_offset = model.get_position_offset_factor(Voice::Voice1);
 
     let voice4_circle_params = model.get_wind_circle_params(Voice::Voice4).cloned();
     let voice4_alpha = model.get_alpha_limit(Voice::Voice4);
     let voice4_volume = model.get_volume(Voice::Voice4);
     let voice4_feedback = model.get_feedback(Voice::Voice4);
+    let voice4_angle_variation = model.get_angle_variation(Voice::Voice4);
+    let voice4_position_offset = model.get_position_offset_factor(Voice::Voice4);
 
     let ctx = model.egui.begin_frame();
 
@@ -738,6 +739,38 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             parameter_changes.push(VoiceParameterChange::CenterBias {
                                 voice: Voice::Voice1,
                                 value: center_bias,
+                            });
+                        }
+
+                        // Angle variation slider
+                        let mut angle_variation = voice1_angle_variation;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut angle_variation, 0.0..=1.0)
+                                    .text("Noise")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::AngleVariation {
+                                voice: Voice::Voice1,
+                                value: angle_variation,
+                            });
+                        }
+
+                        // Position offset slider
+                        let mut position_offset = voice1_position_offset;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut position_offset, 0.0..=1.0)
+                                    .text("Vibration")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::PositionOffset {
+                                voice: Voice::Voice1,
+                                value: position_offset,
                             });
                         }
 
@@ -904,6 +937,38 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             parameter_changes.push(VoiceParameterChange::CenterBias {
                                 voice: Voice::Voice4,
                                 value: center_bias,
+                            });
+                        }
+
+                        // Angle variation slider
+                        let mut angle_variation = voice4_angle_variation;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut angle_variation, 0.0..=1.0)
+                                    .text("Vibration")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::AngleVariation {
+                                voice: Voice::Voice4,
+                                value: angle_variation,
+                            });
+                        }
+
+                        // Position offset slider
+                        let mut position_offset = voice4_position_offset;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut position_offset, 0.0..=1.0)
+                                    .text("Position Offset")
+                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                            )
+                            .changed()
+                        {
+                            parameter_changes.push(VoiceParameterChange::PositionOffset {
+                                voice: Voice::Voice4,
+                                value: position_offset,
                             });
                         }
 

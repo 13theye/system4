@@ -16,6 +16,8 @@ pub enum VoiceParameterChange {
     InnerRadius { voice: Voice, value: f32 },
     Strength { voice: Voice, value: f32 },
     CenterBias { voice: Voice, value: f32 },
+    AngleVariation { voice: Voice, value: f32 },
+    PositionOffset { voice: Voice, value: f32 },
     CenterX { voice: Voice, value: f32 },
     CenterY { voice: Voice, value: f32 },
 }
@@ -38,6 +40,16 @@ impl Model {
     /// Get the center bias of a Voice's WindCircle ("gravity")
     pub fn get_center_bias(&mut self, voice: Voice) -> f32 {
         self.particle_system.forces.get_center_bias(&voice)
+    }
+
+    /// Get the angle variation of a Voice's WindCircle ("vibration")
+    pub fn get_angle_variation(&self, voice: Voice) -> f32 {
+        self.particle_system.forces.get_angle_variation(&voice)
+    }
+
+    /// Get the position offset factor of a Voice ("vibration")
+    pub fn get_position_offset_factor(&self, voice: Voice) -> f32 {
+        self.particle_system.get_position_offset_factor(voice)
     }
 
     pub fn get_volume(&self, voice: Voice) -> f32 {
@@ -80,6 +92,12 @@ impl Model {
             }
             VoiceParameterChange::CenterBias { voice, value } => {
                 self.particle_system.forces.set_center_bias(&voice, value);
+            }
+            VoiceParameterChange::AngleVariation { voice, value } => {
+                self.particle_system.forces.set_angle_variation(&voice, value);
+            }
+            VoiceParameterChange::PositionOffset { voice, value } => {
+                self.particle_system.set_position_offset_factor(&voice, value);
             }
             VoiceParameterChange::CenterX { voice, value } => {
                 if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {

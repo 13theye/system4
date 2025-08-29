@@ -19,6 +19,7 @@ use crate::{
 };
 
 pub const EMPTY_GPU_BUFFER: GpuBuffers = (Vec::new(), Vec::new());
+const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position offset in pixels
 
 pub struct ParticleSystem {
     // Particles
@@ -57,9 +58,9 @@ pub struct ParticleSystem {
     pub mass_variation_enabled: bool,
     pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
 
-    // Wind angle variation parameters
-    pub wind_angle_variation_enabled: bool,
-    pub wind_angle_variation_amount: f32, // factor 0.0-1.0, where 1.0 = full 45° deviation
+    // Position offset parameters
+    pub position_offset_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
+
 }
 
 impl ParticleSystem {
@@ -106,9 +107,8 @@ impl ParticleSystem {
             mass_variation_enabled: true,
             mass_variation_amount: 0.05, // 5% variation by default
 
-            // Initialize wind angle variation parameters
-            wind_angle_variation_enabled: true,
-            wind_angle_variation_amount: 0.2, // 20% of 45° = ~9° max deviation by default
+            // Initialize position offset parameters
+            position_offset_factors: HashMap::new(),
         }
     }
 
@@ -203,20 +203,18 @@ impl ParticleSystem {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
-        // Apply wind angle variation if enabled, otherwise pass 0.0
-        let angle_variation_factor = if self.wind_angle_variation_enabled {
-            self.wind_angle_variation_amount
-        } else {
-            0.0
-        };
-
-        self.forces.update(show_forces, rng, angle_variation_factor);
+        self.forces.update(show_forces, rng);
 
         // Reuse existing buffer to avoid allocations
         for (_, (p_gpu, s_gpu)) in gpu_buffers.iter_mut() {
             p_gpu.clear();
             s_gpu.clear();
         }
+
+        // Pre-compute position offset factors for all voices to avoid borrow conflicts
+        let position_offset_factors: HashMap<Voice, f32> = self.particles.keys()
+            .map(|voice| (*voice, self.get_position_offset_factor(*voice)))
+            .collect();
 
         for (voice, particles) in self.particles.iter_mut() {
             let color_limit = self.color_limits.get(voice).copied();
@@ -249,6 +247,18 @@ impl ParticleSystem {
                     vec![0.0; particles.len()]
                 };
 
+            // Pre-compute position offset random signs for all particles in this voice
+            let position_offset_factor = position_offset_factors.get(voice).copied().unwrap_or(0.0);
+            let position_offset_signs: Vec<f32> = if position_offset_factor > 0.0 {
+                use nannou::rand::Rng;
+                particles
+                    .iter()
+                    .map(|_| if rng.gen::<bool>() { 1.0 } else { -1.0 })
+                    .collect()
+            } else {
+                vec![0.0; particles.len()]
+            };
+
             // Parallel update, collect simple particle data and segments
             let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
                 particles
@@ -266,7 +276,15 @@ impl ParticleSystem {
                         }
 
                         if particle.is_alive() && particle.is_within_rect(mask.rect) {
-                            Some((particle.to_gpu(), particle.to_segment_gpu()))
+                            // Calculate position offset perpendicular to velocity
+                            let offset = if position_offset_factor > 0.0 && particle.velocity.length_squared() > 0.0 {
+                                let normal = vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
+                                normal * MAX_POSITION_OFFSET * position_offset_factor * position_offset_signs[index]
+                            } else {
+                                vec2(0.0, 0.0)
+                            };
+                            
+                            Some((particle.to_gpu_with_offset(offset), particle.to_segment_gpu()))
                         } else {
                             None
                         }
@@ -423,25 +441,19 @@ impl ParticleSystem {
         self.mass_variation_amount
     }
 
-    /// Enable or disable wind angle variation
-    pub fn set_wind_angle_variation_enabled(&mut self, enabled: bool) {
-        self.wind_angle_variation_enabled = enabled;
+    /********************* Position Offset methods ********************************** */
+
+    /// Set the position offset factor for a given voice
+    pub fn set_position_offset_factor(&mut self, voice: &Voice, factor: f32) {
+        let clamped_factor = factor.clamp(0.0, 1.0);
+        self.position_offset_factors.insert(*voice, clamped_factor);
     }
 
-    /// Set the amount of wind angle variation (factor 0.0-1.0)
-    /// where 1.0 = full ±45° deviation, 0.5 = ±22.5°, etc.
-    pub fn set_wind_angle_variation_amount(&mut self, amount: f32) {
-        self.wind_angle_variation_amount = amount.clamp(0.0, 1.0);
+    /// Get the position offset factor for a given voice (defaults to 0.0 if not set)
+    pub fn get_position_offset_factor(&self, voice: Voice) -> f32 {
+        self.position_offset_factors.get(&voice).copied().unwrap_or(0.0)
     }
 
-    /// Get current wind angle variation settings
-    pub fn get_wind_angle_variation_enabled(&self) -> bool {
-        self.wind_angle_variation_enabled
-    }
-
-    pub fn get_wind_angle_variation_amount(&self) -> f32 {
-        self.wind_angle_variation_amount
-    }
 
     /********************* Accessor/Helper methods ********************************** */
 

@@ -243,6 +243,15 @@ impl Particle {
         )
     }
 
+    pub fn to_gpu_with_offset(&self, offset: Vec2) -> ParticleGpu {
+        let offset_position = self.position + offset;
+        ParticleGpu::new(
+            [offset_position.x, offset_position.y],
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha,
+        )
+    }
+
     pub fn to_segment_gpu(&self) -> SegmentGpu {
         let mut points = [[0.0f32; 2]; 16];
 

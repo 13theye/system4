@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 
 /// Maximum wind angle deviation in radians (90 degrees)
-const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::FRAC_PI_2;
+const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
 
 /// A wind is a simple vector force that is applied to a particle.
 /// It has a direction and a strength.
@@ -230,32 +230,54 @@ impl WindField {
         }
     }
 
-    /// Force a recalculation of all cells in the WindField in parallel with angle variation
+    /// Force a recalculation of all cells in the WindField in parallel with per-circle angle variations
     pub fn par_force_update_all(
         &mut self,
         rng: &mut nannou::rand::rngs::ThreadRng,
-        angle_variation_factor: f32,
+        circle_angle_variations: &std::collections::HashMap<usize, f32>,
     ) {
-        // Pre-compute angle variations for all cells following mass variation pattern
-        let angle_variations: Vec<f32> = if angle_variation_factor > 0.0 {
-            use nannou::rand::Rng;
-            self.cells
-                .iter()
-                .map(|_| {
-                    rng.gen_range(-1.0..=1.0) // Random factor between -1.0 and 1.0
-                })
-                .collect()
-        } else {
-            vec![0.0; self.cells.len()]
-        };
+        use nannou::rand::Rng;
 
-        // Parallel update with pre-computed variations
+        // Pre-compute random variations for all cells for each circle that has angle variation
+        let mut cell_variations: std::collections::HashMap<usize, Vec<f32>> =
+            std::collections::HashMap::new();
+        for (&circle_id, &variation_factor) in circle_angle_variations.iter() {
+            if variation_factor > 0.0 {
+                let variations: Vec<f32> = self
+                    .cells
+                    .iter()
+                    .map(|_| rng.gen_range(-1.0..=1.0) * variation_factor)
+                    .collect();
+                cell_variations.insert(circle_id, variations);
+            }
+        }
+
+        // Parallel update with pre-computed per-circle variations
         self.cells
             .par_iter_mut()
             .enumerate()
             .for_each(|(index, cell)| {
-                let angle_variation = angle_variations[index] * angle_variation_factor;
-                let _ = cell.get_updated_combined_wind(angle_variation);
+                // Calculate combined angle variation for this cell based on all circles affecting it
+                let mut combined_variation = 0.0f32;
+                let mut variation_count = 0;
+
+                for (&circle_id, _) in &cell.winds {
+                    if let Some(variations) = cell_variations.get(&circle_id) {
+                        if let Some(&variation) = variations.get(index) {
+                            combined_variation += variation;
+                            variation_count += 1;
+                        }
+                    }
+                }
+
+                // Average the variations if multiple circles affect this cell
+                let final_variation = if variation_count > 0 {
+                    combined_variation / variation_count as f32
+                } else {
+                    0.0
+                };
+
+                let _ = cell.get_updated_combined_wind(final_variation);
             });
     }
 
@@ -451,6 +473,7 @@ impl WindCircle {
             inner_radius: width,
             strength,
             center_bias,
+            angle_variation: 0.0, // Default to no vibration
             dirty: true,
         };
         Self {
@@ -653,6 +676,7 @@ impl WindCircle {
 /// - Inner radius: The radius of the hole in the center of the circle
 /// - Strength: The strength of the wind applied within the circle
 /// - Center bias: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
+/// - Angle variation: Amount of random angle variation (0.0-1.0, where 1.0 = ±90° deviation)
 /// - Dirty: Flag to indicate that one or more parameters have changed so that WindField will recalculate
 #[derive(Clone)]
 pub struct WindCircleParams {
@@ -666,6 +690,8 @@ pub struct WindCircleParams {
     pub strength: f32,
     /// 0.0 = purely tangential, 1.0 = purely radial inward, 2.0 = tangential in the opposite direction
     pub center_bias: f32,
+    /// 0.0-1.0 factor for random angle variation, where 1.0 = full ±90° deviation
+    pub angle_variation: f32,
     /// True if settings changed and cells need recalculation
     pub dirty: bool,
 }
@@ -707,6 +733,15 @@ impl WindCircleParams {
     pub fn set_center_bias(&mut self, center_bias: f32) {
         if self.center_bias != center_bias {
             self.center_bias = center_bias;
+            self.dirty = true;
+        }
+    }
+
+    /// Set the angle variation of the WindCircle
+    pub fn set_angle_variation(&mut self, angle_variation: f32) {
+        let clamped_variation = angle_variation.clamp(0.0, 1.0);
+        if self.angle_variation != clamped_variation {
+            self.angle_variation = clamped_variation;
             self.dirty = true;
         }
     }

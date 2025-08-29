@@ -45,22 +45,29 @@ impl ForceFields {
         }
     }
 
-    /// Update all circles in this ForceField with angle variation
-    pub fn update(&mut self, show_forces: bool, rng: &mut nannou::rand::rngs::ThreadRng, angle_variation_factor: f32) {
+    /// Update all circles in this ForceField with per-circle angle variations
+    pub fn update(&mut self, show_forces: bool, rng: &mut nannou::rand::rngs::ThreadRng) {
         // Update the wind circle meta-force
         for circle in self.wind_circles.iter_mut() {
             circle.update(&mut self.wind_field, show_forces);
         }
 
-        // Update each cell with angle variation
-        self.wind_field.par_force_update_all(rng, angle_variation_factor);
+        // Collect per-circle angle variations
+        let circle_angle_variations: std::collections::HashMap<usize, f32> = self.wind_circles
+            .iter()
+            .map(|circle| (circle.id, circle.params().angle_variation))
+            .collect();
+
+        // Update each cell with per-circle angle variations
+        self.wind_field.par_force_update_all(rng, &circle_angle_variations);
     }
 
     /// Update all Winds in this ForceField
     pub fn force_update_all(&mut self) {
-        // Use a dummy RNG and 0.0 variation for compatibility
+        // Use a dummy RNG and empty variations for compatibility
         let mut dummy_rng = nannou::rand::thread_rng();
-        self.wind_field.par_force_update_all(&mut dummy_rng, 0.0);
+        let empty_variations = std::collections::HashMap::new();
+        self.wind_field.par_force_update_all(&mut dummy_rng, &empty_variations);
     }
 
     /// Apply all applicable forces to a particle with mass variation factor
@@ -188,6 +195,22 @@ impl ForceFields {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_outer_radius(radius);
             circle.params_mut().set_inner_radius(radius - width);
+        } else {
+            println!("Wind circle not found for {:?}", voice);
+        }
+    }
+
+    /// Get the angle variation of a WindCircle for a given Voice
+    pub fn get_angle_variation(&self, voice: &Voice) -> f32 {
+        self.get_wind_circle_params(*voice)
+            .map(|params| params.angle_variation)
+            .unwrap_or(0.0)
+    }
+
+    /// Set the angle variation of WindCircle for a given Voice
+    pub fn set_angle_variation(&mut self, voice: &Voice, angle_variation: f32) {
+        if let Some(circle) = self.get_wind_circle_mut(*voice) {
+            circle.params_mut().set_angle_variation(angle_variation);
         } else {
             println!("Wind circle not found for {:?}", voice);
         }
