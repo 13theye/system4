@@ -526,10 +526,11 @@ impl ParticleSystem {
     /// Draw the forces and emitters
     pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
-        self.forces.wind_field.draw(draw, scale_x, scale_y, 16);
+        self.forces.wind_field.draw(draw, scale_x, scale_y, 25);
         self.draw_emitters(draw, scale_x, scale_y);
         for circle in self.forces.wind_circles.iter() {
             circle.draw_center(draw, scale_x, scale_y);
+            circle.draw(draw, scale_x, scale_y);
         }
     }
 

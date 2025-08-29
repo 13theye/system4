@@ -622,6 +622,29 @@ impl WindCircle {
             .w_h(40.0 * scale_x, 40.0 * scale_y)
             .color(rgba(1.0, 0.2, 0.0, 0.2));
     }
+
+    /// Draw the WindCircle with outer and inner radius circles
+    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        let center = self.params.center * vec2(scale_x, scale_y);
+        let outer_radius = self.params.outer_radius;
+        let inner_radius = self.params.inner_radius;
+
+        // Draw outer radius circle
+        draw.ellipse()
+            .xy(center)
+            .radius(outer_radius * scale_x.min(scale_y))
+            .stroke_color(rgba(0.8, 0.4, 0.0, 0.6))
+            .stroke_weight(2.0)
+            .no_fill();
+
+        // Draw inner radius circle
+        draw.ellipse()
+            .xy(center)
+            .radius(inner_radius * scale_x.min(scale_y))
+            .stroke_color(rgba(0.8, 0.4, 0.0, 0.4))
+            .stroke_weight(1.0)
+            .no_fill();
+    }
 }
 
 /// Parameters for a WindCircle.
