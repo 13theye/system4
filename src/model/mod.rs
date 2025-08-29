@@ -94,6 +94,6 @@ impl Drop for Model {
 fn erase_drone(model: &mut Model, id: i32) {
     let voice = Voice::from_i32(id);
     model.particle_system.kill_voice(&voice);
-    model.particle_system.forces.update(model.show_forces);
+    model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);
 }

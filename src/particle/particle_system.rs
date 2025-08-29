@@ -56,6 +56,10 @@ pub struct ParticleSystem {
     // Mass variation parameters
     pub mass_variation_enabled: bool,
     pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
+
+    // Wind angle variation parameters
+    pub wind_angle_variation_enabled: bool,
+    pub wind_angle_variation_amount: f32, // factor 0.0-1.0, where 1.0 = full 45° deviation
 }
 
 impl ParticleSystem {
@@ -101,6 +105,10 @@ impl ParticleSystem {
             // Initialize mass variation parameters
             mass_variation_enabled: true,
             mass_variation_amount: 0.05, // 5% variation by default
+
+            // Initialize wind angle variation parameters
+            wind_angle_variation_enabled: true,
+            wind_angle_variation_amount: 0.2, // 20% of 45° = ~9° max deviation by default
         }
     }
 
@@ -195,7 +203,14 @@ impl ParticleSystem {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
-        self.forces.update(show_forces);
+        // Apply wind angle variation if enabled, otherwise pass 0.0
+        let angle_variation_factor = if self.wind_angle_variation_enabled {
+            self.wind_angle_variation_amount
+        } else {
+            0.0
+        };
+
+        self.forces.update(show_forces, rng, angle_variation_factor);
 
         // Reuse existing buffer to avoid allocations
         for (_, (p_gpu, s_gpu)) in gpu_buffers.iter_mut() {
@@ -400,6 +415,26 @@ impl ParticleSystem {
 
     pub fn get_mass_variation_amount(&self) -> f32 {
         self.mass_variation_amount
+    }
+
+    /// Enable or disable wind angle variation
+    pub fn set_wind_angle_variation_enabled(&mut self, enabled: bool) {
+        self.wind_angle_variation_enabled = enabled;
+    }
+
+    /// Set the amount of wind angle variation (factor 0.0-1.0)
+    /// where 1.0 = full ±45° deviation, 0.5 = ±22.5°, etc.
+    pub fn set_wind_angle_variation_amount(&mut self, amount: f32) {
+        self.wind_angle_variation_amount = amount.clamp(0.0, 1.0);
+    }
+
+    /// Get current wind angle variation settings
+    pub fn get_wind_angle_variation_enabled(&self) -> bool {
+        self.wind_angle_variation_enabled
+    }
+
+    pub fn get_wind_angle_variation_amount(&self) -> f32 {
+        self.wind_angle_variation_amount
     }
 
     /********************* Accessor/Helper methods ********************************** */

@@ -7,6 +7,9 @@ use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+/// Maximum wind angle deviation in radians (45 degrees)
+const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::FRAC_PI_4;
+
 /// A wind is a simple vector force that is applied to a particle.
 /// It has a direction and a strength.
 /// The direction is a unit vector that points in the direction of the wind.
@@ -104,9 +107,9 @@ impl WindCell {
     }
 
     /// Get the sum of all Winds in this WindCell, recalculating if necessary.
-    pub fn get_updated_combined_wind(&mut self) -> Option<Wind> {
+    pub fn get_updated_combined_wind(&mut self, angle_variation: f32) -> Option<Wind> {
         if self.needs_update {
-            self.calculate_combined_wind();
+            self.calculate_combined_wind(angle_variation);
         }
         self.combined_wind
     }
@@ -116,8 +119,8 @@ impl WindCell {
         self.combined_wind
     }
 
-    /// Calculate the combined effects of all Winds in this WindCell.
-    fn calculate_combined_wind(&mut self) {
+    /// Calculate the combined effects of all Winds in this WindCell with angle variation.
+    fn calculate_combined_wind(&mut self, angle_variation: f32) {
         if self.winds.is_empty() {
             self.combined_wind = None;
             return;
@@ -129,11 +132,26 @@ impl WindCell {
         }
 
         let combined_strength = total_force.length();
-        let combined_direction = if combined_strength > 0.0 {
+        let mut combined_direction = if combined_strength > 0.0 {
             total_force.normalize()
         } else {
             vec2(0.0, 0.0) // if no force, direction doesn't matter.
         };
+
+        // Apply angle variation if variation is non-zero and we have a valid direction
+        if angle_variation != 0.0 && combined_strength > 0.0 {
+            // Calculate actual angle deviation using pre-computed variation
+            let angle_offset = angle_variation * MAX_WIND_ANGLE_DEVIATION;
+            
+            // Apply rotation to the combined direction
+            let cos_a = angle_offset.cos();
+            let sin_a = angle_offset.sin();
+            
+            combined_direction = vec2(
+                combined_direction.x * cos_a - combined_direction.y * sin_a,
+                combined_direction.x * sin_a + combined_direction.y * cos_a,
+            );
+        }
 
         self.combined_wind = Some(Wind::new_with(combined_direction, combined_strength));
         self.needs_update = false;
@@ -208,15 +226,26 @@ impl WindField {
     /// Force a recalculation of all cells in the WindField.
     pub fn force_update_all(&mut self) {
         for cell in &mut self.cells {
-            let _ = cell.get_updated_combined_wind();
+            let _ = cell.get_updated_combined_wind(0.0); // No angle variation
         }
     }
 
-    /// Force a recalculation of all cells in the WindField in parallel
-    /// - experimental.
-    pub fn par_force_update_all(&mut self) {
-        self.cells.par_iter_mut().for_each(|cell| {
-            let _ = cell.get_updated_combined_wind();
+    /// Force a recalculation of all cells in the WindField in parallel with angle variation
+    pub fn par_force_update_all(&mut self, rng: &mut nannou::rand::rngs::ThreadRng, angle_variation_factor: f32) {
+        // Pre-compute angle variations for all cells following mass variation pattern
+        let angle_variations: Vec<f32> = if angle_variation_factor > 0.0 {
+            use nannou::rand::Rng;
+            self.cells.iter().map(|_| {
+                rng.gen_range(-1.0..=1.0) // Random factor between -1.0 and 1.0
+            }).collect()
+        } else {
+            vec![0.0; self.cells.len()]
+        };
+
+        // Parallel update with pre-computed variations
+        self.cells.par_iter_mut().enumerate().for_each(|(index, cell)| {
+            let angle_variation = angle_variations[index] * angle_variation_factor;
+            let _ = cell.get_updated_combined_wind(angle_variation);
         });
     }
 

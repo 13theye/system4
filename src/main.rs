@@ -85,6 +85,9 @@ fn model(app: &App) -> Model {
     particle_system.set_mass_variation_enabled(true);
     particle_system.set_mass_variation_amount(0.5);
 
+    particle_system.set_wind_angle_variation_enabled(true);
+    particle_system.set_wind_angle_variation_amount(1.0);
+
     // Create window
     let audience_window_id = app
         .new_window()
@@ -1180,7 +1183,7 @@ fn make_drone(
 fn erase_drone(model: &mut Model, id: i32) {
     let voice = Voice::from_i32(id);
     model.particle_system.kill_voice(&voice);
-    model.particle_system.forces.update(model.show_forces);
+    model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);
 }
 

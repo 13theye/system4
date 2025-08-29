@@ -45,20 +45,22 @@ impl ForceFields {
         }
     }
 
-    /// Update all circles in this ForceField
-    pub fn update(&mut self, show_forces: bool) {
+    /// Update all circles in this ForceField with angle variation
+    pub fn update(&mut self, show_forces: bool, rng: &mut nannou::rand::rngs::ThreadRng, angle_variation_factor: f32) {
         // Update the wind circle meta-force
         for circle in self.wind_circles.iter_mut() {
             circle.update(&mut self.wind_field, show_forces);
         }
 
-        // Update each cell
-        self.force_update_all();
+        // Update each cell with angle variation
+        self.wind_field.par_force_update_all(rng, angle_variation_factor);
     }
 
     /// Update all Winds in this ForceField
     pub fn force_update_all(&mut self) {
-        self.wind_field.par_force_update_all();
+        // Use a dummy RNG and 0.0 variation for compatibility
+        let mut dummy_rng = nannou::rand::thread_rng();
+        self.wind_field.par_force_update_all(&mut dummy_rng, 0.0);
     }
 
     /// Apply all applicable forces to a particle with mass variation factor
@@ -69,7 +71,8 @@ impl ForceFields {
 
     /// Recalculate all applicable forces in this ForceField
     pub fn recalculate_once(&mut self) {
-        self.update(true);
+        // Use the regular force_update_all for recalculation without variation
+        self.force_update_all();
     }
 
     /// Add a WindCircle to this ForceField (replaces existing circle for same voice)
