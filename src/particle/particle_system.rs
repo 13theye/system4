@@ -60,7 +60,6 @@ pub struct ParticleSystem {
 
     // Position offset parameters
     pub position_offset_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
-
 }
 
 impl ParticleSystem {
@@ -212,7 +211,9 @@ impl ParticleSystem {
         }
 
         // Pre-compute position offset factors for all voices to avoid borrow conflicts
-        let position_offset_factors: HashMap<Voice, f32> = self.particles.keys()
+        let position_offset_factors: HashMap<Voice, f32> = self
+            .particles
+            .keys()
             .map(|voice| (*voice, self.get_position_offset_factor(*voice)))
             .collect();
 
@@ -269,22 +270,33 @@ impl ParticleSystem {
                         self.forces
                             .apply_forces_to_particle(particle, mass_variation_factor);
 
-                        particle.update(color_limit, alpha_limit);
+                        // Calculate position offset perpendicular to velocity BEFORE updating particle
+                        // This ensures we use the velocity from this frame for the offset calculation
+                        let offset = if position_offset_factor > 0.0
+                            && particle.velocity.length_squared() > 0.0
+                        {
+                            let normal =
+                                vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
+                            normal
+                                * MAX_POSITION_OFFSET
+                                * position_offset_factor
+                                * position_offset_signs[index]
+                        } else {
+                            vec2(0.0, 0.0)
+                        };
+
+                        // Update particle with the calculated offset for feedback recording
+                        particle.update_with_offset(color_limit, alpha_limit, offset);
 
                         if particle.is_out_of_bounds(self.bounds_rect) {
                             particle.kill();
                         }
 
                         if particle.is_alive() && particle.is_within_rect(mask.rect) {
-                            // Calculate position offset perpendicular to velocity
-                            let offset = if position_offset_factor > 0.0 && particle.velocity.length_squared() > 0.0 {
-                                let normal = vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
-                                normal * MAX_POSITION_OFFSET * position_offset_factor * position_offset_signs[index]
-                            } else {
-                                vec2(0.0, 0.0)
-                            };
-                            
-                            Some((particle.to_gpu_with_offset(offset), particle.to_segment_gpu()))
+                            Some((
+                                particle.to_gpu_with_offset(offset),
+                                particle.to_segment_gpu(),
+                            ))
                         } else {
                             None
                         }
@@ -451,9 +463,11 @@ impl ParticleSystem {
 
     /// Get the position offset factor for a given voice (defaults to 0.0 if not set)
     pub fn get_position_offset_factor(&self, voice: Voice) -> f32 {
-        self.position_offset_factors.get(&voice).copied().unwrap_or(0.0)
+        self.position_offset_factors
+            .get(&voice)
+            .copied()
+            .unwrap_or(0.0)
     }
-
 
     /********************* Accessor/Helper methods ********************************** */
 
