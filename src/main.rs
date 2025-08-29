@@ -68,7 +68,7 @@ fn model(app: &App) -> Model {
     // DPI scale is used to scale the size of draw objects to account for DPI scaling.
     let dpi_scale = config.rendering.dpi_scale;
 
-    let particle_system = ParticleSystem::new(
+    let mut particle_system = ParticleSystem::new(
         pt2(0.0, 0.0),
         render_size.x,
         render_size.y,
@@ -81,6 +81,9 @@ fn model(app: &App) -> Model {
         particle_limit,
         dpi_scale,
     );
+
+    particle_system.set_mass_variation_enabled(true);
+    particle_system.set_mass_variation_amount(15.0);
 
     // Create window
     let audience_window_id = app
