@@ -6,8 +6,8 @@ use nannou::prelude::*;
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
-const PARTICLE_LIFE_SPAN: f32 = 3600.0;
-const FADE_IN_DURATION: f32 = 20.0; // frames to fade in
+const PARTICLE_LIFE_SPAN: f32 = 1800.0;
+const FADE_IN_DURATION: f32 = 200.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
 
 #[derive(Clone, Copy)]

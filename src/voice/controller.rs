@@ -5,6 +5,7 @@
 use super::Voice;
 use crate::{forces::WindCircleParams, model::Model};
 use nannou::prelude::*;
+use nannou::wgpu::{Device, Queue};
 
 #[derive(Debug, Clone)]
 pub enum VoiceParameterChange {
@@ -94,4 +95,23 @@ impl Model {
             }
         }
     }
+}
+
+/********** Functions for changing renderer properties ***************** */
+
+/// Update the "Feedback" feature
+pub fn update_feedback(model: &mut Model, device: &Device, queue: &Queue) {
+    // Read feedback value for segment length before updating particle system
+    let voice1_feedback = model.get_feedback(Voice::Voice1);
+    let voice4_feedback = model.get_feedback(Voice::Voice4);
+
+    // Update segment length based on Voice1 feedback slider
+    model
+        .segment_renderer1
+        .set_segment_length(device, queue, voice1_feedback);
+
+    // Update segment length based on Voice1 feedback slider
+    model
+        .segment_renderer4
+        .set_segment_length(device, queue, voice4_feedback);
 }

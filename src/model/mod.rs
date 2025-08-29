@@ -3,12 +3,10 @@
 // The main App Model
 
 use crate::{
-    config::*,
-    forces::WindCircle,
     fps::FpsManager,
-    osc::{OscCommand, OscController, OscSender},
+    osc::{OscController, OscSender},
     particle::ParticleSystem,
-    terminals::{TerminalParams, TerminalSystem},
+    terminals::TerminalSystem,
     utils::IdGenerator,
     voice::Voice,
 };
@@ -19,7 +17,7 @@ use nnpipe::renderers::{
 };
 use nnpipe::*;
 
-use std::{cell::RefCell, collections::HashMap, time::Instant};
+use std::{cell::RefCell, collections::HashMap};
 
 pub type GpuBuffers = (Vec<ParticleGpu>, Vec<SegmentGpu>);
 
@@ -78,7 +76,6 @@ pub struct Model {
     // Timing for render and updates
     pub frame_count: u64,
     pub update_ticks: u64,
-    pub last_update: Instant,
 
     // Debug stuff
     pub show_bounds: bool,

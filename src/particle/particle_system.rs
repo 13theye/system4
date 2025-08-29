@@ -124,9 +124,8 @@ impl ParticleSystem {
         let emitter_left = LinearEmitter::new(
             id_generator.generate(),
             voice,
-            emitter_left_origin,
             mask.rect.top_left(),
-            mask.rect.bottom_left(),
+            mask.rect.mid_left(),
             EmitDirection::East,
             self.global_max_spawn_rate,
             spawn_rate_factor,
@@ -135,8 +134,7 @@ impl ParticleSystem {
         let emitter_right = LinearEmitter::new(
             id_generator.generate(),
             voice,
-            emitter_right_origin,
-            mask.rect.top_right(),
+            mask.rect.mid_right(),
             mask.rect.bottom_right(),
             EmitDirection::West,
             self.global_max_spawn_rate,
@@ -154,7 +152,7 @@ impl ParticleSystem {
         // Add the emitters
         self.emitters.push(Box::new(emitter_left)); //emitter_left);
         self.emitters.push(Box::new(emitter_right));
-        //self.emitters.push(Box::new(emitter_center));
+        self.emitters.push(Box::new(emitter_center));
 
         // Set the particle system params
         let alpha_limit = (alpha as f32) / 100.0;
@@ -248,43 +246,90 @@ impl ParticleSystem {
         let mut indices: Vec<usize> = (0..self.emitters.len()).collect();
         indices.shuffle(rng);
 
-        let mut parent_voice: Voice;
-        let mut particle_limit: usize;
-        let mut color_limit: Rgb;
+        // Collect emission data to avoid borrowing conflicts
+        let mut emission_data: Vec<(usize, Voice, f32, Rgb)> = Vec::new();
 
-        for i in indices {
+        for &i in &indices {
             let emitter = &self.emitters[i];
-            if emitter.is_spawning() {
-                parent_voice = emitter.parent_voice();
+            if emitter.is_enabled() {
+                let parent_voice = emitter.parent_voice();
                 let particle_vec = self.particles.entry(parent_voice).or_default();
-                particle_limit = self
-                    .particle_limits
-                    .get(&parent_voice)
-                    .copied()
-                    .unwrap_or(self.default_particle_limit);
+                let current_count = particle_vec.len();
 
-                // Don't add new particles if limit is reached
-                if particle_vec.len() > particle_limit {
-                    return;
+                // Calculate emission scaling based on how close we are to the limit
+                let emission_scaling = self.calculate_emission_scaling(&parent_voice, current_count);
+                
+                // Skip emission entirely if scaling is near zero
+                if emission_scaling < 0.001 {
+                    continue;
                 }
 
-                color_limit = self
+                let color_limit = self
                     .color_limits
                     .get(&parent_voice)
                     .copied()
                     .unwrap_or(self.default_particle_color);
 
-                particle_vec.extend(emitter.emit(
-                    10.0,
-                    self.default_particle_size,
-                    rgba_from(color_limit, 0.0),
-                    rng,
-                ));
+                emission_data.push((i, parent_voice, emission_scaling, color_limit));
             }
+        }
+
+        // Now emit particles using the collected data
+        for (i, parent_voice, emission_scaling, color_limit) in emission_data {
+            let emitter = &mut self.emitters[i];
+            
+            // Temporarily adjust the emitter's spawn rate based on the scaling
+            let original_spawn_rate = emitter.get_spawn_rate_factor();
+            emitter.set_spawn_rate_factor(original_spawn_rate * emission_scaling);
+
+            let new_particles = emitter.emit(
+                10.0,
+                self.default_particle_size,
+                rgba_from(color_limit, 0.0),
+                rng,
+            );
+
+            // Restore the original spawn rate
+            emitter.set_spawn_rate_factor(original_spawn_rate);
+
+            // Add particles to the voice's particle vector
+            let particle_vec = self.particles.entry(parent_voice).or_default();
+            particle_vec.extend(new_particles);
         }
     }
 
     /********************* Particle methods ********************************** */
+
+    /// Calculate emission rate scaling factor based on how close we are to the particle limit
+    /// Returns a value from 0.0 to 1.0 where:
+    /// - 1.0 when far from the limit (aggressive emission)
+    /// - 0.0 when at or over the limit (no emission)
+    /// - Smooth curve in between to avoid jerky transitions
+    fn calculate_emission_scaling(&self, voice: &Voice, current_count: usize) -> f32 {
+        let limit = self
+            .particle_limits
+            .get(voice)
+            .copied()
+            .unwrap_or(self.default_particle_limit);
+        
+        if limit == 0 {
+            return 0.0;
+        }
+        
+        let ratio = current_count as f32 / limit as f32;
+        
+        // If we're over the limit, stop emitting
+        if ratio >= 1.0 {
+            return 0.0;
+        }
+        
+        // Use a smooth quadratic curve that starts aggressive (1.0) and 
+        // gradually reduces as we approach the limit
+        // At 80% of limit, we're at 4% emission rate
+        // At 90% of limit, we're at 1% emission rate
+        let remaining_capacity = 1.0 - ratio;
+        remaining_capacity.powi(2)
+    }
 
     fn cull_excess_particles(&mut self) {
         for (voice, particles) in self.particles.iter_mut() {
@@ -306,7 +351,7 @@ impl ParticleSystem {
 
                 for particle in active_particles
                     .into_iter()
-                    .rev() // kill oldest particles first
+                    //.rev() // kill oldest particles first
                     .take(excess_active)
                 {
                     particle.set_to_fade_out();
@@ -346,7 +391,7 @@ impl ParticleSystem {
     pub fn set_is_spawning(&mut self, voice: &Voice, is_spawning: bool) {
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice() == *voice {
-                emitter.set_is_spawning(is_spawning);
+                emitter.set_enabled(is_spawning);
             }
         });
     }

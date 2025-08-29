@@ -9,6 +9,7 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, SegmentRenderer};
 use nnpipe::*;
+use system4::voice::controller;
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -16,7 +17,6 @@ use std::{
     collections::HashMap,
     fs,
     sync::atomic::{AtomicU64, Ordering},
-    time::Instant,
 };
 
 use system4::{
@@ -237,7 +237,7 @@ fn model(app: &App) -> Model {
         .name("Composite Step Pipeline")
         .input_textures(&["particles", "heatmap_processed"])
         .output_texture("processed_composited")
-        .simple_additive_composite(hi_config, 1.0)
+        .simple_additive_composite(hi_config, 0.0)
         .build(device);
 
     if let Ok(effect) = composite_step {
@@ -247,11 +247,11 @@ fn model(app: &App) -> Model {
     let effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
         .input_texture("processed_composited")
-        .brightness_extract(med_config, 0.65)
+        .brightness_extract(med_config, 0.7)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
-        .bloom_composite_with_curve(hi_config, 3.0, 3.0)
-        .inversion(hi_config)
+        .bloom_composite_with_curve(hi_config, 2.0, 3.0)
+        //.inversion(hi_config)
         .build(device);
 
     if let Ok(effect) = effects {
@@ -318,7 +318,6 @@ fn model(app: &App) -> Model {
         fps,
         frame_count: 0,
         update_ticks: 0,
-        last_update: Instant::now(),
         show_bounds: false,
         show_forces: false,
     }
@@ -338,21 +337,12 @@ fn main() {
         );
     }
     nannou::app(model)
-        .loop_mode(nannou::LoopMode::rate_fps(120.0)) // Run at 120fps regardless of display refresh rate
+        .loop_mode(nannou::LoopMode::rate_fps(60.0)) // Run at 120fps regardless of display refresh rate
         .update(update)
         .run();
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
-    // Quick and dirty way to limit update rate.
-    // Approximates 60Hz
-    let now = Instant::now();
-    if model.last_update.elapsed().as_millis() < 10 {
-        return;
-    } else {
-        model.last_update = now;
-    }
-
     // Increment frame counter
     model.frame_count += 1;
     model.update_ticks += 1;
@@ -373,21 +363,10 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let commands = model.osc.take_commands();
     process_osc(model, commands);
 
-    // Read feedback value for segment length before updating particle system
-    let voice1_feedback = model.get_feedback(Voice::Voice1);
-    let voice4_feedback = model.get_feedback(Voice::Voice4);
+    // Update feedback render params
+    controller::update_feedback(model, device, queue);
 
-    // Update segment length based on Voice1 feedback slider
-    model
-        .segment_renderer1
-        .set_segment_length(device, queue, voice1_feedback);
-
-    // Update segment length based on Voice1 feedback slider
-    model
-        .segment_renderer4
-        .set_segment_length(device, queue, voice4_feedback);
-
-    // Update particle system and get a Vec containing all particles for GPU to draw
+    // Update particle system
     model
         .particle_system
         .update(&mut model.rng, model.show_forces, &mut model.gpu_buffers);
