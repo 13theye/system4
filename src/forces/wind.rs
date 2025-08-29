@@ -7,8 +7,8 @@ use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-/// Maximum wind angle deviation in radians (45 degrees)
-const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::FRAC_PI_4;
+/// Maximum wind angle deviation in radians (90 degrees)
+const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::FRAC_PI_2;
 
 /// A wind is a simple vector force that is applied to a particle.
 /// It has a direction and a strength.
@@ -108,7 +108,7 @@ impl WindCell {
 
     /// Get the sum of all Winds in this WindCell, recalculating if necessary.
     pub fn get_updated_combined_wind(&mut self, angle_variation: f32) -> Option<Wind> {
-        if self.needs_update {
+        if self.needs_update || angle_variation != 0.0 {
             self.calculate_combined_wind(angle_variation);
         }
         self.combined_wind
@@ -142,11 +142,11 @@ impl WindCell {
         if angle_variation != 0.0 && combined_strength > 0.0 {
             // Calculate actual angle deviation using pre-computed variation
             let angle_offset = angle_variation * MAX_WIND_ANGLE_DEVIATION;
-            
+
             // Apply rotation to the combined direction
             let cos_a = angle_offset.cos();
             let sin_a = angle_offset.sin();
-            
+
             combined_direction = vec2(
                 combined_direction.x * cos_a - combined_direction.y * sin_a,
                 combined_direction.x * sin_a + combined_direction.y * cos_a,
@@ -231,22 +231,32 @@ impl WindField {
     }
 
     /// Force a recalculation of all cells in the WindField in parallel with angle variation
-    pub fn par_force_update_all(&mut self, rng: &mut nannou::rand::rngs::ThreadRng, angle_variation_factor: f32) {
+    pub fn par_force_update_all(
+        &mut self,
+        rng: &mut nannou::rand::rngs::ThreadRng,
+        angle_variation_factor: f32,
+    ) {
         // Pre-compute angle variations for all cells following mass variation pattern
         let angle_variations: Vec<f32> = if angle_variation_factor > 0.0 {
             use nannou::rand::Rng;
-            self.cells.iter().map(|_| {
-                rng.gen_range(-1.0..=1.0) // Random factor between -1.0 and 1.0
-            }).collect()
+            self.cells
+                .iter()
+                .map(|_| {
+                    rng.gen_range(-1.0..=1.0) // Random factor between -1.0 and 1.0
+                })
+                .collect()
         } else {
             vec![0.0; self.cells.len()]
         };
 
         // Parallel update with pre-computed variations
-        self.cells.par_iter_mut().enumerate().for_each(|(index, cell)| {
-            let angle_variation = angle_variations[index] * angle_variation_factor;
-            let _ = cell.get_updated_combined_wind(angle_variation);
-        });
+        self.cells
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, cell)| {
+                let angle_variation = angle_variations[index] * angle_variation_factor;
+                let _ = cell.get_updated_combined_wind(angle_variation);
+            });
     }
 
     /******************* Grid accessors *******************/
@@ -318,19 +328,28 @@ impl WindField {
     /******************* Draw for Performer *******************/
 
     /// Draw the WindField
-    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32, div_factor: usize) {
         self.draw_origin(draw, scale_x, scale_y);
         self.draw_grid(draw, scale_x, scale_y);
-        self.draw_vectors(draw, scale_x, scale_y);
+        self.draw_vectors(draw, scale_x, scale_y, div_factor);
     }
 
     /// Draw all the Wind vectors
-    fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        // Draw wind vectors from each cell's origin
-        for cell in &self.cells {
+    fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32, div_factor: usize) {
+        // Draw wind vectors from selected cells based on div_factor
+        for (index, cell) in self.cells.iter().enumerate() {
             let Some(wind) = &cell.combined_wind else {
                 continue;
             };
+
+            // Calculate row and column from the flat index
+            let col = index % self.grid_cols;
+            let row = index / self.grid_cols;
+
+            // Sample based on div_factor using deterministic pattern
+            if (col + row) % div_factor != 0 {
+                continue;
+            }
 
             // Draw wind vector from cell origin
             let vector_scale = 3.0; // Increased scale for better visibility

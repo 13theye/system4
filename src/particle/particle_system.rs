@@ -236,14 +236,18 @@ impl ParticleSystem {
                 .or_insert_with(|| EMPTY_GPU_BUFFER);
 
             // Pre-compute mass variation factors for all particles in this voice
-            let mass_variations: Vec<f32> = if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
-                use nannou::rand::Rng;
-                particles.iter().map(|_| {
-                    rng.gen_range(-self.mass_variation_amount..=self.mass_variation_amount)
-                }).collect()
-            } else {
-                vec![0.0; particles.len()]
-            };
+            let mass_variations: Vec<f32> =
+                if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
+                    use nannou::rand::Rng;
+                    particles
+                        .iter()
+                        .map(|_| {
+                            rng.gen_range(-self.mass_variation_amount..=self.mass_variation_amount)
+                        })
+                        .collect()
+                } else {
+                    vec![0.0; particles.len()]
+                };
 
             // Parallel update, collect simple particle data and segments
             let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
@@ -252,7 +256,8 @@ impl ParticleSystem {
                     .enumerate()
                     .filter_map(|(index, particle)| {
                         let mass_variation_factor = mass_variations[index];
-                        self.forces.apply_forces_to_particle(particle, mass_variation_factor);
+                        self.forces
+                            .apply_forces_to_particle(particle, mass_variation_factor);
 
                         particle.update(color_limit, alpha_limit);
 
@@ -292,8 +297,9 @@ impl ParticleSystem {
                 let current_count = particle_vec.len();
 
                 // Calculate emission scaling based on how close we are to the limit
-                let emission_scaling = self.calculate_emission_scaling(&parent_voice, current_count);
-                
+                let emission_scaling =
+                    self.calculate_emission_scaling(&parent_voice, current_count);
+
                 // Skip emission entirely if scaling is near zero
                 if emission_scaling < 0.001 {
                     continue;
@@ -312,7 +318,7 @@ impl ParticleSystem {
         // Now emit particles using the collected data
         for (i, parent_voice, emission_scaling, color_limit) in emission_data {
             let emitter = &mut self.emitters[i];
-            
+
             // Temporarily adjust the emitter's spawn rate based on the scaling
             let original_spawn_rate = emitter.get_spawn_rate_factor();
             emitter.set_spawn_rate_factor(original_spawn_rate * emission_scaling);
@@ -346,19 +352,19 @@ impl ParticleSystem {
             .get(voice)
             .copied()
             .unwrap_or(self.default_particle_limit);
-        
+
         if limit == 0 {
             return 0.0;
         }
-        
+
         let ratio = current_count as f32 / limit as f32;
-        
+
         // If we're over the limit, stop emitting
         if ratio >= 1.0 {
             return 0.0;
         }
-        
-        // Use a smooth quadratic curve that starts aggressive (1.0) and 
+
+        // Use a smooth quadratic curve that starts aggressive (1.0) and
         // gradually reduces as we approach the limit
         // At 80% of limit, we're at 4% emission rate
         // At 90% of limit, we're at 1% emission rate
@@ -520,7 +526,7 @@ impl ParticleSystem {
     /// Draw the forces and emitters
     pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
-        self.forces.wind_field.draw(draw, scale_x, scale_y);
+        self.forces.wind_field.draw(draw, scale_x, scale_y, 16);
         self.draw_emitters(draw, scale_x, scale_y);
         for circle in self.forces.wind_circles.iter() {
             circle.draw_center(draw, scale_x, scale_y);
