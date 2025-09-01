@@ -9,17 +9,55 @@ use nannou::wgpu::{Device, Queue};
 
 #[derive(Debug, Clone)]
 pub enum VoiceParameterChange {
-    Alpha { voice: Voice, value: f32 },
-    Volume { voice: Voice, value: f32 },
-    Feedback { voice: Voice, value: f32 },
-    OuterRadius { voice: Voice, value: f32 },
-    InnerRadius { voice: Voice, value: f32 },
-    Strength { voice: Voice, value: f32 },
-    CenterBias { voice: Voice, value: f32 },
-    AngleVariation { voice: Voice, value: f32 },
-    PositionOffset { voice: Voice, value: f32 },
-    CenterX { voice: Voice, value: f32 },
-    CenterY { voice: Voice, value: f32 },
+    Alpha {
+        voice: Voice,
+        value: f32,
+    },
+    Volume {
+        voice: Voice,
+        value: f32,
+    },
+    Feedback {
+        voice: Voice,
+        value: f32,
+    },
+    OuterRadius {
+        voice: Voice,
+        value: f32,
+    },
+    InnerRadius {
+        voice: Voice,
+        value: f32,
+    },
+    Strength {
+        voice: Voice,
+        value: f32,
+    },
+    CenterBias {
+        voice: Voice,
+        value: f32,
+    },
+    AngleVariation {
+        voice: Voice,
+        value: f32,
+    },
+    PositionOffset {
+        voice: Voice,
+        value: f32,
+    },
+    ForceCenterX {
+        voice: Voice,
+        value: f32,
+    },
+    ForceCenterY {
+        voice: Voice,
+        value: f32,
+    },
+    MaskChangeBounds {
+        voice: Voice,
+        rect: Rect,
+        duration: f32,
+    },
 }
 
 impl Model {
@@ -42,7 +80,7 @@ impl Model {
         self.particle_system.forces.get_center_bias(&voice)
     }
 
-    /// Get the angle variation of a Voice's WindCircle ("vibration")
+    /// Get the angle variation of a Voice's WindCircle ("noise")
     pub fn get_angle_variation(&self, voice: Voice) -> f32 {
         self.particle_system.forces.get_angle_variation(&voice)
     }
@@ -94,21 +132,33 @@ impl Model {
                 self.particle_system.forces.set_center_bias(&voice, value);
             }
             VoiceParameterChange::AngleVariation { voice, value } => {
-                self.particle_system.forces.set_angle_variation(&voice, value);
+                self.particle_system
+                    .forces
+                    .set_angle_variation(&voice, value);
             }
             VoiceParameterChange::PositionOffset { voice, value } => {
-                self.particle_system.set_position_offset_factor(&voice, value);
+                self.particle_system
+                    .set_position_offset_factor(&voice, value);
             }
-            VoiceParameterChange::CenterX { voice, value } => {
+            VoiceParameterChange::ForceCenterX { voice, value } => {
                 if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
                     let current_y = circle.params().center.y;
                     circle.params_mut().set_center(vec2(value, current_y));
                 }
             }
-            VoiceParameterChange::CenterY { voice, value } => {
+            VoiceParameterChange::ForceCenterY { voice, value } => {
                 if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
                     let current_x = circle.params().center.x;
                     circle.params_mut().set_center(vec2(current_x, value));
+                }
+            }
+            VoiceParameterChange::MaskChangeBounds {
+                voice,
+                rect,
+                duration,
+            } => {
+                if let Some(mask) = self.particle_system.masks.get_mut(&voice) {
+                    mask.change_bounds(rect, duration);
                 }
             }
         }

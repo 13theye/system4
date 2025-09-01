@@ -72,7 +72,7 @@ impl Mask {
         if let (Some(target), Some(start_time)) = (self.target_rect, self.animation_start_time) {
             let elapsed = start_time.elapsed().as_secs_f32();
             let progress = (elapsed / self.animation_duration).min(1.0);
-            
+
             if progress >= 1.0 {
                 // Animation complete
                 self.rect = target;
@@ -92,12 +92,23 @@ impl Mask {
     }
 }
 
-/// Linear interpolation between two rectangles
+/// Smooth easing function (ease-in-out cubic)
+fn ease_in_out_cubic(t: f32) -> f32 {
+    if t < 0.5 {
+        4.0 * t * t * t
+    } else {
+        let f = (2.0 * t) - 2.0;
+        1.0 + f * f * f / 2.0
+    }
+}
+
+/// Linear interpolation between two rectangles with smooth easing
 fn lerp_rect(start: Rect, end: Rect, t: f32) -> Rect {
-    let x = start.x() + (end.x() - start.x()) * t;
-    let y = start.y() + (end.y() - start.y()) * t;
-    let w = start.w() + (end.w() - start.w()) * t;
-    let h = start.h() + (end.h() - start.h()) * t;
+    let eased_t = ease_in_out_cubic(t);
+    let x = start.x() + (end.x() - start.x()) * eased_t;
+    let y = start.y() + (end.y() - start.y()) * eased_t;
+    let w = start.w() + (end.w() - start.w()) * eased_t;
+    let h = start.h() + (end.h() - start.h()) * eased_t;
     Rect::from_x_y_w_h(x, y, w, h)
 }
 

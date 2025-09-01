@@ -203,6 +203,9 @@ impl ParticleSystem {
         self.cull_excess_particles();
 
         self.forces.update(show_forces, rng);
+        self.masks.iter_mut().for_each(|(_, mask)| {
+            mask.update_animation();
+        });
 
         // Reuse existing buffer to avoid allocations
         for (_, (p_gpu, s_gpu)) in gpu_buffers.iter_mut() {
@@ -286,7 +289,7 @@ impl ParticleSystem {
                         };
 
                         // Update particle with the calculated offset for feedback recording
-                        particle.update_with_offset(color_limit, alpha_limit, offset);
+                        particle.update(color_limit, alpha_limit, offset);
 
                         if particle.is_out_of_bounds(self.bounds_rect) {
                             particle.kill();

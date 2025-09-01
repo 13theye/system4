@@ -37,6 +37,14 @@ pub enum OscCommand {
         id: i32,
         val: f32,
     },
+    ParticlesNoise {
+        id: i32,
+        val: f32,
+    },
+    ParticlesVibration {
+        id: i32,
+        val: f32,
+    },
 
     EraseDrone {
         id: i32,
@@ -55,6 +63,7 @@ pub enum OscCommand {
         y: i32,
         w: i32,
         h: i32,
+        duration: f32,
     },
 
     TermBrightness {
@@ -167,6 +176,45 @@ impl OscSender {
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
     }
+
+    pub fn send_vibration(&self, player_id: i32, val: f32) {
+        let addr = "/sys2/particles/vibration".to_string();
+        let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
+    pub fn send_noise(&self, player_id: i32, val: f32) {
+        let addr = "/sys2/particles/noise".to_string();
+        let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
+    pub fn send_mask_change_bounds(
+        &self,
+        player_id: i32,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        dur: f32,
+    ) {
+        let addr = "/sys2/mask/changeBounds".to_string();
+        let args = vec![
+            osc::Type::Int(player_id),
+            osc::Type::Int(x),
+            osc::Type::Int(y),
+            osc::Type::Int(w),
+            osc::Type::Int(h),
+            osc::Type::Float(dur),
+        ];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
 }
 
 pub struct OscController {
@@ -232,9 +280,21 @@ impl OscController {
                                 .push(OscCommand::ParticlesTrail { id: *id, val: *val });
                         }
                     }
+                    "/sys2/particles/noise" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesNoise { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/vibration" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesVibration { id: *id, val: *val });
+                        }
+                    }
                     /********************* Mask Commands *************************** */
                     "/sys2/mask/changeBounds" => {
-                        if let [osc::Type::Int(id), osc::Type::Int(x), osc::Type::Int(y), osc::Type::Int(w), osc::Type::Int(h)] =
+                        if let [osc::Type::Int(id), osc::Type::Int(x), osc::Type::Int(y), osc::Type::Int(w), osc::Type::Int(h), osc::Type::Float(dur)] =
                             &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MaskChangeBounds {
@@ -243,6 +303,7 @@ impl OscController {
                                 y: *y,
                                 w: *w,
                                 h: *h,
+                                duration: *dur,
                             });
                         }
                     }

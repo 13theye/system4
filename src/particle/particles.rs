@@ -70,20 +70,15 @@ impl Particle {
         }
     }
 
-    /// Update the particle based on forces and age, given externally-determined color and alpha limits
-    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32) {
-        self.update_with_offset(color_limit, alpha_limit, vec2(0.0, 0.0));
-    }
-
-    /// Update the particle with a position offset for feedback recording
-    pub fn update_with_offset(&mut self, color_limit: Rgb, alpha_limit: f32, position_offset: Vec2) {
+    /// Update the particle based on forces and age, given externally-determined color and alpha limits, and offset for feedback recording
+    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32, position_offset: Vec2) {
         // Record the offset position for feedback trails
         let offset_position = if position_offset.length_squared() > 0.0 {
             self.position + position_offset
         } else {
             self.position
         };
-        self.record_feedback_position_with_offset(offset_position);
+        self.record_feedback_position(offset_position);
 
         self.velocity += self.acceleration;
         self.position += self.velocity;
@@ -127,11 +122,7 @@ impl Particle {
         self.position
     }
 
-    fn record_feedback_position(&mut self) {
-        self.record_feedback_position_with_offset(self.position);
-    }
-
-    fn record_feedback_position_with_offset(&mut self, position: Point2) {
+    fn record_feedback_position(&mut self, position: Point2) {
         for i in (1..15).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }

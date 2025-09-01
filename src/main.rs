@@ -553,6 +553,14 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             model.osc_loop.send_erase_drone(1);
             model.osc_loop.send_erase_drone(4);
         }
+        Key::M => {
+            model
+                .osc_loop
+                .send_mask_change_bounds(1, 0, 0, 1920, 1080, 10.0);
+        }
+        Key::V => {
+            model.osc_loop.send_vibration(1, 0.5);
+        }
 
         _ => {}
     }
@@ -796,7 +804,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("Ctr X"))
                             .changed()
                         {
-                            parameter_changes.push(VoiceParameterChange::CenterX {
+                            parameter_changes.push(VoiceParameterChange::ForceCenterX {
                                 voice: Voice::Voice1,
                                 value: center_x,
                             });
@@ -808,7 +816,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Ctr Y"))
                             .changed()
                         {
-                            parameter_changes.push(VoiceParameterChange::CenterY {
+                            parameter_changes.push(VoiceParameterChange::ForceCenterY {
                                 voice: Voice::Voice1,
                                 value: center_y,
                             });
@@ -945,7 +953,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         if ui
                             .add(
                                 egui::Slider::new(&mut angle_variation, 0.0..=1.0)
-                                    .text("Vibration")
+                                    .text("Noise")
                                     .custom_formatter(|n, _| format!("{:.3}", n)),
                             )
                             .changed()
@@ -961,7 +969,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         if ui
                             .add(
                                 egui::Slider::new(&mut position_offset, 0.0..=1.0)
-                                    .text("Position Offset")
+                                    .text("Vibration")
                                     .custom_formatter(|n, _| format!("{:.3}", n)),
                             )
                             .changed()
@@ -994,7 +1002,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("Ctr X"))
                             .changed()
                         {
-                            parameter_changes.push(VoiceParameterChange::CenterX {
+                            parameter_changes.push(VoiceParameterChange::ForceCenterX {
                                 voice: Voice::Voice4,
                                 value: center_x,
                             });
@@ -1006,7 +1014,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                             .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Ctr Y"))
                             .changed()
                         {
-                            parameter_changes.push(VoiceParameterChange::CenterY {
+                            parameter_changes.push(VoiceParameterChange::ForceCenterY {
                                 voice: Voice::Voice4,
                                 value: center_y,
                             });
@@ -1141,7 +1149,29 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                 let voice = Voice::from_i32(id);
                 parameter_changes.push(VoiceParameterChange::OuterRadius { voice, value: val });
             }
-            OscCommand::MaskChangeBounds { id, x, y, w, h } => {}
+            OscCommand::ParticlesNoise { id, val } => {
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::AngleVariation { voice, value: val });
+            }
+            OscCommand::ParticlesVibration { id, val } => {
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::PositionOffset { voice, value: val });
+            }
+            OscCommand::MaskChangeBounds {
+                id,
+                x,
+                y,
+                w,
+                h,
+                duration,
+            } => {
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::MaskChangeBounds {
+                    voice,
+                    rect: Rect::from_x_y_w_h(x as f32, y as f32, w as f32, h as f32),
+                    duration,
+                })
+            }
             _ => {}
         }
     }
