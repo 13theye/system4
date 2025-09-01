@@ -27,6 +27,7 @@ impl Default for FpsManager {
 }
 
 impl FpsManager {
+    /// Create a new FpsManager with counting and drawing enabled or not
     pub fn new_with(counting: bool, should_draw: bool) -> Self {
         Self {
             fps: 0.0,

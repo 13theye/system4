@@ -13,6 +13,7 @@ nnpipe = { workspace = true }
 objc2-app-kit = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
+rayon = "1.8"
 thread-priority = "2"
 toml = { workspace = true }
 

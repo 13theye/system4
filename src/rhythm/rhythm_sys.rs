@@ -5,7 +5,7 @@
 use nannou::{prelude::*, rand::rngs::ThreadRng};
 use std::collections::HashMap;
 
-use crate::{rhythm::Rhythm, view::Voice};
+use crate::{rhythm::Rhythm, voice::Voice};
 
 pub struct RhythmSystem {
     pub rhythms: HashMap<Voice, Rhythm>,

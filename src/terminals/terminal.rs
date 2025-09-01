@@ -5,7 +5,7 @@
 use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
-use crate::view::Voice;
+use crate::voice::Voice;
 
 #[derive(Clone)]
 pub struct Line {

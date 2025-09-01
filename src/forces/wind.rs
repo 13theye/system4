@@ -2,12 +2,13 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, particle::Particle, view::Voice};
+use crate::{forces::CellIdx, particle::Particle, voice::Voice};
 use nannou::prelude::*;
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use rayon::prelude::*;
+use std::collections::HashMap;
+
+/// Maximum wind angle deviation in radians (90 degrees)
+const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
 
 /// A wind is a simple vector force that is applied to a particle.
 /// It has a direction and a strength.
@@ -37,8 +38,8 @@ impl Wind {
         }
     }
 
-    /// Apply the Wind to a Particle
-    pub fn apply(&self, particle: &mut Particle) {
+    /// Apply the Wind to a Particle with mass variation factor
+    pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
         // Calculate the x and y components of particle's current velocity
         let particle_vx = particle.velocity.x;
         let particle_vy = particle.velocity.y;
@@ -51,17 +52,20 @@ impl Wind {
         let diff_x = wind_vx - particle_vx;
         let diff_y = wind_vy - particle_vy;
 
-        // Calculate inertial resistance based on current momentum
+        // Calculate effective mass with variation factor
+        let effective_mass = particle.mass * (1.0 + mass_variation_factor);
+
+        // Calculate inertial resistance based on current momentum using effective mass
         let current_speed = particle.velocity.length();
-        let momentum_magnitude = particle.mass * current_speed;
+        let momentum_magnitude = effective_mass * current_speed;
 
         // Inertial resistance: particles with higher momentum resist changes more
         let inertia_coefficient = 0.1; // Adjust this to control resistance strength
         let inertia_factor = 1.0 / (1.0 + momentum_magnitude * inertia_coefficient);
 
-        // Apply the force with inertial resistance
+        // Apply the force with inertial resistance using effective mass
         let force = vec2(diff_x, diff_y) * inertia_factor;
-        particle.acceleration += force / particle.mass;
+        particle.acceleration += force / effective_mass;
     }
 }
 
@@ -103,15 +107,20 @@ impl WindCell {
     }
 
     /// Get the sum of all Winds in this WindCell, recalculating if necessary.
-    pub fn get_combined_wind(&mut self) -> Option<Wind> {
-        if self.needs_update {
-            self.calculate_combined_wind();
+    pub fn get_updated_combined_wind(&mut self, angle_variation: f32) -> Option<Wind> {
+        if self.needs_update || angle_variation != 0.0 {
+            self.calculate_combined_wind(angle_variation);
         }
         self.combined_wind
     }
 
-    /// Calculate the combined effects of all Winds in this WindCell.
-    fn calculate_combined_wind(&mut self) {
+    /// Get the sum of all Winds in this WindCell, without recalculating.
+    pub fn get_combined_wind(&self) -> Option<Wind> {
+        self.combined_wind
+    }
+
+    /// Calculate the combined effects of all Winds in this WindCell with angle variation.
+    fn calculate_combined_wind(&mut self, angle_variation: f32) {
         if self.winds.is_empty() {
             self.combined_wind = None;
             return;
@@ -123,11 +132,26 @@ impl WindCell {
         }
 
         let combined_strength = total_force.length();
-        let combined_direction = if combined_strength > 0.0 {
+        let mut combined_direction = if combined_strength > 0.0 {
             total_force.normalize()
         } else {
             vec2(0.0, 0.0) // if no force, direction doesn't matter.
         };
+
+        // Apply angle variation if variation is non-zero and we have a valid direction
+        if angle_variation != 0.0 && combined_strength > 0.0 {
+            // Calculate actual angle deviation using pre-computed variation
+            let angle_offset = angle_variation * MAX_WIND_ANGLE_DEVIATION;
+
+            // Apply rotation to the combined direction
+            let cos_a = angle_offset.cos();
+            let sin_a = angle_offset.sin();
+
+            combined_direction = vec2(
+                combined_direction.x * cos_a - combined_direction.y * sin_a,
+                combined_direction.x * sin_a + combined_direction.y * cos_a,
+            );
+        }
 
         self.combined_wind = Some(Wind::new_with(combined_direction, combined_strength));
         self.needs_update = false;
@@ -138,8 +162,8 @@ impl WindCell {
 /// It is used to apply wind forces to particles.
 /// The grid is used to quickly find the wind force at a given position.
 pub struct WindField {
-    // Grid of winds in x,y order. (0,0) is top left.
-    cells: Vec<Vec<WindCell>>,
+    // Flattened grid of winds. Use get_cell_index() to convert (x,y) to 1D index.
+    cells: Vec<WindCell>,
 
     // Origin should align with ParticleSystem origin
     origin: Vec2,
@@ -150,6 +174,11 @@ pub struct WindField {
 }
 
 impl WindField {
+    /// Convert 2D grid coordinates to 1D index
+    fn get_cell_index(&self, x: usize, y: usize) -> usize {
+        y * self.grid_cols + x
+    }
+
     /// Create a new WindField with a center origin, x&y size, number of columns and number of rows.
     pub fn new(origin: Vec2, bounds_size: Vec2, grid_cols: usize, grid_rows: usize) -> Self {
         let cell_size = Vec2::new(
@@ -162,20 +191,18 @@ impl WindField {
             origin.y + bounds_size.y / 2.0, // Start from top (positive Y)
         );
 
-        let mut cells = Vec::new();
+        let mut cells = Vec::with_capacity(grid_cols * grid_rows);
 
-        for col in 0..grid_cols {
-            let mut row_of_cells = Vec::new();
-            for row in 0..grid_rows {
+        for row in 0..grid_rows {
+            for col in 0..grid_cols {
                 let cell_origin = top_left
                     + Vec2::new(
                         col as f32 * cell_size.x + cell_size.x / 2.0,
                         -(row as f32 * cell_size.y + cell_size.y / 2.0), // Negative Y to go downward
                     );
                 let cell = WindCell::new_from_origin(cell_origin, cell_size);
-                row_of_cells.push(cell);
+                cells.push(cell);
             }
-            cells.push(row_of_cells);
         }
 
         Self {
@@ -189,28 +216,75 @@ impl WindField {
     }
 
     /// Given a particle, determines the WindCell that contains the particle, and then applies the WindCell's Wind on that particle.
-    pub fn apply(&mut self, particle: &mut Particle) {
+    pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
         let Some(wind) = self.get_wind_at_pos(particle.position()) else {
             return;
         };
-        wind.apply(particle);
+        wind.apply(particle, mass_variation_factor);
     }
 
     /// Force a recalculation of all cells in the WindField.
     pub fn force_update_all(&mut self) {
-        for col in 0..self.grid_cols {
-            for row in 0..self.grid_rows {
-                if let Some(cell) = self.get_mut_cell(col, row) {
-                    let _ = cell.get_combined_wind();
-                }
+        for cell in &mut self.cells {
+            let _ = cell.get_updated_combined_wind(0.0); // No angle variation
+        }
+    }
+
+    /// Force a recalculation of all cells in the WindField in parallel with per-circle angle variations
+    pub fn par_force_update_all(
+        &mut self,
+        rng: &mut nannou::rand::rngs::ThreadRng,
+        circle_angle_variations: &std::collections::HashMap<usize, f32>,
+    ) {
+        use nannou::rand::Rng;
+
+        // Pre-compute random variations for all cells for each circle that has angle variation
+        let mut cell_variations: std::collections::HashMap<usize, Vec<f32>> =
+            std::collections::HashMap::new();
+        for (&circle_id, &variation_factor) in circle_angle_variations.iter() {
+            if variation_factor > 0.0 {
+                let variations: Vec<f32> = self
+                    .cells
+                    .iter()
+                    .map(|_| rng.gen_range(-1.0..=1.0) * variation_factor)
+                    .collect();
+                cell_variations.insert(circle_id, variations);
             }
         }
+
+        // Parallel update with pre-computed per-circle variations
+        self.cells
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, cell)| {
+                // Calculate combined angle variation for this cell based on all circles affecting it
+                let mut combined_variation = 0.0f32;
+                let mut variation_count = 0;
+
+                for (&circle_id, _) in &cell.winds {
+                    if let Some(variations) = cell_variations.get(&circle_id) {
+                        if let Some(&variation) = variations.get(index) {
+                            combined_variation += variation;
+                            variation_count += 1;
+                        }
+                    }
+                }
+
+                // Average the variations if multiple circles affect this cell
+                let final_variation = if variation_count > 0 {
+                    combined_variation / variation_count as f32
+                } else {
+                    0.0
+                };
+
+                let _ = cell.get_updated_combined_wind(final_variation);
+            });
     }
 
     /******************* Grid accessors *******************/
 
     /// Get combined wind at a position in ParticleSystem coordinates
-    pub fn get_wind_at_pos(&mut self, position: Vec2) -> Option<Wind> {
+    pub fn get_wind_at_pos(&self, position: Vec2) -> Option<Wind> {
         let (x, y) = self.position_to_idx(position)?;
 
         self.get_wind(x, y)
@@ -218,20 +292,29 @@ impl WindField {
 
     /// Get the cell at a grid position (0,0 is top left)
     pub fn get_cell(&self, x: usize, y: usize) -> Option<&WindCell> {
-        let col = self.cells.get(x)?;
-        col.get(y)
+        if x >= self.grid_cols || y >= self.grid_rows {
+            return None;
+        }
+        let index = self.get_cell_index(x, y);
+        self.cells.get(index)
     }
 
     /// Get a mutable reference to the cell at a grid position (0,0 is top left)
     pub fn get_mut_cell(&mut self, x: usize, y: usize) -> Option<&mut WindCell> {
-        let col = self.cells.get_mut(x)?;
-        col.get_mut(y)
+        if x >= self.grid_cols || y >= self.grid_rows {
+            return None;
+        }
+        let index = self.get_cell_index(x, y);
+        self.cells.get_mut(index)
     }
 
     /// Get the combined wind at a grid position (0,0 is top left)
-    pub fn get_wind(&mut self, x: usize, y: usize) -> Option<Wind> {
-        let col = self.cells.get_mut(x)?;
-        let cell = col.get_mut(y)?;
+    pub fn get_wind(&self, x: usize, y: usize) -> Option<Wind> {
+        if x >= self.grid_cols || y >= self.grid_rows {
+            return None;
+        }
+        let index = self.get_cell_index(x, y);
+        let cell = self.cells.get(index)?;
         cell.get_combined_wind()
     }
 
@@ -267,32 +350,38 @@ impl WindField {
     /******************* Draw for Performer *******************/
 
     /// Draw the WindField
-    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32, div_factor: usize) {
         self.draw_origin(draw, scale_x, scale_y);
         self.draw_grid(draw, scale_x, scale_y);
-        self.draw_vectors(draw, scale_x, scale_y);
+        self.draw_vectors(draw, scale_x, scale_y, div_factor);
     }
 
     /// Draw all the Wind vectors
-    fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        // Draw wind vectors from each cell's origin
-        for col in 0..self.grid_cols {
-            for row in 0..self.grid_rows {
-                let cell = &self.cells[col][row];
-                let Some(wind) = &cell.combined_wind else {
-                    continue;
-                };
+    fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32, div_factor: usize) {
+        // Draw wind vectors from selected cells based on div_factor
+        for (index, cell) in self.cells.iter().enumerate() {
+            let Some(wind) = &cell.combined_wind else {
+                continue;
+            };
 
-                // Draw wind vector from cell origin
-                let vector_scale = 3.0; // Increased scale for better visibility
-                let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
+            // Calculate row and column from the flat index
+            let col = index % self.grid_cols;
+            let row = index / self.grid_cols;
 
-                draw.arrow()
-                    .start(cell.origin * vec2(scale_x, scale_y))
-                    .end(vector_end * vec2(scale_x, scale_y))
-                    .color(rgba(0.0, 0.8, 1.0, 0.2))
-                    .stroke_weight(0.5);
+            // Sample based on div_factor using deterministic pattern
+            if (col + row) % div_factor != 0 {
+                continue;
             }
+
+            // Draw wind vector from cell origin
+            let vector_scale = 3.0; // Increased scale for better visibility
+            let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
+
+            draw.arrow()
+                .start(cell.origin * vec2(scale_x, scale_y))
+                .end(vector_end * vec2(scale_x, scale_y))
+                .color(rgba(0.0, 0.8, 1.0, 0.2))
+                .stroke_weight(0.5);
         }
     }
 
@@ -332,18 +421,13 @@ impl WindField {
 
     /// Draw a grid of rectangles that represent the cells -- slow but more accurate
     pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        for col in 0..self.grid_cols {
-            for row in 0..self.grid_rows {
-                let Some(cell) = self.get_cell(col, row) else {
-                    return;
-                };
-                draw.rect()
-                    .xy(cell.origin * vec2(scale_x, scale_y))
-                    .w_h(self.cell_size.x * scale_x, self.cell_size.y * scale_y)
-                    .stroke_color(rgba(0.3, 0.3, 0.3, 0.3))
-                    .stroke_weight(1.0)
-                    .no_fill();
-            }
+        for cell in &self.cells {
+            draw.rect()
+                .xy(cell.origin * vec2(scale_x, scale_y))
+                .w_h(self.cell_size.x * scale_x, self.cell_size.y * scale_y)
+                .stroke_color(rgba(0.3, 0.3, 0.3, 0.3))
+                .stroke_weight(1.0)
+                .no_fill();
         }
     }
 
@@ -370,7 +454,7 @@ pub struct WindCircle {
     pub id: usize,
     pub parent_voice: Voice,
     cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
-    params: Arc<RwLock<WindCircleParams>>, // Params of the circle
+    params: WindCircleParams, // Params of the circle
 }
 
 impl WindCircle {
@@ -389,13 +473,14 @@ impl WindCircle {
             inner_radius: width,
             strength,
             center_bias,
-            needs_recalculation: true,
+            angle_variation: 0.0, // Default to no vibration
+            dirty: true,
         };
         Self {
             id,
             parent_voice,
             cell_idxs: Vec::new(),
-            params: Arc::new(RwLock::new(config)),
+            params: config,
         }
     }
 
@@ -409,30 +494,29 @@ impl WindCircle {
     }
 
     /// Remove the circle's wind from the field
-    pub fn remove_from_field(&mut self, field: &mut WindField, show_forces: bool) {
+    pub fn remove_from_field(&mut self, field: &mut WindField, _show_forces: bool) {
         for cell_idx in self.cell_idxs.iter() {
             let Some(cell) = field.get_mut_cell(cell_idx.x, cell_idx.y) else {
                 continue;
             };
             cell.remove_wind(self.id);
 
+            // In debug mode, pre-calculate combined wind so we can draw the field
+            // no longer needed because we update all cells on every frame now
+            /*
             if show_forces {
-                let _ = cell.get_combined_wind();
+                let _ = cell.get_updated_combined_wind();
             }
+            */
         }
         self.cell_idxs.clear();
     }
 
-    /// Apply the circle's wind to the field, return the cells that were affected
-    pub fn apply_to_field(&self, field: &mut WindField, show_forces: bool) -> Vec<CellIdx> {
-        // Get a copy of the config
-        let params = self.params.read().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-
-        // Calculate bounding box
-        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &params);
+    /// Add the circle's wind to the field, return the cells that were affected.
+    /// The total numerical force for each cell is calculated once per frame in a later step.
+    pub fn apply_to_field(&self, field: &mut WindField, _show_forces: bool) -> Vec<CellIdx> {
+        // Calculate bounding box using direct parameter access
+        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
 
         let mut affected_cells = Vec::new();
 
@@ -442,15 +526,18 @@ impl WindCircle {
                 let Some(cell) = field.get_mut_cell(col, row) else {
                     continue;
                 };
-                let Some(wind) = self.calculate_wind_for_cell(cell, &params) else {
+                let Some(wind) = self.calculate_wind_for_cell(cell, &self.params) else {
                     continue;
                 };
                 cell.add_wind(self.id, wind);
 
                 // In debug mode, pre-calculate combined wind so we can draw the field
+                // no longer needed because we update all cells on every frame now
+                /*
                 if show_forces {
-                    let _ = cell.get_combined_wind();
+                    let _ = cell.get_updated_combined_wind();
                 }
+                */
 
                 affected_cells.push(CellIdx { x: col, y: row });
             }
@@ -532,49 +619,54 @@ impl WindCircle {
 
     /// Returns true if the WindCircle has parameter changes that have not been applied.
     pub fn has_changes(&self) -> bool {
-        self.with_params_read(|params| params.needs_recalculation)
+        self.params.dirty
     }
 
     /// Clear the needs_recalculation flag, indicating that the parameters have been applied.
     pub fn clear_changes(&mut self) {
-        self.with_params_write(|params| params.needs_recalculation = false);
+        self.params.dirty = false;
     }
 
-    /// Return the WindCircleParams wrapped in an Arc<RwLock>
-    pub fn params_arc(&self) -> Arc<RwLock<WindCircleParams>> {
-        self.params.clone()
+    /// Return a reference to the WindCircleParams
+    pub fn params(&self) -> &WindCircleParams {
+        &self.params
     }
 
-    /// Abstracted function to read the parameters of the WindCircle.
-    pub fn with_params_read<R>(&self, f: impl FnOnce(&WindCircleParams) -> R) -> R {
-        let params = self.params.read().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-        f(&params)
-    }
-
-    /// Abstracted function to change parameters of the WindCircle.
-    pub fn with_params_write<R>(&self, f: impl FnOnce(&mut WindCircleParams) -> R) -> R {
-        let mut params = self.params.write().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-        f(&mut params)
+    /// Return a mutable reference to the WindCircleParams
+    pub fn params_mut(&mut self) -> &mut WindCircleParams {
+        &mut self.params
     }
 
     /// Draw the center of the WindCircle
     pub fn draw_center(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        let params = self.params.read().unwrap_or_else(|poisoned| {
-            eprintln!("Warning: RwLock was poisoned. Recovering...");
-            poisoned.into_inner() // You still get access to the data
-        });
-
-        let center = params.center;
+        let center = self.params.center;
         draw.ellipse()
             .xy(center * vec2(scale_x, scale_y))
             .w_h(40.0 * scale_x, 40.0 * scale_y)
             .color(rgba(1.0, 0.2, 0.0, 0.2));
+    }
+
+    /// Draw the WindCircle with outer and inner radius circles
+    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        let center = self.params.center * vec2(scale_x, scale_y);
+        let outer_radius = self.params.outer_radius;
+        let inner_radius = self.params.inner_radius;
+
+        // Draw outer radius circle
+        draw.ellipse()
+            .xy(center)
+            .radius(outer_radius * scale_x.min(scale_y))
+            .stroke_color(rgba(0.8, 0.4, 0.0, 0.6))
+            .stroke_weight(2.0)
+            .no_fill();
+
+        // Draw inner radius circle
+        draw.ellipse()
+            .xy(center)
+            .radius(inner_radius * scale_x.min(scale_y))
+            .stroke_color(rgba(0.8, 0.4, 0.0, 0.4))
+            .stroke_weight(1.0)
+            .no_fill();
     }
 }
 
@@ -584,55 +676,73 @@ impl WindCircle {
 /// - Inner radius: The radius of the hole in the center of the circle
 /// - Strength: The strength of the wind applied within the circle
 /// - Center bias: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
-/// - Needs recalculation: Flag to indicate that one or more parameters have changed so that WindField will recalculate
+/// - Angle variation: Amount of random angle variation (0.0-1.0, where 1.0 = ±90° deviation)
+/// - Dirty: Flag to indicate that one or more parameters have changed so that WindField will recalculate
 #[derive(Clone)]
 pub struct WindCircleParams {
-    pub center: Vec2, // center of the circle in the ParticleSystem space
+    /// center of the circle in the ParticleSystem space
+    pub center: Vec2,
+    /// outer circle radius
     pub outer_radius: f32,
-    pub inner_radius: f32,         // inner hole radius
-    pub strength: f32,             // strength of the wind
-    pub center_bias: f32,          // 0.0 = purely tangential, 1.0 = purely radial inward
-    pub needs_recalculation: bool, // if settings changed, we need to recalculate the cells
+    /// inner hole radius
+    pub inner_radius: f32,
+    /// strength of the wind
+    pub strength: f32,
+    /// 0.0 = purely tangential, 1.0 = purely radial inward, 2.0 = tangential in the opposite direction
+    pub center_bias: f32,
+    /// 0.0-1.0 factor for random angle variation, where 1.0 = full ±90° deviation
+    pub angle_variation: f32,
+    /// True if settings changed and cells need recalculation
+    pub dirty: bool,
 }
 
 impl WindCircleParams {
     /// Set the center of the WindCircle
-    pub fn center(&mut self, center: Vec2) {
+    pub fn set_center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
     /// Set the OR of the WindCircle
-    pub fn outer_radius(&mut self, radius: f32) {
+    pub fn set_outer_radius(&mut self, radius: f32) {
         if self.outer_radius != radius {
             self.outer_radius = radius;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
     /// Set the IR of the WindCircle
-    pub fn inner_radius(&mut self, radius: f32) {
+    pub fn set_inner_radius(&mut self, radius: f32) {
         if self.inner_radius != radius {
             self.inner_radius = radius;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
     /// Set the strength of the WindCircle
-    pub fn strength(&mut self, strength: f32) {
+    pub fn set_strength(&mut self, strength: f32) {
         if self.strength != strength {
             self.strength = strength;
-            self.needs_recalculation = true;
+            self.dirty = true;
         }
     }
 
     /// Set the center bias of the WindCircle
-    pub fn center_bias(&mut self, center_bias: f32) {
+    pub fn set_center_bias(&mut self, center_bias: f32) {
         if self.center_bias != center_bias {
             self.center_bias = center_bias;
-            self.needs_recalculation = true;
+            self.dirty = true;
+        }
+    }
+
+    /// Set the angle variation of the WindCircle
+    pub fn set_angle_variation(&mut self, angle_variation: f32) {
+        let clamped_variation = angle_variation.clamp(0.0, 1.0);
+        if self.angle_variation != clamped_variation {
+            self.angle_variation = clamped_variation;
+            self.dirty = true;
         }
     }
 }

@@ -1,18 +1,25 @@
 /// src/particle/particle_system.rs
 ///
 ///
-/// The Particle System of System 3
+/// The Particle System of System 4
 use std::collections::HashMap;
 
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
+use nnpipe::renderers::{ParticleGpu, SegmentGpu};
+use rayon::prelude::*;
 
 use crate::{
     forces::{ForceFields, WindCircle},
+    model::GpuBuffers,
     particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
     utils::IdGenerator,
-    view::{Mask, Voice},
+    view::Mask,
+    voice::Voice,
 };
+
+pub const EMPTY_GPU_BUFFER: GpuBuffers = (Vec::new(), Vec::new());
+const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position offset in pixels
 
 pub struct ParticleSystem {
     // Particles
@@ -46,6 +53,13 @@ pub struct ParticleSystem {
 
     // DPI scale
     dpi_scale: f32,
+
+    // Mass variation parameters
+    pub mass_variation_enabled: bool,
+    pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
+
+    // Position offset parameters
+    pub position_offset_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
 }
 
 impl ParticleSystem {
@@ -60,8 +74,8 @@ impl ParticleSystem {
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
-        let grid_cols = (width / 30.0) as usize;
-        let grid_rows = (height / 30.0) as usize;
+        let grid_cols = (width / 4.0) as usize;
+        let grid_rows = (height / 4.0) as usize;
 
         // pre-populate the first mask
         let masks = HashMap::new();
@@ -87,6 +101,13 @@ impl ParticleSystem {
             trail: 0.0,
 
             dpi_scale,
+
+            // Initialize mass variation parameters
+            mass_variation_enabled: true,
+            mass_variation_amount: 0.05, // 5% variation by default
+
+            // Initialize position offset parameters
+            position_offset_factors: HashMap::new(),
         }
     }
 
@@ -118,9 +139,8 @@ impl ParticleSystem {
         let emitter_left = LinearEmitter::new(
             id_generator.generate(),
             voice,
-            emitter_left_origin,
             mask.rect.top_left(),
-            mask.rect.bottom_left(),
+            mask.rect.mid_left(),
             EmitDirection::East,
             self.global_max_spawn_rate,
             spawn_rate_factor,
@@ -129,8 +149,7 @@ impl ParticleSystem {
         let emitter_right = LinearEmitter::new(
             id_generator.generate(),
             voice,
-            emitter_right_origin,
-            mask.rect.top_right(),
+            mask.rect.mid_right(),
             mask.rect.bottom_right(),
             EmitDirection::West,
             self.global_max_spawn_rate,
@@ -173,39 +192,126 @@ impl ParticleSystem {
 
     /********************* Update methods ********************************** */
 
-    pub fn update(&mut self, rng: &mut ThreadRng, show_forces: bool) {
+    /// Emit particles, update forces, update particles, and cull particles - returns simple particles and accompanying trails
+    pub fn update(
+        &mut self,
+        rng: &mut ThreadRng,
+        show_forces: bool,
+        gpu_buffers: &mut HashMap<Voice, GpuBuffers>,
+    ) {
         self.handle_particle_emission(rng);
         self.cull_excess_particles();
 
-        self.forces.update(show_forces);
+        self.forces.update(show_forces, rng);
+        self.masks.iter_mut().for_each(|(_, mask)| {
+            mask.update_animation();
+        });
+
+        // Reuse existing buffer to avoid allocations
+        for (_, (p_gpu, s_gpu)) in gpu_buffers.iter_mut() {
+            p_gpu.clear();
+            s_gpu.clear();
+        }
+
+        // Pre-compute position offset factors for all voices to avoid borrow conflicts
+        let position_offset_factors: HashMap<Voice, f32> = self
+            .particles
+            .keys()
+            .map(|voice| (*voice, self.get_position_offset_factor(*voice)))
+            .collect();
 
         for (voice, particles) in self.particles.iter_mut() {
-            let mut write_inx = 0;
-            for read_inx in 0..particles.len() {
-                let particle = &mut particles[read_inx];
-                self.forces.apply_forces_to_particle(particle);
+            let color_limit = self.color_limits.get(voice).copied();
+            let alpha_limit = self.alpha_limits.get(voice).copied();
 
-                let Some(color_limit) = self.color_limits.get(voice) else {
-                    return;
-                };
-
-                let Some(alpha_limit) = self.alpha_limits.get(voice) else {
-                    return;
-                };
-
-                particle.update(*color_limit, *alpha_limit);
-                if particle.is_out_of_bounds(self.bounds_rect) {
-                    particle.kill();
-                }
-
-                if !particle.is_dead() {
-                    if write_inx != read_inx {
-                        particles[write_inx] = particles[read_inx];
-                    }
-                    write_inx += 1;
-                }
+            // Skip if no limits for this voice
+            if color_limit.is_none() || alpha_limit.is_none() {
+                continue;
             }
-            particles.truncate(write_inx);
+
+            let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
+            let mask = self.masks.get(voice).unwrap();
+
+            // Ensure buffer exists for this voice
+            let (pgpu_buf, sgpu_buf) = gpu_buffers
+                .entry(*voice)
+                .or_insert_with(|| EMPTY_GPU_BUFFER);
+
+            // Pre-compute mass variation factors for all particles in this voice
+            let mass_variations: Vec<f32> =
+                if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
+                    use nannou::rand::Rng;
+                    particles
+                        .iter()
+                        .map(|_| {
+                            rng.gen_range(-self.mass_variation_amount..=self.mass_variation_amount)
+                        })
+                        .collect()
+                } else {
+                    vec![0.0; particles.len()]
+                };
+
+            // Pre-compute position offset random signs for all particles in this voice
+            let position_offset_factor = position_offset_factors.get(voice).copied().unwrap_or(0.0);
+            let position_offset_signs: Vec<f32> = if position_offset_factor > 0.0 {
+                use nannou::rand::Rng;
+                particles
+                    .iter()
+                    .map(|_| if rng.gen::<bool>() { 1.0 } else { -1.0 })
+                    .collect()
+            } else {
+                vec![0.0; particles.len()]
+            };
+
+            // Parallel update, collect simple particle data and segments
+            let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
+                particles
+                    .par_iter_mut()
+                    .enumerate()
+                    .filter_map(|(index, particle)| {
+                        let mass_variation_factor = mass_variations[index];
+                        self.forces
+                            .apply_forces_to_particle(particle, mass_variation_factor);
+
+                        // Calculate position offset perpendicular to velocity BEFORE updating particle
+                        // This ensures we use the velocity from this frame for the offset calculation
+                        let offset = if position_offset_factor > 0.0
+                            && particle.velocity.length_squared() > 0.0
+                        {
+                            let normal =
+                                vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
+                            normal
+                                * MAX_POSITION_OFFSET
+                                * position_offset_factor
+                                * position_offset_signs[index]
+                        } else {
+                            vec2(0.0, 0.0)
+                        };
+
+                        // Update particle with the calculated offset for feedback recording
+                        particle.update(color_limit, alpha_limit, offset);
+
+                        if particle.is_out_of_bounds(self.bounds_rect) {
+                            particle.kill();
+                        }
+
+                        if particle.is_alive() && particle.is_within_rect(mask.rect) {
+                            Some((
+                                particle.to_gpu_with_offset(offset),
+                                particle.to_segment_gpu(),
+                            ))
+                        } else {
+                            None
+                        }
+                    })
+                    .unzip();
+
+            // Append to buffers
+            pgpu_buf.extend(gpu_particle_group);
+            sgpu_buf.extend(gpu_segment_group);
+
+            // Cull dead particles
+            particles.retain(|particle| particle.is_alive());
         }
     }
 
@@ -213,43 +319,91 @@ impl ParticleSystem {
         let mut indices: Vec<usize> = (0..self.emitters.len()).collect();
         indices.shuffle(rng);
 
-        let mut parent_voice: Voice;
-        let mut particle_limit: usize;
-        let mut color_limit: Rgb;
+        // Collect emission data to avoid borrowing conflicts
+        let mut emission_data: Vec<(usize, Voice, f32, Rgb)> = Vec::new();
 
-        for i in indices {
+        for &i in &indices {
             let emitter = &self.emitters[i];
-            if emitter.is_spawning() {
-                parent_voice = emitter.parent_voice();
+            if emitter.is_enabled() {
+                let parent_voice = emitter.parent_voice();
                 let particle_vec = self.particles.entry(parent_voice).or_default();
-                particle_limit = self
-                    .particle_limits
-                    .get(&parent_voice)
-                    .copied()
-                    .unwrap_or(self.default_particle_limit);
+                let current_count = particle_vec.len();
 
-                // Don't add new particles if limit is reached
-                if particle_vec.len() > particle_limit {
-                    return;
+                // Calculate emission scaling based on how close we are to the limit
+                let emission_scaling =
+                    self.calculate_emission_scaling(&parent_voice, current_count);
+
+                // Skip emission entirely if scaling is near zero
+                if emission_scaling < 0.001 {
+                    continue;
                 }
 
-                color_limit = self
+                let color_limit = self
                     .color_limits
                     .get(&parent_voice)
                     .copied()
                     .unwrap_or(self.default_particle_color);
 
-                particle_vec.extend(emitter.emit(
-                    10.0,
-                    self.default_particle_size,
-                    rgba_from(color_limit, 0.0),
-                    rng,
-                ));
+                emission_data.push((i, parent_voice, emission_scaling, color_limit));
             }
+        }
+
+        // Now emit particles using the collected data
+        for (i, parent_voice, emission_scaling, color_limit) in emission_data {
+            let emitter = &mut self.emitters[i];
+
+            // Temporarily adjust the emitter's spawn rate based on the scaling
+            let original_spawn_rate = emitter.get_spawn_rate_factor();
+            emitter.set_spawn_rate_factor(original_spawn_rate * emission_scaling);
+
+            let new_particles = emitter.emit(
+                10.0,
+                self.default_particle_size,
+                rgba_from(color_limit, 0.0),
+                rng,
+            );
+
+            // Restore the original spawn rate
+            emitter.set_spawn_rate_factor(original_spawn_rate);
+
+            // Add particles to the voice's particle vector
+            let particle_vec = self.particles.entry(parent_voice).or_default();
+            particle_vec.extend(new_particles);
         }
     }
 
     /********************* Particle methods ********************************** */
+
+    /// Calculate emission rate scaling factor based on how close we are to the particle limit
+    /// Returns a value from 0.0 to 1.0 where:
+    /// - 1.0 when far from the limit (aggressive emission)
+    /// - 0.0 when at or over the limit (no emission)
+    /// - Smooth curve in between to avoid jerky transitions
+    fn calculate_emission_scaling(&self, voice: &Voice, current_count: usize) -> f32 {
+        let limit = self
+            .particle_limits
+            .get(voice)
+            .copied()
+            .unwrap_or(self.default_particle_limit);
+
+        if limit == 0 {
+            return 0.0;
+        }
+
+        let ratio = current_count as f32 / limit as f32;
+
+        // If we're over the limit, stop emitting
+        if ratio >= 1.0 {
+            return 0.0;
+        }
+
+        // Use a smooth quadratic curve that starts aggressive (1.0) and
+        // gradually reduces as we approach the limit
+        // At 80% of limit, we're at 4% emission rate
+        // At 90% of limit, we're at 1% emission rate
+        let remaining_capacity = 1.0 - ratio;
+        remaining_capacity.powi(2)
+    }
 
     fn cull_excess_particles(&mut self) {
         for (voice, particles) in self.particles.iter_mut() {
@@ -271,13 +425,51 @@ impl ParticleSystem {
 
                 for particle in active_particles
                     .into_iter()
-                    .rev() // kill oldest particles first
+                    //.rev() // kill oldest particles first
                     .take(excess_active)
                 {
                     particle.set_to_fade_out();
                 }
             }
         }
+    }
+
+    /********************* Mass Variation methods ********************************** */
+
+    /// Enable or disable mass variation for all particles
+    pub fn set_mass_variation_enabled(&mut self, enabled: bool) {
+        self.mass_variation_enabled = enabled;
+    }
+
+    /// Set the amount of mass variation (as percentage of base mass)
+    /// e.g., 0.1 means particles can vary by ±10% of their base mass
+    pub fn set_mass_variation_amount(&mut self, amount: f32) {
+        self.mass_variation_amount = amount.max(0.0); // Ensure non-negative
+    }
+
+    /// Get current mass variation settings
+    pub fn get_mass_variation_enabled(&self) -> bool {
+        self.mass_variation_enabled
+    }
+
+    pub fn get_mass_variation_amount(&self) -> f32 {
+        self.mass_variation_amount
+    }
+
+    /********************* Position Offset methods ********************************** */
+
+    /// Set the position offset factor for a given voice
+    pub fn set_position_offset_factor(&mut self, voice: &Voice, factor: f32) {
+        let clamped_factor = factor.clamp(0.0, 1.0);
+        self.position_offset_factors.insert(*voice, clamped_factor);
+    }
+
+    /// Get the position offset factor for a given voice (defaults to 0.0 if not set)
+    pub fn get_position_offset_factor(&self, voice: Voice) -> f32 {
+        self.position_offset_factors
+            .get(&voice)
+            .copied()
+            .unwrap_or(0.0)
     }
 
     /********************* Accessor/Helper methods ********************************** */
@@ -297,7 +489,7 @@ impl ParticleSystem {
     pub fn kill_voice(&mut self, voice: &Voice) {
         self.emitters
             .retain(|emitter| emitter.parent_voice() != *voice);
-        self.forces.remove_wind_by_voice(voice);
+        self.forces.remove_wind(voice);
     }
 
     pub fn set_alpha_limit(&mut self, voice: &Voice, alpha: f32) {
@@ -308,52 +500,27 @@ impl ParticleSystem {
         self.feedback.insert(*voice, feedback);
     }
 
-    pub fn set_gravity(&mut self, voice: &Voice, gravity: f32) {
-        self.forces.set_circle_center_bias_by_voice(voice, gravity);
-    }
-
     pub fn set_is_spawning(&mut self, voice: &Voice, is_spawning: bool) {
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice() == *voice {
-                emitter.set_is_spawning(is_spawning);
+                emitter.set_enabled(is_spawning);
             }
         });
     }
 
-    pub fn set_strength(&mut self, voice: &Voice, strength: f32) {
-        self.forces.set_circle_strength_by_voice(voice, strength);
-    }
-
-    pub fn set_num_particles(&mut self, voice: &Voice, num_particles: f32) {
-        let limit = (self.default_particle_limit as f32 * num_particles) as usize;
+    pub fn set_volume(&mut self, voice: &Voice, volume: f32) {
+        let limit = (self.default_particle_limit as f32 * volume) as usize;
         self.particle_limits.insert(*voice, limit);
 
         let spawn_rate_factor = self
             .particle_num_factors
-            .insert(*voice, num_particles)
+            .insert(*voice, volume)
             .unwrap_or(0.5);
         self.emitters.iter_mut().for_each(|emitter| {
             if emitter.parent_voice() == *voice {
                 emitter.set_spawn_rate_factor(spawn_rate_factor);
             }
         });
-    }
-
-    pub fn set_radius_outer(&mut self, voice: &Voice, val: f32) {
-        let Some(mask) = self.masks.get(voice) else {
-            println!("Can't set inner radius: No mask found for voice: {}", voice);
-            return;
-        };
-
-        // The maximum outer radius is half the largest side of the mask
-        let max_radius = (mask.size.x.max(mask.size.y) + 50.0) / 2.0;
-        let radius = max_radius * val;
-
-        self.forces.set_circle_outer_radius_by_voice(voice, radius);
-    }
-
-    pub fn set_radius_inner(&mut self, voice: &Voice, val: f32) {
-        self.forces.set_circle_inner_radius_by_voice(voice, val);
     }
 
     fn make_bounds_rect(&self) -> Rect {
@@ -388,10 +555,11 @@ impl ParticleSystem {
     /// Draw the forces and emitters
     pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
-        self.forces.wind_field.draw(draw, scale_x, scale_y);
+        self.forces.wind_field.draw(draw, scale_x, scale_y, 25);
         self.draw_emitters(draw, scale_x, scale_y);
-        for circle in self.forces.wind_circles.values() {
+        for circle in self.forces.wind_circles.iter() {
             circle.draw_center(draw, scale_x, scale_y);
+            circle.draw(draw, scale_x, scale_y);
         }
     }
 

@@ -3,17 +3,18 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
+use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
-const PARTICLE_LIFE_SPAN: f32 = 3600.0;
-const FADE_IN_DURATION: f32 = 400.0; // frames to fade in
+const PARTICLE_LIFE_SPAN: f32 = 1800.0;
+const FADE_IN_DURATION: f32 = 200.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     position: Point2,
-    feedback_positions: [Option<Point2>; 4],
+    feedback_positions: [Option<Point2>; 15],
     pub velocity: Vec2,
     pub acceleration: Vec2,
 
@@ -34,7 +35,7 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: [None; 4],
+            feedback_positions: [None; 15],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -58,7 +59,7 @@ impl Particle {
             acceleration,
             velocity,
             position,
-            feedback_positions: [None; 4],
+            feedback_positions: [None; 15],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -69,10 +70,15 @@ impl Particle {
         }
     }
 
-    /// Update the particle based on forces and age, given externally-determined color and alpha limits
-    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32) {
-        // Add the current position to the feedback positions
-        self.record_feedback_position();
+    /// Update the particle based on forces and age, given externally-determined color and alpha limits, and offset for feedback recording
+    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32, position_offset: Vec2) {
+        // Record the offset position for feedback trails
+        let offset_position = if position_offset.length_squared() > 0.0 {
+            self.position + position_offset
+        } else {
+            self.position
+        };
+        self.record_feedback_position(offset_position);
 
         self.velocity += self.acceleration;
         self.position += self.velocity;
@@ -116,51 +122,68 @@ impl Particle {
         self.position
     }
 
-    fn record_feedback_position(&mut self) {
-        for i in (1..3).rev() {
+    fn record_feedback_position(&mut self, position: Point2) {
+        for i in (1..15).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
-        self.feedback_positions[0] = Some(self.position);
+        self.feedback_positions[0] = Some(position);
     }
 
-    pub fn draw(&self, draw: &Draw, feedback: f32, dpi_scale: f32) {
-        let scaled_position = self.position / dpi_scale;
+    /// Deprecated draw command that uses Nannou::draw to draw the particle as a short line.
+    /// FOR REFERENCE ONLY!
+    /// Particle drawing is now handled by Nnpipe::ParticleRenderer
+    /// Trails are now handled by Nnpipe::SegmentRenderer
+    pub fn draw(&self, draw: &Draw, _feedback: f32, dpi_scale: f32) {
         let scaled_size = self.size / dpi_scale;
 
         draw.line()
-            .xy(scaled_position)
-            .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-            .end(scaled_position + vec2(0.0, scaled_size / 2.0))
+            .xy(self.position)
+            .start(vec2(scaled_size / 2.0, 0.0))
+            .end(vec2(-scaled_size / 2.0, 0.0))
             .stroke_weight(scaled_size)
             .color(self.rgba);
 
-        if feedback > 0.1 {
-            for i in 1..(feedback * 3.0).round().min(3.0) as usize {
-                if let Some(position) = self.feedback_positions[i] {
-                    let scaled_position = position / dpi_scale;
-                    let color = rgba(
-                        self.rgba.red,
-                        self.rgba.green,
-                        self.rgba.blue,
-                        (self.rgba.alpha - (i as f32 / 3.0)).max(0.1),
-                    );
+        /* Old Feedback/Trail functionality has been moved to GPU as a post-processing component
+        if feedback > 0.01 {
+            // Create trail by connecting feedback positions with scaled distances
+            let mut prev_pos = self.position;
+
+            for i in 1..(feedback * 4.0).round().min(4.0) as usize {
+                if let Some(trail_pos) = self.feedback_positions[i] {
+                    // Work entirely in world coordinates, let draw API handle scaling
+                    let direction = trail_pos - self.position;
+                    let extended_pos = self.position + direction * feedback;
+
+                    // Draw trail segment
+                    let trail_alpha = self.rgba.alpha * (1.0 - i as f32 * 0.125);
+                    let trail_color =
+                        rgba(self.rgba.red, self.rgba.green, self.rgba.blue, trail_alpha);
+
+                    // Draw line connecting positions
                     draw.line()
-                        .xy(scaled_position)
-                        .start(scaled_position + vec2(scaled_size / 2.0, 0.0))
-                        .end(scaled_position + vec2(0.0, scaled_size / 2.0))
-                        .stroke_weight(scaled_size)
-                        .color(color);
+                        .start(prev_pos)
+                        .end(extended_pos)
+                        .stroke_weight(scaled_size * (0.5 - i as f32 * 0.05))
+                        .color(trail_color);
+
+                    prev_pos = extended_pos;
                 }
             }
         }
+        */
     }
 
+    /// True if the particle is out of bounds, with a buffer of 1000 pixels
     pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {
         let buffer = 1000.0;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer
             || self.position.y < bounds_rect.bottom() - buffer
             || self.position.y > bounds_rect.top() + buffer
+    }
+
+    pub fn is_within_rect(&self, rect: Rect) -> bool {
+        rect.contains(self.position)
     }
 
     pub fn kill(&mut self) {
@@ -214,5 +237,46 @@ impl Particle {
 
     pub fn fade_out_duration(&self) -> f32 {
         FADE_OUT_DURATION
+    }
+
+    /********************* Convert to GPU *********************/
+    pub fn to_gpu(&self) -> ParticleGpu {
+        ParticleGpu::new(
+            [self.position.x, self.position.y],
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha,
+        )
+    }
+
+    pub fn to_gpu_with_offset(&self, offset: Vec2) -> ParticleGpu {
+        let offset_position = self.position + offset;
+        ParticleGpu::new(
+            [offset_position.x, offset_position.y],
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha,
+        )
+    }
+
+    pub fn to_segment_gpu(&self) -> SegmentGpu {
+        let mut points = [[0.0f32; 2]; 16];
+
+        // First point is current position
+        points[0] = [self.position.x, self.position.y];
+
+        // Fill remaining points from feedback positions
+        for i in 0..15 {
+            if let Some(feedback_pos) = self.feedback_positions[i] {
+                points[i + 1] = [feedback_pos.x, feedback_pos.y];
+            } else {
+                // If no feedback position, use the current position
+                points[i + 1] = [self.position.x, self.position.y];
+            }
+        }
+
+        SegmentGpu::new(
+            points,
+            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            self.rgba.alpha,
+        )
     }
 }

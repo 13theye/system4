@@ -1,7 +1,7 @@
 /// src/particle/emitter.rs
 ///
 /// The thing that spits out particles
-use crate::{particle::Particle, view::Voice};
+use crate::{particle::Particle, voice::Voice};
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
@@ -9,9 +9,10 @@ use nannou::rand::{rngs::ThreadRng, Rng};
 pub trait Emitter {
     fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle>;
     fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool;
-    fn is_spawning(&self) -> bool;
-    fn set_is_spawning(&mut self, is_spawning: bool);
+    fn is_enabled(&self) -> bool;
+    fn set_enabled(&mut self, is_enabled: bool);
     fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32);
+    fn get_spawn_rate_factor(&self) -> f32;
     fn parent_voice(&self) -> Voice;
     fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32);
 }
@@ -24,7 +25,7 @@ pub struct PointEmitter {
     pub origin: Vec2,
     pub max_spawn_rate: f32,
     pub spawn_rate_factor: f32,
-    pub is_spawning: bool,
+    pub is_enabled: bool,
 }
 
 impl PointEmitter {
@@ -41,7 +42,7 @@ impl PointEmitter {
             origin,
             max_spawn_rate,
             spawn_rate_factor,
-            is_spawning: false,
+            is_enabled: false,
         }
     }
 }
@@ -96,16 +97,20 @@ impl Emitter for PointEmitter {
         rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
-    fn is_spawning(&self) -> bool {
-        self.is_spawning
+    fn is_enabled(&self) -> bool {
+        self.is_enabled
     }
 
-    fn set_is_spawning(&mut self, is_spawning: bool) {
-        self.is_spawning = is_spawning;
+    fn set_enabled(&mut self, is_spawning: bool) {
+        self.is_enabled = is_spawning;
     }
 
     fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32) {
         self.spawn_rate_factor = spawn_rate_factor;
+    }
+
+    fn get_spawn_rate_factor(&self) -> f32 {
+        self.spawn_rate_factor
     }
 
     fn parent_voice(&self) -> Voice {
@@ -126,13 +131,13 @@ impl Emitter for PointEmitter {
 pub struct LinearEmitter {
     pub id: usize,           // unique id for this emitter
     pub parent_voice: Voice, // voice that this emitter belongs to
-    pub origin: Vec2,        // Center point
+    pub midpoint: Vec2,      // Center point
     pub start: Vec2,         // Start point
     pub end: Vec2,           // End point
     pub direction: EmitDirection,
     pub max_spawn_rate: f32,
     pub spawn_rate_factor: f32,
-    pub is_spawning: bool,
+    pub is_enabled: bool,
 }
 
 pub enum EmitDirection {
@@ -147,7 +152,6 @@ impl LinearEmitter {
     pub fn new(
         id: usize,
         parent_voice: Voice,
-        origin: Vec2,
         start: Vec2,
         end: Vec2,
         direction: EmitDirection,
@@ -157,13 +161,13 @@ impl LinearEmitter {
         Self {
             id,
             parent_voice,
-            origin,
+            midpoint: (start + end) / 2.0,
             start,
             end,
             direction,
             max_spawn_rate,
             spawn_rate_factor,
-            is_spawning: false,
+            is_enabled: false,
         }
     }
 }
@@ -175,7 +179,7 @@ impl Emitter for LinearEmitter {
 
         // Use probabilistic emission instead of fixed rate for timing variation
         let base_rate = self.max_spawn_rate * self.spawn_rate_factor;
-        let max_particles = (base_rate * 1.5) as usize; // Allow some variation above base rate
+        let max_particles = base_rate as usize; // Allow some variation above base rate
 
         let base_velocity = match self.direction {
             EmitDirection::North => vec2(0.0, speed),
@@ -193,16 +197,16 @@ impl Emitter for LinearEmitter {
             }
 
             // Add speed variation to make particles less uniform
-            let speed_variation = rng.gen_range(0.8..1.2);
+            let speed_variation = rng.gen_range(0.95..1.05);
             let velocity = base_velocity * speed_variation;
 
             let var_pos = rng.gen_range(gen_range.clone());
 
             let base_position = match self.direction {
-                EmitDirection::North => vec2(var_pos + self.origin.x, self.origin.y),
-                EmitDirection::South => vec2(var_pos + self.origin.x, self.origin.y),
-                EmitDirection::East => vec2(self.origin.x, var_pos + self.origin.y),
-                EmitDirection::West => vec2(self.origin.x, var_pos + self.origin.y),
+                EmitDirection::North => vec2(var_pos + self.midpoint.x, self.midpoint.y),
+                EmitDirection::South => vec2(var_pos + self.midpoint.x, self.midpoint.y),
+                EmitDirection::East => vec2(self.midpoint.x, var_pos + self.midpoint.y),
+                EmitDirection::West => vec2(self.midpoint.x, var_pos + self.midpoint.y),
             };
 
             // Add small random offset perpendicular to emission direction
@@ -234,16 +238,20 @@ impl Emitter for LinearEmitter {
         rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
-    fn is_spawning(&self) -> bool {
-        self.is_spawning
+    fn is_enabled(&self) -> bool {
+        self.is_enabled
     }
 
-    fn set_is_spawning(&mut self, is_spawning: bool) {
-        self.is_spawning = is_spawning;
+    fn set_enabled(&mut self, is_spawning: bool) {
+        self.is_enabled = is_spawning;
     }
 
     fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32) {
         self.spawn_rate_factor = spawn_rate_factor;
+    }
+
+    fn get_spawn_rate_factor(&self) -> f32 {
+        self.spawn_rate_factor
     }
 
     fn parent_voice(&self) -> Voice {
