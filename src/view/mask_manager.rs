@@ -7,23 +7,22 @@ use super::masks::Mask;
 use crate::voice::Voice;
 use nannou::prelude::*;
 use nannou::wgpu;
-use nnpipe::{EffectPresets, PipelineComponent, RenderWindow, TextureConfig};
-use std::collections::HashMap;
+use nnpipe::{Pipeline, PipelineBuilder, TextureConfig};
+use std::{cell::RefCell, collections::HashMap};
 
 /// High-level mask management system for System4
 pub struct MaskManager {
     masks: HashMap<u32, ManagedMask>,
-    effect_presets: EffectPresets,
     screen_size: Vec2,
     texture_config: TextureConfig,
     next_mask_id: u32,
 }
 
-/// A managed mask that combines System4's Mask with nnpipe's RenderWindow
+/// A managed mask that combines System4's Mask with nnpipe's Pipeline
 struct ManagedMask {
     id: u32,
     mask: Mask,
-    render_window: RenderWindow,
+    pipeline: Option<RefCell<Pipeline>>,
     current_effect: Option<String>,
     effect_parameters: HashMap<String, f32>,
     enabled: bool,
@@ -34,7 +33,6 @@ impl MaskManager {
     pub fn new(screen_size: Vec2, texture_config: TextureConfig) -> Self {
         Self {
             masks: HashMap::new(),
-            effect_presets: EffectPresets::new(),
             screen_size,
             texture_config,
             next_mask_id: 1,
@@ -58,36 +56,22 @@ impl MaskManager {
         mask.rect = bounds;
         mask.origin = bounds.xy();
 
-        // Create the render window
-        let mut render_window = RenderWindow::with_id(
-            device,
-            self.texture_config,
-            mask_id,
-            bounds,
-            self.screen_size,
-        );
-        render_window.set_layer(layer);
-
-        // Apply effect preset if specified
-        if let Some(preset_name) = effect_preset {
-            let pipeline = self
-                .effect_presets
-                .create_pipeline(preset_name, self.texture_config, device)
-                .map_err(|e| format!("Failed to create effect pipeline: {}", e))?;
-
-            render_window.add_effect_pipeline(preset_name.to_string(), pipeline);
-            render_window.set_active_effect(Some(preset_name.to_string()));
-        }
-
-        // Create intermediate texture if needed
-        if render_window.has_active_effect() {
-            render_window.create_intermediate_texture(device);
-        }
+        // Create pipeline if effect preset specified
+        let pipeline = if let Some(effect_name) = effect_preset {
+            Some(RefCell::new(self.create_mask_pipeline(
+                device,
+                bounds,
+                effect_name,
+                &HashMap::new(),
+            )?))
+        } else {
+            None
+        };
 
         let managed_mask = ManagedMask {
             id: mask_id,
             mask,
-            render_window,
+            pipeline,
             current_effect: effect_preset.map(|s| s.to_string()),
             effect_parameters: HashMap::new(),
             enabled: true,
@@ -97,6 +81,64 @@ impl MaskManager {
         self.masks.insert(mask_id, managed_mask);
         println!("Mask created: {}", mask_id);
         Ok(mask_id)
+    }
+
+    /// Create a pipeline for a mask with the given effect and parameters
+    fn create_mask_pipeline(
+        &self,
+        device: &wgpu::Device,
+        bounds: Rect,
+        effect_name: &str,
+        parameters: &HashMap<String, f32>,
+    ) -> Result<Pipeline, String> {
+        Self::create_mask_pipeline_static(
+            device,
+            bounds,
+            effect_name,
+            parameters,
+            self.texture_config,
+        )
+    }
+
+    /// Static version of create_mask_pipeline to avoid borrowing issues
+    fn create_mask_pipeline_static(
+        device: &wgpu::Device,
+        _bounds: Rect,
+        effect_name: &str,
+        parameters: &HashMap<String, f32>,
+        texture_config: TextureConfig,
+    ) -> Result<Pipeline, String> {
+        // For now, we'll create a simple pipeline based on the effect name
+        // Later this can be expanded to use viewport/scissoring and more complex effects
+        let mut builder = PipelineBuilder::new()
+            .name(&format!("Mask {} Pipeline", effect_name))
+            .input_texture("effects_output");
+
+        // Apply the effect based on name and parameters
+        builder = match effect_name {
+            "invert" => {
+                let darken_darks = parameters.get("darken_darks").unwrap_or(&1.0);
+                builder.inversion(texture_config, *darken_darks)
+            }
+            "blur" => {
+                let radius = parameters.get("radius").unwrap_or(&2.0);
+                builder.gaussian_blur_passes(texture_config, 1, *radius, 5.0)
+            }
+            "glow" => {
+                // Simple glow effect using brightness extraction and blur
+                builder
+                    .brightness_extract(texture_config, 0.7)
+                    .gaussian_blur_passes(texture_config, 2, 3.0, 5.0)
+            }
+            _ => {
+                return Err(format!("Unknown effect: {}", effect_name));
+            }
+        };
+
+        // Build the pipeline
+        builder
+            .build(device)
+            .map_err(|e| format!("Failed to build mask pipeline: {:?}", e))
     }
 
     /// Remove a mask by ID
@@ -128,9 +170,19 @@ impl MaskManager {
 
         managed_mask.mask.rect = new_bounds;
         managed_mask.mask.origin = new_bounds.xy();
-        managed_mask
-            .render_window
-            .resize_viewport(device, new_bounds, self.texture_config);
+
+        // Rebuild the pipeline with new bounds if there's an active effect
+        if let Some(effect_name) = managed_mask.current_effect.clone() {
+            let effect_parameters = managed_mask.effect_parameters.clone();
+            let texture_config = self.texture_config;
+            managed_mask.pipeline = Some(RefCell::new(Self::create_mask_pipeline_static(
+                device,
+                new_bounds,
+                &effect_name,
+                &effect_parameters,
+                texture_config,
+            )?));
+        }
 
         Ok(())
     }
@@ -163,35 +215,22 @@ impl MaskManager {
             .get_mut(&mask_id)
             .ok_or_else(|| format!("Mask {} not found", mask_id))?;
 
-        if let Some(preset_name) = effect_preset {
-            // Create new pipeline with current parameters if available
-            let pipeline = if managed_mask.effect_parameters.is_empty() {
-                self.effect_presets
-                    .create_pipeline(preset_name, self.texture_config, device)?
-            } else {
-                self.effect_presets.create_pipeline_with_params(
-                    preset_name,
-                    self.texture_config,
-                    &managed_mask.effect_parameters,
-                    device,
-                )?
-            };
-
-            managed_mask
-                .render_window
-                .add_effect_pipeline(preset_name.to_string(), pipeline);
-            managed_mask
-                .render_window
-                .set_active_effect(Some(preset_name.to_string()));
-            managed_mask.current_effect = Some(preset_name.to_string());
-
-            // Ensure intermediate texture exists
-            managed_mask
-                .render_window
-                .create_intermediate_texture(device);
+        if let Some(effect_name) = effect_preset {
+            // Create new pipeline with current parameters
+            let mask_rect = managed_mask.mask.rect;
+            let effect_parameters = managed_mask.effect_parameters.clone();
+            let texture_config = self.texture_config;
+            managed_mask.pipeline = Some(RefCell::new(Self::create_mask_pipeline_static(
+                device,
+                mask_rect,
+                effect_name,
+                &effect_parameters,
+                texture_config,
+            )?));
+            managed_mask.current_effect = Some(effect_name.to_string());
         } else {
             // Remove effect
-            managed_mask.render_window.set_active_effect(None);
+            managed_mask.pipeline = None;
             managed_mask.current_effect = None;
         }
 
@@ -217,23 +256,17 @@ impl MaskManager {
             .insert(parameter_name.to_string(), value);
 
         // If there's an active effect, rebuild the pipeline with new parameters
-        if let Some(ref effect_name) = managed_mask.current_effect.clone() {
-            let pipeline = self.effect_presets.create_pipeline_with_params(
-                &effect_name,
-                self.texture_config,
-                &managed_mask.effect_parameters,
+        if let Some(effect_name) = managed_mask.current_effect.clone() {
+            let mask_rect = managed_mask.mask.rect;
+            let effect_parameters = managed_mask.effect_parameters.clone();
+            let texture_config = self.texture_config;
+            managed_mask.pipeline = Some(RefCell::new(Self::create_mask_pipeline_static(
                 device,
-            )?;
-
-            managed_mask
-                .render_window
-                .remove_effect_pipeline(&effect_name);
-            managed_mask
-                .render_window
-                .add_effect_pipeline(effect_name.to_string(), pipeline);
-            managed_mask
-                .render_window
-                .set_active_effect(Some(effect_name.to_string()));
+                mask_rect,
+                &effect_name,
+                &effect_parameters,
+                texture_config,
+            )?));
         }
 
         Ok(())
@@ -255,7 +288,6 @@ impl MaskManager {
             .ok_or_else(|| format!("Mask {} not found", mask_id))?;
 
         managed_mask.enabled = enabled;
-        managed_mask.render_window.set_enabled(enabled);
         Ok(())
     }
 
@@ -267,50 +299,86 @@ impl MaskManager {
             .ok_or_else(|| format!("Mask {} not found", mask_id))?;
 
         managed_mask.layer = layer;
-        managed_mask.render_window.set_layer(layer);
         Ok(())
     }
 
     /// Update all masks (handles animations)
     pub fn update(&mut self, device: &wgpu::Device) {
-        for managed_mask in self.masks.values_mut() {
+        // Collect mask IDs that need pipeline updates
+        let mut masks_to_update = Vec::new();
+
+        for (mask_id, managed_mask) in &mut self.masks {
             // Update mask animation
             let animation_complete = managed_mask.mask.update_animation();
 
-            // If animation changed the bounds, update the render window
-            if !animation_complete {
-                let new_bounds = managed_mask.mask.rect;
-                managed_mask
-                    .render_window
-                    .resize_viewport(device, new_bounds, self.texture_config);
+            // If animation changed the bounds, mark for pipeline rebuild
+            if !animation_complete && managed_mask.current_effect.is_some() {
+                masks_to_update.push(*mask_id);
+            }
+        }
+
+        // Rebuild pipelines for masks that need updates
+        for mask_id in masks_to_update {
+            if let Some(managed_mask) = self.masks.get_mut(&mask_id) {
+                if let Some(effect_name) = &managed_mask.current_effect.clone() {
+                    let new_bounds = managed_mask.mask.rect;
+                    let effect_parameters = managed_mask.effect_parameters.clone();
+                    if let Ok(pipeline) = Self::create_mask_pipeline_static(
+                        device,
+                        new_bounds,
+                        effect_name,
+                        &effect_parameters,
+                        self.texture_config,
+                    ) {
+                        managed_mask.pipeline = Some(RefCell::new(pipeline));
+                    }
+                }
             }
         }
     }
 
-    /// Encode all enabled masks in layer order
-    pub fn encode_masks(
-        &mut self,
+    /// Render masks as a pipeline step - composites all enabled masks over the input texture
+    /// This method should be called during the mask_compositor pipeline execution  
+    /// If no active masks exist, this method does nothing and lets the pipeline passthrough
+    pub fn render_pipeline_step(
+        &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        // Get masks sorted by layer
-        let mut mask_refs: Vec<_> = self.masks.values_mut().filter(|m| m.enabled).collect();
+        // If no active masks, do nothing - let the pipeline handle passthrough
+        if self.masks.is_empty()
+            || !self
+                .masks
+                .values()
+                .any(|m| m.enabled && m.pipeline.is_some())
+        {
+            return;
+        }
+
+        // Execute all enabled mask pipelines in layer order
+        // For now, the last mask wins (overwrites previous ones)
+        // TODO: Implement proper layer compositing with intermediate textures
+        let mut mask_refs: Vec<_> = self
+            .masks
+            .values()
+            .filter(|m| m.enabled && m.pipeline.is_some())
+            .collect();
         mask_refs.sort_by_key(|m| m.layer);
 
-        // Process each mask
         for managed_mask in mask_refs {
-            // First encode the viewport pass
-            managed_mask
-                .render_window
-                .finalize_bind_groups(device, input_view, None);
-            managed_mask.render_window.encode_pass(encoder, output_view);
+            if let Some(ref pipeline_cell) = managed_mask.pipeline {
+                println!(
+                    "Executing mask pipeline for mask {} with effect {:?}",
+                    managed_mask.id, managed_mask.current_effect
+                );
 
-            // Then encode effects if any
-            managed_mask
-                .render_window
-                .encode_effects(device, encoder, output_view);
+                // Execute the mask pipeline from input_view to output_view
+                pipeline_cell
+                    .borrow_mut()
+                    .encode_into(device, encoder, input_view, output_view);
+            }
         }
     }
 
@@ -329,8 +397,8 @@ impl MaskManager {
     }
 
     /// Get available effect presets
-    pub fn get_available_effects(&self) -> Vec<&String> {
-        self.effect_presets.list_presets()
+    pub fn get_available_effects(&self) -> Vec<&str> {
+        vec!["invert", "blur", "glow"]
     }
 
     /// Get current effect for a mask

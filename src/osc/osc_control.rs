@@ -29,6 +29,14 @@ pub enum OscCommand {
         id: i32,
         val: f32,
     },
+    ParticlesCenterX {
+        id: i32,
+        val: f32,
+    },
+    ParticlesCenterY {
+        id: i32,
+        val: f32,
+    },
     ParticlesGravity {
         id: i32,
         val: f32,
@@ -65,7 +73,7 @@ pub enum OscCommand {
         h: i32,
         duration: f32,
     },
-    
+
     // New mask commands for RenderWindow integration
     MaskCreate {
         id: i32,
@@ -306,6 +314,18 @@ impl OscController {
                                 .push(OscCommand::ParticlesOuterRadius { id: *id, val: *val });
                         }
                     }
+                    "/sys2/particles/centerX" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesCenterX { id: *id, val: *val });
+                        }
+                    }
+                    "/sys2/particles/centerY" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            self.command_queue
+                                .push(OscCommand::ParticlesCenterY { id: *id, val: *val });
+                        }
+                    }
                     "/sys2/particles/gravity" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
@@ -332,7 +352,8 @@ impl OscController {
                     }
                     /********************* Mask Commands *************************** */
                     "/mask/create" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h)] = &message.args[..]
+                        if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h)] =
+                            &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MaskCreate {
                                 id: *id,
@@ -343,7 +364,8 @@ impl OscController {
                                 effect_preset: None,
                                 layer: 0,
                             });
-                        } else if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h), osc::Type::String(effect)] = &message.args[..]
+                        } else if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h), osc::Type::String(effect)] =
+                            &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MaskCreate {
                                 id: *id,
@@ -351,10 +373,15 @@ impl OscController {
                                 y: *y,
                                 w: *w,
                                 h: *h,
-                                effect_preset: if effect.is_empty() { None } else { Some(effect.clone()) },
+                                effect_preset: if effect.is_empty() {
+                                    None
+                                } else {
+                                    Some(effect.clone())
+                                },
                                 layer: 0,
                             });
-                        } else if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h), osc::Type::String(effect), osc::Type::Int(layer)] = &message.args[..]
+                        } else if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h), osc::Type::String(effect), osc::Type::Int(layer)] =
+                            &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MaskCreate {
                                 id: *id,
@@ -362,7 +389,11 @@ impl OscController {
                                 y: *y,
                                 w: *w,
                                 h: *h,
-                                effect_preset: if effect.is_empty() { None } else { Some(effect.clone()) },
+                                effect_preset: if effect.is_empty() {
+                                    None
+                                } else {
+                                    Some(effect.clone())
+                                },
                                 layer: *layer,
                             });
                         }
@@ -373,7 +404,8 @@ impl OscController {
                         }
                     }
                     "/mask/resize" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h)] = &message.args[..]
+                        if let [osc::Type::Int(id), osc::Type::Float(x), osc::Type::Float(y), osc::Type::Float(w), osc::Type::Float(h)] =
+                            &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MaskResize {
                                 id: *id,
@@ -390,15 +422,22 @@ impl OscController {
                                 id: *id,
                                 effect_preset: None,
                             });
-                        } else if let [osc::Type::Int(id), osc::Type::String(effect)] = &message.args[..] {
+                        } else if let [osc::Type::Int(id), osc::Type::String(effect)] =
+                            &message.args[..]
+                        {
                             self.command_queue.push(OscCommand::MaskSetEffect {
                                 id: *id,
-                                effect_preset: if effect.is_empty() { None } else { Some(effect.clone()) },
+                                effect_preset: if effect.is_empty() {
+                                    None
+                                } else {
+                                    Some(effect.clone())
+                                },
                             });
                         }
                     }
                     "/mask/param" => {
-                        if let [osc::Type::Int(id), osc::Type::String(param_name), osc::Type::Float(value)] = &message.args[..]
+                        if let [osc::Type::Int(id), osc::Type::String(param_name), osc::Type::Float(value)] =
+                            &message.args[..]
                         {
                             self.command_queue.push(OscCommand::MaskSetEffectParam {
                                 id: *id,

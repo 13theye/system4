@@ -217,6 +217,8 @@ fn model(app: &App) -> Model {
     //rendering.create_named_texture(device, "particle_processed", hi_config);
     rendering.create_named_texture(device, "heatmap_processed", hi_config);
     rendering.create_named_texture(device, "processed_composited", hi_config);
+    rendering.create_named_texture(device, "effects_output", hi_config);
+    rendering.create_named_texture(device, "final_output", hi_config);
 
     /*
     let particle_effects = PipelineBuilder::new()
@@ -245,7 +247,7 @@ fn model(app: &App) -> Model {
         .name("Composite Step Pipeline")
         .input_textures(&["particles", "heatmap_processed"])
         .output_texture("processed_composited")
-        .simple_additive_composite(hi_config, 1.0)
+        .simple_additive_composite(hi_config, 0.5)
         .build(device);
 
     if let Ok(effect) = composite_step {
@@ -254,16 +256,29 @@ fn model(app: &App) -> Model {
 
     let effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
-        .input_texture("processed_composited")
+        .input_texture("particles")
         .brightness_extract(med_config, 0.7)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
         .bloom_composite_with_curve(hi_config, 2.0, 3.0)
         .inversion(hi_config, 1.0)
+        .output_texture("effects_output")
         .build(device);
 
     if let Ok(effect) = effects {
         rendering.add_multi_pipeline("effects", effect);
+    }
+
+    // Create a custom mask compositor pipeline step
+    // For now, this is a passthrough that will be handled by MaskManager
+    let mask_compositor = PipelineBuilder::new()
+        .name("Mask Compositor Pipeline")
+        .input_texture("effects_output")
+        .resample(hi_config)
+        .build(device);
+
+    if let Ok(effect) = mask_compositor {
+        rendering.add_multi_pipeline("mask_compositor", effect);
     }
 
     // Set up egui
@@ -495,6 +510,26 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         if let Err(e) = rendering.execute_named_pipeline("effects", device, &mut encoder) {
             eprintln!("Error executing effects pipeline: {}", e);
+        }
+
+        // Execute mask compositor pipeline (passthrough from effects_output to final_output)
+        if let Err(e) = rendering.execute_named_pipeline("mask_compositor", device, &mut encoder) {
+            eprintln!("Error executing mask_compositor pipeline: {}", e);
+        }
+
+        // Let MaskManager add mask effects on top if there are active masks
+        {
+            let effects_output_view = rendering
+                .get_named_texture("effects_output")
+                .expect("effects_output texture should exist");
+            let final_output_view = rendering.output_view();
+
+            model.mask_manager.render_pipeline_step(
+                device,
+                &mut encoder,
+                effects_output_view,
+                final_output_view,
+            );
         }
 
         rendering.submit_command_encoder(device, queue, encoder);
@@ -1154,6 +1189,14 @@ fn process_osc(app: &App, model: &mut Model, commands: Vec<OscCommand>) {
             OscCommand::ParticlesNumParticles { id, val } => {
                 let voice = Voice::from_i32(id);
                 parameter_changes.push(VoiceParameterChange::Volume { voice, value: val });
+            }
+            OscCommand::ParticlesCenterX { id, val } => {
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::ForceCenterX { voice, value: val });
+            }
+            OscCommand::ParticlesCenterY { id, val } => {
+                let voice = Voice::from_i32(id);
+                parameter_changes.push(VoiceParameterChange::ForceCenterY { voice, value: val });
             }
             OscCommand::ParticlesAlpha { id, val } => {
                 let voice = Voice::from_i32(id);
