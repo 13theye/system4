@@ -214,18 +214,21 @@ fn model(app: &App) -> Model {
     // Create pipeline textures
     rendering.create_named_texture(device, "particles", hi_config);
     rendering.create_named_texture(device, "heatmap", hi_config);
-    rendering.create_named_texture(device, "particle_processed", hi_config);
+    //rendering.create_named_texture(device, "particle_processed", hi_config);
     rendering.create_named_texture(device, "heatmap_processed", hi_config);
     rendering.create_named_texture(device, "processed_composited", hi_config);
 
+    /*
     let particle_effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
         .input_texture("particles")
+        .inversion(hi_config, 1.0)
         .output_texture("particle_processed")
         .build(device);
     if let Ok(effect) = particle_effects {
         rendering.add_multi_pipeline("particle_effects", effect);
     }
+     */
 
     let heatmap_effects = PipelineBuilder::new()
         .name("Heatmap Effects Pipeline")
@@ -242,7 +245,7 @@ fn model(app: &App) -> Model {
         .name("Composite Step Pipeline")
         .input_textures(&["particles", "heatmap_processed"])
         .output_texture("processed_composited")
-        .simple_additive_composite(hi_config, 0.0)
+        .simple_additive_composite(hi_config, 1.0)
         .build(device);
 
     if let Ok(effect) = composite_step {
@@ -256,7 +259,7 @@ fn model(app: &App) -> Model {
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
         .bloom_composite_with_curve(hi_config, 2.0, 3.0)
-        //.inversion(hi_config)
+        .inversion(hi_config, 1.0)
         .build(device);
 
     if let Ok(effect) = effects {
@@ -454,11 +457,21 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         );
 
         // Encode heatmap
-        model.heatmap_renderer.encode_heatmap_into(
+        model.heatmap_renderer.encode_into(
             device,
             &mut encoder,
             queue,
             &gpu_buffer1.0,
+            model.render_rect,
+            model.frame_count,
+            rendering.get_named_texture("heatmap").unwrap(),
+        );
+
+        model.heatmap_renderer.encode_into(
+            device,
+            &mut encoder,
+            queue,
+            &gpu_buffer4.0,
             model.render_rect,
             model.frame_count,
             rendering.get_named_texture("heatmap").unwrap(),
@@ -1286,6 +1299,7 @@ fn erase_drone(model: &mut Model, id: i32) {
 
 /// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn set_macos_window_behavior(window: &Window) {
     use nannou::winit::platform::macos::WindowExtMacOS;
     // removed the NSUInteger type below because it's just an alias for usize.

@@ -9,7 +9,7 @@ const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 1800.0;
 const FADE_IN_DURATION: f32 = 300.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
-const FEEDBACK_POSITIONS: usize = 64;
+const FEEDBACK_POSITIONS: usize = 256;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
@@ -83,7 +83,7 @@ impl Particle {
         };
 
         // Calculate the maximum alpha this particle has reached so far
-        let max_alpha_reached = alpha_limit * fade_in_factor.powi(4);
+        let max_alpha_reached = alpha_limit * fade_in_factor.powi(3);
 
         // Calculate life-based alpha fade-out using remaining life span
         let end_of_life_alpha = if self.remaining_life_span <= FADE_OUT_DURATION {
