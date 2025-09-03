@@ -293,9 +293,13 @@ fn model(app: &App) -> Model {
     // Create terminal system
     let terminal_system = TerminalSystem::new();
 
+    // Create mask manager
+    let mask_manager = system4::view::MaskManager::new(render_size, hi_config);
+
     Model {
         particle_system,
         terminal_system,
+        mask_manager,
         osc,
         osc_send,
         osc_loop,
@@ -369,7 +373,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Process OSC commands
     model.osc.process_messages();
     let commands = model.osc.take_commands();
-    process_osc(model, commands);
+    process_osc(app, model, commands);
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -378,6 +382,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model
         .particle_system
         .update(&mut model.rng, model.show_forces, &mut model.gpu_buffers);
+
+    // Update mask manager
+    model.mask_manager.update(device);
 
     // Update terminals
     let finish_signals = model
@@ -1118,7 +1125,7 @@ fn draw_bounds(app: &App, model: &Model) {
 
 // ************************ OSC   *************************************
 
-fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
+fn process_osc(app: &App, model: &mut Model, commands: Vec<OscCommand>) {
     let mut parameter_changes = Vec::<VoiceParameterChange>::new();
 
     for command in commands {
@@ -1186,6 +1193,88 @@ fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
                     rect: Rect::from_x_y_w_h(x as f32, y as f32, w as f32, h as f32),
                     duration,
                 })
+            }
+
+            // New mask commands
+            OscCommand::MaskCreate {
+                id,
+                x,
+                y,
+                w,
+                h,
+                effect_preset,
+                layer,
+            } => {
+                let voice = Voice::from_i32(id);
+                let bounds = Rect::from_x_y_w_h(x, y, w, h);
+                let window = app.main_window();
+                let device = window.device();
+                println!("Received command MaskCreate");
+
+                if let Err(e) = model.mask_manager.create_mask(
+                    device,
+                    voice,
+                    bounds,
+                    effect_preset.as_deref(),
+                    layer as u32,
+                ) {
+                    eprintln!("Failed to create mask {}: {}", id, e);
+                }
+            }
+            OscCommand::MaskDelete { id } => {
+                if !model.mask_manager.remove_mask(id as u32) {
+                    eprintln!("Failed to remove mask {}: not found", id);
+                }
+            }
+            OscCommand::MaskResize { id, x, y, w, h } => {
+                let bounds = Rect::from_x_y_w_h(x, y, w, h);
+                let window = app.main_window();
+                let device = window.device();
+
+                if let Err(e) = model.mask_manager.resize_mask(device, id as u32, bounds) {
+                    eprintln!("Failed to resize mask {}: {}", id, e);
+                }
+            }
+            OscCommand::MaskSetEffect { id, effect_preset } => {
+                let window = app.main_window();
+                let device = window.device();
+
+                if let Err(e) =
+                    model
+                        .mask_manager
+                        .set_mask_effect(device, id as u32, effect_preset.as_deref())
+                {
+                    eprintln!("Failed to set effect for mask {}: {}", id, e);
+                }
+            }
+            OscCommand::MaskSetEffectParam {
+                id,
+                param_name,
+                value,
+            } => {
+                let window = app.main_window();
+                let device = window.device();
+
+                if let Err(e) =
+                    model
+                        .mask_manager
+                        .set_effect_parameter(device, id as u32, &param_name, value)
+                {
+                    eprintln!(
+                        "Failed to set parameter {} for mask {}: {}",
+                        param_name, id, e
+                    );
+                }
+            }
+            OscCommand::MaskEnable { id, enabled } => {
+                if let Err(e) = model.mask_manager.set_mask_enabled(id as u32, enabled) {
+                    eprintln!("Failed to enable/disable mask {}: {}", id, e);
+                }
+            }
+            OscCommand::MaskSetLayer { id, layer } => {
+                if let Err(e) = model.mask_manager.set_mask_layer(id as u32, layer as u32) {
+                    eprintln!("Failed to set layer for mask {}: {}", id, e);
+                }
             }
             _ => {}
         }

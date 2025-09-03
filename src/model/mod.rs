@@ -8,6 +8,7 @@ use crate::{
     particle::ParticleSystem,
     terminals::TerminalSystem,
     utils::IdGenerator,
+    view::MaskManager,
     voice::Voice,
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
@@ -25,6 +26,9 @@ pub struct Model {
     pub particle_system: ParticleSystem,
 
     pub terminal_system: TerminalSystem,
+    
+    // Mask management system
+    pub mask_manager: MaskManager,
 
     // OSC
     pub osc: OscController,
