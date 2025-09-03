@@ -9,6 +9,7 @@ use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 use rayon::prelude::*;
 
+use crate::particle::emitter::FullScreenRandomEmitter;
 use crate::{
     forces::{ForceFields, WindCircle},
     model::GpuBuffers,
@@ -129,9 +130,6 @@ impl ParticleSystem {
 
         let mask = Mask::make_drone(voice);
 
-        let emitter_left_origin = vec2(mask.rect.left() - 20.0, mask.origin.y);
-        let emitter_right_origin = vec2(mask.rect.right() + 20.0, mask.origin.y);
-
         let max_particle_percentage = (num_particles as f32) / 100.0;
         let spawn_rate_factor = 1.0;
 
@@ -164,10 +162,20 @@ impl ParticleSystem {
             spawn_rate_factor,
         );
 
+        let fullscreen_rect = Rect::from_x_y_w_h(0.0, 0.0, 3840.0, 2160.0);
+        let emitter_full = FullScreenRandomEmitter::new(
+            id_generator.generate(),
+            voice,
+            fullscreen_rect,
+            self.global_max_spawn_rate,
+            spawn_rate_factor,
+        );
+
         // Add the emitters
-        self.emitters.push(Box::new(emitter_left)); //emitter_left);
-        self.emitters.push(Box::new(emitter_right));
-        self.emitters.push(Box::new(emitter_center));
+        //self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        //self.emitters.push(Box::new(emitter_right));
+        //self.emitters.push(Box::new(emitter_center));
+        self.emitters.push(Box::new(emitter_full));
 
         // Set the particle system params
         let alpha_limit = (alpha as f32) / 100.0;
@@ -253,11 +261,11 @@ impl ParticleSystem {
 
             // Pre-compute position offset random signs for all particles in this voice
             let position_offset_factor = position_offset_factors.get(voice).copied().unwrap_or(0.0);
-            let position_offset_signs: Vec<f32> = if position_offset_factor > 0.0 {
+            let position_offsets: Vec<f32> = if position_offset_factor > 0.0 {
                 use nannou::rand::Rng;
                 particles
                     .iter()
-                    .map(|_| if rng.gen::<bool>() { 1.0 } else { -1.0 })
+                    .map(|_| rng.gen_range(-position_offset_factor..position_offset_factor))
                     .collect()
             } else {
                 vec![0.0; particles.len()]
@@ -280,10 +288,7 @@ impl ParticleSystem {
                         {
                             let normal =
                                 vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
-                            normal
-                                * MAX_POSITION_OFFSET
-                                * position_offset_factor
-                                * position_offset_signs[index]
+                            normal * MAX_POSITION_OFFSET * position_offsets[index]
                         } else {
                             vec2(0.0, 0.0)
                         };
@@ -295,7 +300,7 @@ impl ParticleSystem {
                             particle.kill();
                         }
 
-                        if particle.is_alive() && particle.is_within_rect(mask.rect) {
+                        if particle.is_alive() && particle.is_activated() {
                             Some((
                                 particle.to_gpu_with_offset(offset),
                                 particle.to_segment_gpu(),

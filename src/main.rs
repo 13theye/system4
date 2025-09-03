@@ -133,12 +133,14 @@ fn model(app: &App) -> Model {
     };
 
     // Set macOS window flags
+    /*
     #[cfg(target_os = "macos")]
     set_macos_window_behavior(&audience_window);
     #[cfg(target_os = "macos")]
     set_macos_window_behavior(&performer_window);
     #[cfg(target_os = "macos")]
     set_macos_window_behavior(&control_window);
+     */
 
     println!(
         "Audience window scale: {:?}",

@@ -40,6 +40,9 @@ impl Wind {
 
     /// Apply the Wind to a Particle with mass variation factor
     pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
+        // Activate the particle if not already
+        particle.activate();
+
         // Calculate the x and y components of particle's current velocity
         let particle_vx = particle.velocity.x;
         let particle_vy = particle.velocity.y;
@@ -77,6 +80,9 @@ pub struct WindCell {
     winds: HashMap<usize, Wind>,
     combined_wind: Option<Wind>,
     origin: Vec2,
+
+    #[allow(dead_code)]
+    // rect is used for debugging
     rect: Rect,
     needs_update: bool,
 }
@@ -261,8 +267,8 @@ impl WindField {
                 let mut combined_variation = 0.0f32;
                 let mut variation_count = 0;
 
-                for (&circle_id, _) in &cell.winds {
-                    if let Some(variations) = cell_variations.get(&circle_id) {
+                for circle_id in cell.winds.keys() {
+                    if let Some(variations) = cell_variations.get(circle_id) {
                         if let Some(&variation) = variations.get(index) {
                             combined_variation += variation;
                             variation_count += 1;

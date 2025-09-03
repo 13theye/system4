@@ -7,14 +7,15 @@ use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 1800.0;
-const FADE_IN_DURATION: f32 = 200.0; // frames to fade in
+const FADE_IN_DURATION: f32 = 300.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
+const FEEDBACK_POSITIONS: usize = 64;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
     pub parent_emitter: usize, // the emitter that spawned this particle
     position: Point2,
-    feedback_positions: [Option<Point2>; 15],
+    feedback_positions: [Option<Point2>; FEEDBACK_POSITIONS],
     pub velocity: Vec2,
     pub acceleration: Vec2,
 
@@ -22,7 +23,9 @@ pub struct Particle {
     pub remaining_life_span: f32,
     age_per_tick: f32,
 
-    pub is_alive: bool,
+    is_alive: bool,
+    // a particle is activated when it has been affected by a force
+    is_activated: bool,
     pub size: f32,
     pub mass: f32,
     pub rgba: Rgba,
@@ -35,39 +38,21 @@ impl Particle {
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
-            feedback_positions: [None; 15],
+            feedback_positions: [None; FEEDBACK_POSITIONS],
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
             is_alive: true,
+            is_activated: false,
             size,
             rgba: color,
             mass: PARTICLE_MASS,
         }
     }
 
-    pub fn new_with_motion(
-        parent_id: usize,
-        position: Point2,
-        size: f32,
-        color: Rgba,
-        acceleration: Vec2,
-        velocity: Vec2,
-    ) -> Self {
-        Self {
-            parent_emitter: parent_id,
-            acceleration,
-            velocity,
-            position,
-            feedback_positions: [None; 15],
-            age: 0.0,
-            remaining_life_span: PARTICLE_LIFE_SPAN,
-            age_per_tick: 1.0,
-            is_alive: true,
-            size,
-            rgba: color,
-            mass: PARTICLE_MASS,
-        }
+    pub fn with_velocity(mut self, velocity: Vec2) -> Self {
+        self.velocity = velocity;
+        self
     }
 
     /// Update the particle based on forces and age, given externally-determined color and alpha limits, and offset for feedback recording
@@ -98,7 +83,7 @@ impl Particle {
         };
 
         // Calculate the maximum alpha this particle has reached so far
-        let max_alpha_reached = alpha_limit * fade_in_factor;
+        let max_alpha_reached = alpha_limit * fade_in_factor.powi(4);
 
         // Calculate life-based alpha fade-out using remaining life span
         let end_of_life_alpha = if self.remaining_life_span <= FADE_OUT_DURATION {
@@ -110,8 +95,11 @@ impl Particle {
         self.rgba.alpha = max_alpha_reached * end_of_life_alpha;
 
         // Increment natural age and decrement remaining life span
-        self.age += self.age_per_tick;
-        self.remaining_life_span -= self.age_per_tick;
+        // Only increment age if the particle is activated
+        if self.is_activated {
+            self.age += self.age_per_tick;
+            self.remaining_life_span -= self.age_per_tick;
+        }
 
         if self.remaining_life_span <= 0.0 {
             self.kill();
@@ -123,7 +111,7 @@ impl Particle {
     }
 
     fn record_feedback_position(&mut self, position: Point2) {
-        for i in (1..15).rev() {
+        for i in (1..FEEDBACK_POSITIONS).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
         self.feedback_positions[0] = Some(position);
@@ -206,6 +194,14 @@ impl Particle {
         self.is_alive
     }
 
+    pub fn is_activated(&self) -> bool {
+        self.is_activated
+    }
+
+    pub fn activate(&mut self) {
+        self.is_activated = true;
+    }
+
     /********************* Accessors *********************/
     pub fn set_position(&mut self, position: Point2) {
         self.position = position;
@@ -258,18 +254,20 @@ impl Particle {
     }
 
     pub fn to_segment_gpu(&self) -> SegmentGpu {
-        let mut points = [[0.0f32; 2]; 16];
+        let mut points = [[0.0f32; 2]; FEEDBACK_POSITIONS];
 
         // First point is current position
         points[0] = [self.position.x, self.position.y];
 
         // Fill remaining points from feedback positions
-        for i in 0..15 {
+        let mut last_valid_pos = [self.position.x, self.position.y];
+        for i in 0..(FEEDBACK_POSITIONS - 1) {
             if let Some(feedback_pos) = self.feedback_positions[i] {
                 points[i + 1] = [feedback_pos.x, feedback_pos.y];
+                last_valid_pos = [feedback_pos.x, feedback_pos.y];
             } else {
-                // If no feedback position, use the current position
-                points[i + 1] = [self.position.x, self.position.y];
+                // If no feedback position, use the last valid position to avoid ray artifacts
+                points[i + 1] = last_valid_pos;
             }
         }
 
