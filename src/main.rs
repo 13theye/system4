@@ -259,7 +259,7 @@ fn model(app: &App) -> Model {
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
         .bloom_composite_with_curve(hi_config, 2.0, 3.0)
-        .inversion(hi_config, 1.0)
+        //.inversion(hi_config, 1.0)
         .build(device);
 
     if let Ok(effect) = effects {
@@ -488,11 +488,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         if let Err(e) = rendering.execute_named_pipeline("effects", device, &mut encoder) {
             eprintln!("Error executing effects pipeline: {}", e);
-        }
-
-        // Execute mask compositor pipeline (passthrough from effects_output to final_output)
-        if let Err(e) = rendering.execute_named_pipeline("mask_compositor", device, &mut encoder) {
-            eprintln!("Error executing mask_compositor pipeline: {}", e);
         }
 
         rendering.submit_command_encoder(device, queue, encoder);
