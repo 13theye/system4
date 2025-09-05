@@ -217,8 +217,6 @@ fn model(app: &App) -> Model {
     //rendering.create_named_texture(device, "particle_processed", hi_config);
     rendering.create_named_texture(device, "heatmap_processed", hi_config);
     rendering.create_named_texture(device, "processed_composited", hi_config);
-    rendering.create_named_texture(device, "effects_output", hi_config);
-    rendering.create_named_texture(device, "final_output", hi_config);
 
     /*
     let particle_effects = PipelineBuilder::new()
@@ -262,23 +260,10 @@ fn model(app: &App) -> Model {
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
         .bloom_composite_with_curve(hi_config, 2.0, 3.0)
         .inversion(hi_config, 1.0)
-        .output_texture("effects_output")
         .build(device);
 
     if let Ok(effect) = effects {
         rendering.add_multi_pipeline("effects", effect);
-    }
-
-    // Create a custom mask compositor pipeline step
-    // For now, this is a passthrough that will be handled by MaskManager
-    let mask_compositor = PipelineBuilder::new()
-        .name("Mask Compositor Pipeline")
-        .input_texture("effects_output")
-        .resample(hi_config)
-        .build(device);
-
-    if let Ok(effect) = mask_compositor {
-        rendering.add_multi_pipeline("mask_compositor", effect);
     }
 
     // Set up egui
@@ -308,13 +293,9 @@ fn model(app: &App) -> Model {
     // Create terminal system
     let terminal_system = TerminalSystem::new();
 
-    // Create mask manager
-    let mask_manager = system4::view::MaskManager::new(render_size, hi_config);
-
     Model {
         particle_system,
         terminal_system,
-        mask_manager,
         osc,
         osc_send,
         osc_loop,
@@ -388,7 +369,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Process OSC commands
     model.osc.process_messages();
     let commands = model.osc.take_commands();
-    process_osc(app, model, commands);
+    process_osc(model, commands);
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -397,9 +378,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model
         .particle_system
         .update(&mut model.rng, model.show_forces, &mut model.gpu_buffers);
-
-    // Update mask manager
-    model.mask_manager.update(device);
 
     // Update terminals
     let finish_signals = model
@@ -515,21 +493,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Execute mask compositor pipeline (passthrough from effects_output to final_output)
         if let Err(e) = rendering.execute_named_pipeline("mask_compositor", device, &mut encoder) {
             eprintln!("Error executing mask_compositor pipeline: {}", e);
-        }
-
-        // Let MaskManager add mask effects on top if there are active masks
-        {
-            let effects_output_view = rendering
-                .get_named_texture("effects_output")
-                .expect("effects_output texture should exist");
-            let final_output_view = rendering.output_view();
-
-            model.mask_manager.render_pipeline_step(
-                device,
-                &mut encoder,
-                effects_output_view,
-                final_output_view,
-            );
         }
 
         rendering.submit_command_encoder(device, queue, encoder);
@@ -1160,7 +1123,7 @@ fn draw_bounds(app: &App, model: &Model) {
 
 // ************************ OSC   *************************************
 
-fn process_osc(app: &App, model: &mut Model, commands: Vec<OscCommand>) {
+fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
     let mut parameter_changes = Vec::<VoiceParameterChange>::new();
 
     for command in commands {
@@ -1221,103 +1184,6 @@ fn process_osc(app: &App, model: &mut Model, commands: Vec<OscCommand>) {
             OscCommand::ParticlesVibration { id, val } => {
                 let voice = Voice::from_i32(id);
                 parameter_changes.push(VoiceParameterChange::PositionOffset { voice, value: val });
-            }
-            OscCommand::MaskChangeBounds {
-                id,
-                x,
-                y,
-                w,
-                h,
-                duration,
-            } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::MaskChangeBounds {
-                    voice,
-                    rect: Rect::from_x_y_w_h(x as f32, y as f32, w as f32, h as f32),
-                    duration,
-                })
-            }
-
-            // New mask commands
-            OscCommand::MaskCreate {
-                id,
-                x,
-                y,
-                w,
-                h,
-                effect_preset,
-                layer,
-            } => {
-                let voice = Voice::from_i32(id);
-                let bounds = Rect::from_x_y_w_h(x, y, w, h);
-                let window = app.main_window();
-                let device = window.device();
-                println!("Received command MaskCreate");
-
-                if let Err(e) = model.mask_manager.create_mask(
-                    device,
-                    voice,
-                    bounds,
-                    effect_preset.as_deref(),
-                    layer as u32,
-                ) {
-                    eprintln!("Failed to create mask {}: {}", id, e);
-                }
-            }
-            OscCommand::MaskDelete { id } => {
-                if !model.mask_manager.remove_mask(id as u32) {
-                    eprintln!("Failed to remove mask {}: not found", id);
-                }
-            }
-            OscCommand::MaskResize { id, x, y, w, h } => {
-                let bounds = Rect::from_x_y_w_h(x, y, w, h);
-                let window = app.main_window();
-                let device = window.device();
-
-                if let Err(e) = model.mask_manager.resize_mask(device, id as u32, bounds) {
-                    eprintln!("Failed to resize mask {}: {}", id, e);
-                }
-            }
-            OscCommand::MaskSetEffect { id, effect_preset } => {
-                let window = app.main_window();
-                let device = window.device();
-
-                if let Err(e) =
-                    model
-                        .mask_manager
-                        .set_mask_effect(device, id as u32, effect_preset.as_deref())
-                {
-                    eprintln!("Failed to set effect for mask {}: {}", id, e);
-                }
-            }
-            OscCommand::MaskSetEffectParam {
-                id,
-                param_name,
-                value,
-            } => {
-                let window = app.main_window();
-                let device = window.device();
-
-                if let Err(e) =
-                    model
-                        .mask_manager
-                        .set_effect_parameter(device, id as u32, &param_name, value)
-                {
-                    eprintln!(
-                        "Failed to set parameter {} for mask {}: {}",
-                        param_name, id, e
-                    );
-                }
-            }
-            OscCommand::MaskEnable { id, enabled } => {
-                if let Err(e) = model.mask_manager.set_mask_enabled(id as u32, enabled) {
-                    eprintln!("Failed to enable/disable mask {}: {}", id, e);
-                }
-            }
-            OscCommand::MaskSetLayer { id, layer } => {
-                if let Err(e) = model.mask_manager.set_mask_layer(id as u32, layer as u32) {
-                    eprintln!("Failed to set layer for mask {}: {}", id, e);
-                }
             }
             _ => {}
         }
