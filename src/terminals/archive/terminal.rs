@@ -344,7 +344,7 @@ impl Terminal {
                 .color(line.color)
                 .font_size(self.params.font_size)
                 .font(font)
-                .x_y(pos.x, pos.y);
+                .x_y(pos.x / self.dpi_scale, pos.y / self.dpi_scale);
         }
     }
 }

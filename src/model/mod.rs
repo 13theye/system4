@@ -6,7 +6,7 @@ use crate::{
     fps::FpsManager,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
-    terminals::TerminalSystem,
+    terminals::command_input::CommandInput,
     utils::IdGenerator,
     voice::Voice,
 };
@@ -23,8 +23,6 @@ pub type GpuBuffers = (Vec<ParticleGpu>, Vec<SegmentGpu>);
 
 pub struct Model {
     pub particle_system: ParticleSystem,
-
-    pub terminal_system: TerminalSystem,
 
     // OSC
     pub osc: OscController,
@@ -80,6 +78,12 @@ pub struct Model {
     // Debug stuff
     pub show_bounds: bool,
     pub show_forces: bool,
+
+    // Command input for NTerminal
+    pub command_input: CommandInput,
+
+    // UI state
+    pub active_tab: usize, // 0 = Voices, 1 = NTerminal
 }
 
 impl Drop for Model {

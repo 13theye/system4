@@ -1,5 +1,9 @@
-pub mod terminal;
-pub use terminal::{Terminal, TerminalParams};
+pub mod commands;
+pub mod command_input;
+pub mod new_terminal;
+pub mod parsing;
+pub mod tokens;
 
-pub mod terminal_system;
-pub use terminal_system::TerminalSystem;
+// Re-export key types for public API
+pub use commands::Command;
+pub use parsing::{ParameterValue, ParseError};
