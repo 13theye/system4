@@ -127,9 +127,9 @@ impl CommandInput {
     /// Get example commands for help text
     pub fn get_examples() -> Vec<&'static str> {
         vec![
-            "drone.new().name(\"My Drone\").brightness(0.8).build();",
+            "makeDrone.name(\"My Drone\").brightness(0.8).begin();",
+            "makeDrone.force(15.5).trail(0.2).begin();",
             "drone.get(\"My Drone\").brightness(0.2).set();",
-            "drone.new().force(15.5).trail(0.2).build();",
         ]
     }
 

@@ -30,6 +30,7 @@ pub enum ParseError {
     UnterminatedString,
     EmptyInput,
     MissingBuild,
+    MissingBegin,
     MissingSet,
     UnknownCommand(String),
 }
@@ -45,6 +46,7 @@ impl fmt::Display for ParseError {
             ParseError::UnterminatedString => write!(f, "Unterminated string"),
             ParseError::EmptyInput => write!(f, "Empty input"),
             ParseError::MissingBuild => write!(f, "Missing .build() call"),
+            ParseError::MissingBegin => write!(f, "Missing .begin() call"),
             ParseError::MissingSet => write!(f, "Missing .set() call"),
             ParseError::UnknownCommand(cmd) => write!(f, "Unknown command: {}", cmd),
         }
@@ -75,6 +77,7 @@ impl CommandParser {
         // Dispatch to appropriate command parser
         match command_type.as_str() {
             "drone" => self.parse_drone_command(),
+            "makeDrone" => self.parse_make_drone_command(),
             _ => Err(ParseError::UnknownCommand(command_type)),
         }
     }
@@ -203,6 +206,50 @@ impl CommandParser {
             name: drone_name, 
             config: builder.build() 
         })
+    }
+
+    fn parse_make_drone_command(&mut self) -> Result<Command, ParseError> {
+        // Parse: makeDrone.method().method().begin();
+        // We've already parsed "makeDrone", now start parsing method chain
+        
+        let mut builder = DroneBuilder::new();
+        let mut found_begin = false;
+
+        // Parse method chain
+        while self.position < self.tokens.len() {
+            if let Some(Token::Dot) = self.current_token() {
+                self.expect_token(&Token::Dot)?;
+
+                let method_name = self.expect_identifier_any()?;
+
+                if method_name == "begin" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    found_begin = true;
+                    break;
+                } else {
+                    // Parse method call with parameter
+                    self.expect_token(&Token::LeftParen)?;
+                    let parameter = self.parse_parameter()?;
+                    self.expect_token(&Token::RightParen)?;
+
+                    builder.set_parameter(&method_name, parameter)?;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !found_begin {
+            return Err(ParseError::MissingBegin);
+        }
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        Ok(Command::CreateDrone(builder.build()))
     }
 
     fn current_token(&self) -> Option<&Token> {

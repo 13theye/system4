@@ -26,7 +26,7 @@ use system4::{
     model::Model,
     osc::{OscCommand, OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
-    terminals::command_input::CommandInput,
+    terminals::{command_input::CommandInput, commands::Command},
     utils::IdGenerator,
     voice::{controller::VoiceParameterChange, Voice},
 };
@@ -571,9 +571,31 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
                         if model.command_input.is_ready_for_execution() {
                             if let Some(command) = model.command_input.try_execute() {
                                 println!("Executing command: {:?}", command);
+                                
+                                // Execute the command
+                                match command {
+                                    Command::CreateDrone(config) => {
+                                        // Convert DroneConfig to make_drone parameters
+                                        let id = 1; // Default to Voice1 for new drones
+                                        let alpha = (config.brightness * 100.0) as i32; // Convert 0.0-1.0 to 0-100
+                                        let num_particles = (config.volume * 1000.0) as i32; // Convert 0.0-1.0 to 0-1000
+                                        let force = (config.force * 100.0) as i32; // Convert to integer
+                                        let gravity = (config.gravity * 100.0) as i32; // Convert to integer
+                                        let trail = (config.trail * 100.0) as i32; // Convert to integer
+                                        
+                                        println!("Creating drone with id={}, alpha={}, particles={}, force={}, gravity={}, trail={}",
+                                            id, alpha, num_particles, force, gravity, trail);
+                                        
+                                        make_drone(model, id, alpha, num_particles, force, gravity, trail);
+                                    }
+                                    Command::ModifyDrone { name, config } => {
+                                        println!("ModifyDrone command not yet implemented for: {}", name);
+                                        // TODO: Implement modify drone functionality
+                                    }
+                                }
+                                
                                 // Clear the input after successful execution
                                 model.command_input.clear();
-                                // TODO: Execute the command here
                             }
                             // Note: Error feedback is now shown in UI status section
                         }

@@ -2,7 +2,9 @@
 //
 // NTerminal: Builder Pattern Pseudocode Parser
 //
-// Parses commands like: drone.name("Drone 1").brightness(0.1).volume(0.5).gravity(0.7).build();
+// Parses commands like:
+//   makeDrone.name("Drone 1").brightness(0.1).volume(0.5).gravity(0.7).begin();
+//   drone.name("Drone 1").brightness(0.1).volume(0.5).gravity(0.7).build(); (legacy)
 
 use super::{
     commands::Command,
@@ -26,11 +28,14 @@ impl NTerminal {
         println!("=== NTerminal Builder Pattern Parser Demo ===\n");
 
         let test_commands = vec![
-            // Create new drones
-            "drone.new().name(\"My Drone\").brightness(0.8).build();",
-            "drone.new().name(\"Drone 1\").brightness(0.1).volume(0.5).gravity(0.7).build();",
-            "drone.new().force(15.5).trail(0.2).build();",
-            "drone.new().build();", // Minimal command with defaults
+            // Create new drones with makeDrone
+            "makeDrone.name(\"My Drone\").brightness(0.8).begin();",
+            "makeDrone.name(\"Drone 1\").brightness(0.1).volume(0.5).gravity(0.7).begin();",
+            "makeDrone.force(15.5).trail(0.2).begin();",
+            "makeDrone.begin();", // Minimal command with defaults
+            
+            // Legacy drone.new() syntax (still supported)
+            "drone.new().name(\"Legacy Drone\").brightness(0.8).build();",
             
             // Modify existing drones
             "drone.get(\"My Drone\").brightness(0.2).set();",
