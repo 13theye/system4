@@ -29,7 +29,6 @@ pub enum ParseError {
     InvalidNumber(String),
     UnterminatedString,
     EmptyInput,
-    MissingBuild,
     MissingBegin,
     MissingSet,
     UnknownCommand(String),
@@ -45,7 +44,6 @@ impl fmt::Display for ParseError {
             ParseError::InvalidNumber(s) => write!(f, "Invalid number: {}", s),
             ParseError::UnterminatedString => write!(f, "Unterminated string"),
             ParseError::EmptyInput => write!(f, "Empty input"),
-            ParseError::MissingBuild => write!(f, "Missing .build() call"),
             ParseError::MissingBegin => write!(f, "Missing .begin() call"),
             ParseError::MissingSet => write!(f, "Missing .set() call"),
             ParseError::UnknownCommand(cmd) => write!(f, "Unknown command: {}", cmd),
@@ -83,89 +81,32 @@ impl CommandParser {
     }
 
     fn parse_drone_command(&mut self) -> Result<Command, ParseError> {
-        // After "drone" we expect a dot for either .new() or .get()
-        self.expect_token(&Token::Dot)?;
-        
-        let method_name = self.expect_identifier_any()?;
-        
-        match method_name.as_str() {
-            "new" => self.parse_create_drone_command(),
-            "get" => self.parse_modify_drone_command(),
-            _ => Err(ParseError::UnexpectedToken {
-                expected: "new or get".to_string(),
-                found: method_name,
-            }),
-        }
-    }
-
-    fn parse_create_drone_command(&mut self) -> Result<Command, ParseError> {
-        // Parse: drone.new().method().method().build();
-        // We've already parsed "drone.new", now expect ()
+        // After "drone" we expect (voice_id) for modification
         self.expect_token(&Token::LeftParen)?;
-        self.expect_token(&Token::RightParen)?;
 
-        let mut builder = DroneBuilder::new();
-        let mut found_build = false;
-
-        // Parse method chain
-        while self.position < self.tokens.len() {
-            if let Some(Token::Dot) = self.current_token() {
-                self.expect_token(&Token::Dot)?;
-
-                let method_name = self.expect_identifier_any()?;
-
-                if method_name == "build" {
-                    self.expect_token(&Token::LeftParen)?;
-                    self.expect_token(&Token::RightParen)?;
-                    found_build = true;
-                    break;
-                } else {
-                    // Parse method call with parameter
-                    self.expect_token(&Token::LeftParen)?;
-                    let parameter = self.parse_parameter()?;
-                    self.expect_token(&Token::RightParen)?;
-
-                    builder.set_parameter(&method_name, parameter)?;
-                }
-            } else {
-                break;
-            }
-        }
-
-        if !found_build {
-            return Err(ParseError::MissingBuild);
-        }
-
-        // Expect semicolon at the end
-        if self.position < self.tokens.len() {
-            self.expect_token(&Token::Semicolon)?;
-        }
-
-        Ok(Command::CreateDrone(builder.build()))
-    }
-
-    fn parse_modify_drone_command(&mut self) -> Result<Command, ParseError> {
-        // Parse: drone.get("name").method().method().set();
-        // We've already parsed "drone.get", now expect ("name")
-        self.expect_token(&Token::LeftParen)?;
-        
-        // Get the drone name
-        let drone_name = match self.current_token() {
-            Some(Token::String(s)) => {
-                let name = s.clone();
+        // Get the voice ID
+        let voice_id = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let id = *n as i32;
                 self.position += 1;
-                name
+                id
             }
-            Some(token) => return Err(ParseError::UnexpectedToken {
-                expected: "drone name string".to_string(),
-                found: format!("{:?}", token),
-            }),
+            Some(token) => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "voice ID number".to_string(),
+                    found: format!("{:?}", token),
+                })
+            }
             None => return Err(ParseError::UnexpectedEnd),
         };
-        
+
         self.expect_token(&Token::RightParen)?;
 
         let mut builder = DroneBuilder::new();
+
+        // Set the voice ID
+        builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
+
         let mut found_set = false;
 
         // Parse method chain
@@ -202,17 +143,43 @@ impl CommandParser {
             self.expect_token(&Token::Semicolon)?;
         }
 
-        Ok(Command::ModifyDrone { 
-            name: drone_name, 
-            config: builder.build() 
+        Ok(Command::ModifyDrone {
+            voice: voice_id,
+            config: builder.build(),
         })
     }
 
     fn parse_make_drone_command(&mut self) -> Result<Command, ParseError> {
-        // Parse: makeDrone.method().method().begin();
-        // We've already parsed "makeDrone", now start parsing method chain
-        
+        // Parse: makeDrone(voice_id).method().method().begin();
+        // We've already parsed "makeDrone", now expect (voice_id)
+        self.expect_token(&Token::LeftParen)?;
+
+        // Get the voice ID (optional for makeDrone)
+        let voice_id = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let id = *n as i32;
+                self.position += 1;
+                Some(id)
+            }
+            Some(Token::RightParen) => None, // Empty parentheses - no voice provided
+            Some(token) => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "voice ID number or )".to_string(),
+                    found: format!("{:?}", token),
+                })
+            }
+            None => return Err(ParseError::UnexpectedEnd),
+        };
+
+        self.expect_token(&Token::RightParen)?;
+
         let mut builder = DroneBuilder::new();
+
+        // Set the voice if provided in parentheses
+        if let Some(voice) = voice_id {
+            builder.set_parameter("voice", ParameterValue::Number(voice as f32))?;
+        }
+
         let mut found_begin = false;
 
         // Parse method chain

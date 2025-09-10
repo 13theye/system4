@@ -103,7 +103,7 @@ impl CommandInput {
     pub fn last_error(&self) -> Option<&ParseError> {
         self.last_error.as_ref()
     }
-    
+
     /// Get the last success message if any
     pub fn last_success(&self) -> Option<&str> {
         self.last_success.as_ref().map(|s| s.as_str())
@@ -127,9 +127,9 @@ impl CommandInput {
     /// Get example commands for help text
     pub fn get_examples() -> Vec<&'static str> {
         vec![
-            "makeDrone.name(\"My Drone\").brightness(0.8).begin();",
-            "makeDrone.force(15.5).trail(0.2).begin();",
-            "drone.get(\"My Drone\").brightness(0.2).set();",
+            "makeDrone(1).brightness(0.8).outerRadius(500.0).begin();",
+            "makeDrone().force(15.5).noise(0.3).feedback(0.9).begin();",
+            "drone(1).brightness(0.2).centerX(100.0).centerY(-50.0).set();",
         ]
     }
 

@@ -12,7 +12,7 @@ use std::fmt;
 pub enum Command {
     CreateDrone(drone::DroneConfig),
     ModifyDrone {
-        name: String,
+        voice: i32,
         config: drone::DroneConfig,
     },
 }
@@ -24,8 +24,8 @@ impl fmt::Display for Command {
                 writeln!(f, "CreateDrone:")?;
                 write!(f, "{}", config)
             }
-            Command::ModifyDrone { name, config } => {
-                writeln!(f, "ModifyDrone \"{}\":", name)?;
+            Command::ModifyDrone { voice, config } => {
+                writeln!(f, "ModifyDrone voice {}:", voice)?;
                 write!(f, "{}", config)
             }
         }
