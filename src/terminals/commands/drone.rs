@@ -2,8 +2,10 @@
 //
 // Drone command builder and configuration
 
-use super::CommandBuilder;
+use super::TerminalCommandBuilder;
 use crate::terminals::parsing::{ParameterValue, ParseError};
+use crate::voice::controller::{Command, CommandInner, CommandSource};
+use crate::voice::Voice;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -25,7 +27,7 @@ pub struct DroneBuilder {
     pub parameters: HashMap<String, ParameterValue>,
 }
 
-impl CommandBuilder for DroneBuilder {
+impl TerminalCommandBuilder for DroneBuilder {
     type Config = DroneConfig;
 
     fn new() -> Self {
@@ -188,6 +190,11 @@ impl CommandBuilder for DroneBuilder {
     }
 
     fn build(self) -> DroneConfig {
+        let (default_center_x, default_center_y) = match self.voice {
+            Some(1) => (-1280.0, 0.0),
+            Some(4) => (1280.0, 0.0),
+            _ => (0.0, 0.0),
+        };
         DroneConfig {
             voice: self.voice.unwrap_or(1),                   // Default to Voice1
             brightness: self.brightness.unwrap_or(0.7),       // Default brightness
@@ -200,8 +207,8 @@ impl CommandBuilder for DroneBuilder {
             noise: self.noise.unwrap_or(0.0),                 // Default noise/angle variation
             vibration: self.vibration.unwrap_or(0.1),         // Default vibration/position offset
             feedback: self.feedback.unwrap_or(0.0),           // Default feedback
-            center_x: self.center_x.unwrap_or(0.0),           // Default center X
-            center_y: self.center_y.unwrap_or(0.0),           // Default center Y
+            center_x: self.center_x.unwrap_or(default_center_x), // Default center X
+            center_y: self.center_y.unwrap_or(default_center_y), // Default center Y
             additional_parameters: self.parameters,
         }
     }
@@ -223,6 +230,38 @@ pub struct DroneConfig {
     pub center_x: f32,
     pub center_y: f32,
     pub additional_parameters: HashMap<String, ParameterValue>,
+}
+
+impl DroneConfig {
+    /// Convert this DroneConfig to a CreateDrone VoiceCommand
+    pub fn to_create_command(&self, source: CommandSource) -> Command {
+        Command::new(
+            CommandInner::CreateDrone {
+                config: self.clone(),
+            },
+            source,
+        )
+    }
+
+    /// Convert this DroneConfig to a ModifyDrone VoiceCommand for the specified voice
+    pub fn to_modify_command(&self, voice: Voice, source: CommandSource) -> Command {
+        Command::new(
+            CommandInner::ModifyDrone {
+                voice,
+                config: self.clone(),
+            },
+            source,
+        )
+    }
+
+    /// Convert this DroneConfig's voice ID to a Voice enum
+    pub fn voice_enum(&self) -> Voice {
+        match self.voice {
+            1 => Voice::Voice1,
+            4 => Voice::Voice4,
+            _ => Voice::Voice1, // Default fallback
+        }
+    }
 }
 
 impl fmt::Display for DroneConfig {

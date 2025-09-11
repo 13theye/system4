@@ -46,7 +46,7 @@ pub struct ParticleSystem {
     default_particle_size: f32,
     default_particle_color: Rgb,
 
-    // OSC params
+    // modifiable params
     pub alpha_limits: HashMap<Voice, f32>, // scale the alpha of the particles
     pub color_limits: HashMap<Voice, Rgb>,
     pub particle_num_factors: HashMap<Voice, f32>, // normalized proportion of particle_limit
@@ -115,14 +115,14 @@ impl ParticleSystem {
     /********************* Make drone ********************************** */
 
     // Create a drone with a mask and emitters. Return the mask's rect
-    pub fn make_drone_with(
+    pub fn begin_voice(
         &mut self,
         id_generator: &mut IdGenerator,
         voice: Voice,
         circle: WindCircle,
-        alpha: i32,
-        num_particles: i32,
-        trail: i32,
+        alpha: f32,
+        volume: f32,
+        feedback: f32,
     ) -> Rect {
         if self.masks.contains_key(&voice) {
             self.masks.remove(&voice);
@@ -130,10 +130,11 @@ impl ParticleSystem {
 
         let mask = Mask::make_drone(voice);
 
-        let max_particle_percentage = (num_particles as f32) / 100.0;
         let spawn_rate_factor = 1.0;
 
         // Create particle emitters
+
+        /*
         let emitter_left = LinearEmitter::new(
             id_generator.generate(),
             voice,
@@ -161,6 +162,7 @@ impl ParticleSystem {
             self.global_max_spawn_rate,
             spawn_rate_factor,
         );
+         */
 
         let fullscreen_rect = Rect::from_x_y_w_h(0.0, 0.0, 3840.0, 2160.0);
         let emitter_full = FullScreenRandomEmitter::new(
@@ -178,14 +180,10 @@ impl ParticleSystem {
         self.emitters.push(Box::new(emitter_full));
 
         // Set the particle system params
-        let alpha_limit = (alpha as f32) / 100.0;
-        self.alpha_limits.insert(voice, alpha_limit);
         self.color_limits.insert(voice, self.default_particle_color);
-
-        self.particle_num_factors
-            .insert(voice, max_particle_percentage);
-        //self.num_particles = 1.0;
-        self.trail = (trail as f32) / 100.0;
+        self.set_alpha_limit(&voice, alpha);
+        self.set_volume(&voice, volume);
+        self.set_feedback(&voice, feedback);
 
         // Add the wind circle to the forces
         self.forces.add_wind_circle(circle);

@@ -8,7 +8,7 @@ use crate::{
     particle::ParticleSystem,
     terminals::command_input::CommandInput,
     utils::IdGenerator,
-    voice::Voice,
+    voice::{controller::Command, Voice},
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
@@ -81,6 +81,9 @@ pub struct Model {
 
     // Command input for NTerminal
     pub command_input: CommandInput,
+
+    // Unified command queue with priority resolution
+    pub command_queue: Vec<Command>,
 
     // UI state
     pub active_tab: usize, // 0 = Voices, 1 = NTerminal

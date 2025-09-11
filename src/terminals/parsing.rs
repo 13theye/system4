@@ -1,7 +1,7 @@
 // src/terminals/parsing.rs
 
 use super::{
-    commands::{drone::DroneBuilder, Command, CommandBuilder},
+    commands::{drone::DroneBuilder, TerminalCommand, TerminalCommandBuilder},
     tokens::Token,
 };
 use std::fmt;
@@ -64,7 +64,7 @@ impl CommandParser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Command, ParseError> {
+    pub fn parse(&mut self) -> Result<TerminalCommand, ParseError> {
         if self.tokens.is_empty() {
             return Err(ParseError::EmptyInput);
         }
@@ -80,7 +80,7 @@ impl CommandParser {
         }
     }
 
-    fn parse_drone_command(&mut self) -> Result<Command, ParseError> {
+    fn parse_drone_command(&mut self) -> Result<TerminalCommand, ParseError> {
         // After "drone" we expect (voice_id) for modification
         self.expect_token(&Token::LeftParen)?;
 
@@ -143,13 +143,13 @@ impl CommandParser {
             self.expect_token(&Token::Semicolon)?;
         }
 
-        Ok(Command::ModifyDrone {
+        Ok(TerminalCommand::ModifyDrone {
             voice: voice_id,
             config: builder.build(),
         })
     }
 
-    fn parse_make_drone_command(&mut self) -> Result<Command, ParseError> {
+    fn parse_make_drone_command(&mut self) -> Result<TerminalCommand, ParseError> {
         // Parse: makeDrone(voice_id).method().method().begin();
         // We've already parsed "makeDrone", now expect (voice_id)
         self.expect_token(&Token::LeftParen)?;
@@ -216,7 +216,7 @@ impl CommandParser {
             self.expect_token(&Token::Semicolon)?;
         }
 
-        Ok(Command::CreateDrone(builder.build()))
+        Ok(TerminalCommand::CreateDrone(builder.build()))
     }
 
     fn current_token(&self) -> Option<&Token> {

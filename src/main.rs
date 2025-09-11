@@ -21,14 +21,13 @@ use std::{
 
 use system4::{
     config::*,
-    forces::WindCircle,
     fps::FpsManager,
     model::Model,
     osc::{OscCommand, OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
-    terminals::{command_input::CommandInput, commands::Command},
+    terminals::{command_input::CommandInput, commands::TerminalCommand},
     utils::IdGenerator,
-    voice::{controller::VoiceParameterChange, Voice},
+    voice::{controller::{Command, CommandInner, CommandSource}, Voice},
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
@@ -315,6 +314,7 @@ fn model(app: &App) -> Model {
         show_bounds: false,
         show_forces: false,
         command_input: CommandInput::new(),
+        command_queue: Vec::new(),
         active_tab: 0,
     }
 }
@@ -361,6 +361,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
+
+    // Process unified command queue with priority resolution
+    model.process_command_queue();
 
     // Update particle system
     model
@@ -526,21 +529,11 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             // Toggle debug and FPS display
             model.show_bounds = !model.show_bounds;
         }
-        Key::Key1 => {
-            model.osc_loop.send_make_drone(1, 100, 20, 0, 0, 0);
-        }
-        Key::Key4 => {
-            model.osc_loop.send_make_drone(4, 100, 20, 0, 0, 0);
-        }
         Key::C => {
             model.osc_loop.send_inner_radius(4, 0.5);
         }
         Key::R => {
             model.osc_loop.send_outer_radius(4, 0.5);
-        }
-        Key::X => {
-            model.osc_loop.send_erase_drone(1);
-            model.osc_loop.send_erase_drone(4);
         }
         Key::M => {
             model
@@ -571,25 +564,18 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
                             if let Some(command) = model.command_input.try_execute() {
                                 println!("Executing command: {:?}", command);
                                 
-                                // Execute the command
+                                // Execute the command using unified VoiceCommand system
                                 match command {
-                                    Command::CreateDrone(config) => {
-                                        // Convert DroneConfig to make_drone parameters
-                                        let id = config.voice; // Use voice from config
-                                        let alpha = (config.brightness * 100.0) as i32; // Convert 0.0-1.0 to 0-100
-                                        let num_particles = (config.volume * 1000.0) as i32; // Convert 0.0-1.0 to 0-1000
-                                        let force = (config.force * 100.0) as i32; // Convert to integer
-                                        let gravity = (config.gravity * 100.0) as i32; // Convert to integer
-                                        let trail = (config.trail * 100.0) as i32; // Convert to integer
-                                        
-                                        println!("Creating drone with voice={}, alpha={}, particles={}, force={}, gravity={}, trail={}",
-                                            id, alpha, num_particles, force, gravity, trail);
-                                        
-                                        make_drone(model, id, alpha, num_particles, force, gravity, trail);
+                                    TerminalCommand::CreateDrone(config) => {
+                                        let voice_command = config.to_create_command(CommandSource::Terminal);
+                                        println!("Queuing CreateDrone command with config: {:?}", config);
+                                        model.queue_command(voice_command);
                                     }
-                                    Command::ModifyDrone { voice, config: _ } => {
-                                        println!("ModifyDrone command not yet implemented for voice: {}", voice);
-                                        // TODO: Implement modify drone functionality
+                                    TerminalCommand::ModifyDrone { voice, config } => {
+                                        let voice_enum = Voice::from_i32(voice);
+                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
+                                        println!("Queuing ModifyDrone command for voice: {:?} with config: {:?}", voice, config);
+                                        model.queue_command(voice_command);
                                     }
                                 }
                                 
@@ -633,14 +619,14 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice1_volume = model.get_volume(Voice::Voice1);
     let voice1_feedback = model.get_feedback(Voice::Voice1);
     let voice1_angle_variation = model.get_angle_variation(Voice::Voice1);
-    let voice1_position_offset = model.get_position_offset_factor(Voice::Voice1);
+    let voice1_vibration_offset = model.get_vibration_offset_factor(Voice::Voice1);
 
     let voice4_circle_params = model.get_wind_circle_params(Voice::Voice4).cloned();
     let voice4_alpha = model.get_alpha_limit(Voice::Voice4);
     let voice4_volume = model.get_volume(Voice::Voice4);
     let voice4_feedback = model.get_feedback(Voice::Voice4);
     let voice4_angle_variation = model.get_angle_variation(Voice::Voice4);
-    let voice4_position_offset = model.get_position_offset_factor(Voice::Voice4);
+    let voice4_vibration_offset = model.get_vibration_offset_factor(Voice::Voice4);
 
     let ctx = model.egui.begin_frame();
 
@@ -649,7 +635,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     ctx.set_style(adjust_style_from(style));
 
     let mut show_forces_changed = false;
-    let mut parameter_changes = Vec::<VoiceParameterChange>::new();
+    let mut command_queue = Vec::<Command>::new();
 
     egui::Window::new("Control Panel")
         .fixed_pos(egui::pos2(0.0, 0.0))
@@ -742,11 +728,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::OuterRadius {
+                                            command_queue.push(
+                                                Command::new(CommandInner::OuterRadius {
                                                     voice: Voice::Voice1,
                                                     value: radius,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -760,11 +746,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::InnerRadius {
+                                            command_queue.push(
+                                                Command::new(CommandInner::InnerRadius {
                                                     voice: Voice::Voice1,
                                                     value: inner_radius,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -778,10 +764,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(VoiceParameterChange::Alpha {
+                                            command_queue.push(Command::new(CommandInner::Alpha {
                                                 voice: Voice::Voice1,
                                                 value: alpha,
-                                            });
+                                            }, CommandSource::Ui));
                                         }
 
                                         // Volume slider
@@ -794,10 +780,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(VoiceParameterChange::Volume {
+                                            command_queue.push(Command::new(CommandInner::Volume {
                                                 voice: Voice::Voice1,
                                                 value: volume,
-                                            });
+                                            }, CommandSource::Ui));
                                         }
 
                                         // Strength slider
@@ -810,11 +796,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::Strength {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Strength {
                                                     voice: Voice::Voice1,
                                                     value: strength,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -828,11 +814,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::CenterBias {
+                                            command_queue.push(
+                                                Command::new(CommandInner::CenterBias {
                                                     voice: Voice::Voice1,
                                                     value: center_bias,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -846,29 +832,29 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::AngleVariation {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Noise {
                                                     voice: Voice::Voice1,
                                                     value: angle_variation,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
-                                        // Position offset slider
-                                        let mut position_offset = voice1_position_offset;
+                                        // Vibration offset slider
+                                        let mut vibration_offset = voice1_vibration_offset;
                                         if ui
                                             .add(
-                                                egui::Slider::new(&mut position_offset, 0.0..=1.0)
+                                                egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
                                                     .text("Vibration")
                                                     .custom_formatter(|n, _| format!("{:.3}", n)),
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::PositionOffset {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Vibration {
                                                     voice: Voice::Voice1,
-                                                    value: position_offset,
-                                                },
+                                                    value: vibration_offset,
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -882,11 +868,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::Feedback {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Feedback {
                                                     voice: Voice::Voice1,
                                                     value: feedback,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -899,11 +885,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::ForceCenterX {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterX {
                                                     voice: Voice::Voice1,
                                                     value: center_x,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -916,11 +902,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::ForceCenterY {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterY {
                                                     voice: Voice::Voice1,
                                                     value: center_y,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
                                     } else {
@@ -939,7 +925,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     egui::ScrollArea::vertical()
                                         .id_source("voice2_scroll")
                                         .auto_shrink([false, false])
-                                        .show(ui, |ui| {
+                                        .show(ui, |_ui| {
                                     }); // end Voice 2 scroll area
                                 }); // end Voice 2 column
 
@@ -986,11 +972,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::OuterRadius {
+                                            command_queue.push(
+                                                Command::new(CommandInner::OuterRadius {
                                                     voice: Voice::Voice4,
                                                     value: radius,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1004,11 +990,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::InnerRadius {
+                                            command_queue.push(
+                                                Command::new(CommandInner::InnerRadius {
                                                     voice: Voice::Voice4,
                                                     value: inner_radius,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1022,10 +1008,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(VoiceParameterChange::Alpha {
+                                            command_queue.push(Command::new(CommandInner::Alpha {
                                                 voice: Voice::Voice4,
                                                 value: alpha,
-                                            });
+                                            }, CommandSource::Ui));
                                         }
 
                                         // Volume slider
@@ -1038,10 +1024,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(VoiceParameterChange::Volume {
+                                            command_queue.push(Command::new(CommandInner::Volume {
                                                 voice: Voice::Voice4,
                                                 value: volume,
-                                            });
+                                            }, CommandSource::Ui));
                                         }
 
                                         // Strength slider
@@ -1054,11 +1040,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::Strength {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Strength {
                                                     voice: Voice::Voice4,
                                                     value: strength,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1072,11 +1058,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::CenterBias {
+                                            command_queue.push(
+                                                Command::new(CommandInner::CenterBias {
                                                     voice: Voice::Voice4,
                                                     value: center_bias,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1090,29 +1076,29 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::AngleVariation {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Noise {
                                                     voice: Voice::Voice4,
                                                     value: angle_variation,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
                                         // Position offset slider
-                                        let mut position_offset = voice4_position_offset;
+                                        let mut vibration_offset = voice4_vibration_offset;
                                         if ui
                                             .add(
-                                                egui::Slider::new(&mut position_offset, 0.0..=1.0)
+                                                egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
                                                     .text("Vibration")
                                                     .custom_formatter(|n, _| format!("{:.3}", n)),
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::PositionOffset {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Vibration {
                                                     voice: Voice::Voice4,
-                                                    value: position_offset,
-                                                },
+                                                    value: vibration_offset,
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1126,11 +1112,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::Feedback {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Feedback {
                                                     voice: Voice::Voice4,
                                                     value: feedback,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1143,11 +1129,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::ForceCenterX {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterX {
                                                     voice: Voice::Voice4,
                                                     value: center_x,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
 
@@ -1160,11 +1146,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             )
                                             .changed()
                                         {
-                                            parameter_changes.push(
-                                                VoiceParameterChange::ForceCenterY {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterY {
                                                     voice: Voice::Voice4,
                                                     value: center_y,
-                                                },
+                                                }, CommandSource::Ui),
                                             );
                                         }
                                     } else {
@@ -1305,9 +1291,9 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     drop(ctx);
 
-    // Apply all parameter changes outside the UI closure - no borrowing conflicts!
-    for change in parameter_changes {
-        model.apply_voice_parameter_change(change);
+    // Queue all UI voice commands for priority processing
+    for command in command_queue {
+        model.queue_command(command);
     }
 }
 
@@ -1380,123 +1366,66 @@ fn draw_bounds(app: &App, model: &Model) {
 // ************************ OSC   *************************************
 
 fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
-    let mut parameter_changes = Vec::<VoiceParameterChange>::new();
+    let mut command_queue = Vec::<Command>::new();
 
     for command in commands {
         match command {
-            OscCommand::MakeDrone {
-                id,
-                alpha,
-                num_particles,
-                force,
-                gravity,
-                trail,
-            } => {
-                make_drone(model, id, alpha, num_particles, force, gravity, trail);
-            }
-            OscCommand::EraseDrone { id } => {
-                erase_drone(model, id);
-            }
             OscCommand::ParticlesGravity { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::CenterBias { voice, value: val });
+                command_queue.push(Command::new(CommandInner::CenterBias { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesTrail { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Feedback { voice, value: val });
+                command_queue.push(Command::new(CommandInner::Feedback { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesNumParticles { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Volume { voice, value: val });
+                command_queue.push(Command::new(CommandInner::Volume { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesCenterX { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::ForceCenterX { voice, value: val });
+                command_queue.push(Command::new(CommandInner::ForceCenterX { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesCenterY { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::ForceCenterY { voice, value: val });
+                command_queue.push(Command::new(CommandInner::ForceCenterY { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesAlpha { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Alpha { voice, value: val });
+                command_queue.push(Command::new(CommandInner::Alpha { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesForce { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Strength { voice, value: val });
+                command_queue.push(Command::new(CommandInner::Strength { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesInnerRadius { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::InnerRadius { voice, value: val });
+                command_queue.push(Command::new(CommandInner::InnerRadius { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesOuterRadius { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::OuterRadius { voice, value: val });
+                command_queue.push(Command::new(CommandInner::OuterRadius { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesNoise { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::AngleVariation { voice, value: val });
+                command_queue.push(Command::new(CommandInner::Noise { voice, value: val }, CommandSource::Osc));
             }
             OscCommand::ParticlesVibration { id, val } => {
                 let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::PositionOffset { voice, value: val });
+                command_queue.push(Command::new(CommandInner::Vibration { voice, value: val }, CommandSource::Osc));
             }
             _ => {}
         }
     }
 
-    // Apply all OSC parameter changes using the same unified system as UI
-    for change in parameter_changes {
-        model.apply_voice_parameter_change(change);
+    // Queue all OSC voice commands for priority processing
+    for command in command_queue {
+        model.queue_command(command);
     }
 }
 
-/// Start the Voice and begin "make drone" automated display
-#[allow(clippy::too_many_arguments)]
-fn make_drone(
-    model: &mut Model,
-    id: i32,
-    alpha: i32,
-    num_particles: i32,
-    force: i32,
-    gravity: i32,
-    trail: i32,
-) {
-    let voice = Voice::from_i32(id);
-    let center = match voice {
-        Voice::Voice1 => pt2(-1280.0, 200.0),
-        Voice::Voice4 => pt2(1280.0, 200.0),
-        _ => pt2(0.0, 0.0),
-    };
-    let (outer_radius, inner_radius) = (620.0, 200.0);
-    let center_bias = (gravity as f32) / 100.0;
-    let strength = ((force as f32) / 100.0) + 10.0;
 
-    let circle = WindCircle::new(
-        model.id_generator.generate(),
-        voice,
-        center,
-        outer_radius,
-        inner_radius,
-        strength,
-        center_bias,
-    );
-
-    // Create the drone / circle
-    let mask_rect = model.particle_system.make_drone_with(
-        &mut model.id_generator,
-        voice,
-        circle,
-        alpha,
-        num_particles,
-        trail,
-    );
-
-    model.osc_send.send_drone_on_off(id, 1);
-    model.particle_system.set_is_spawning(&voice, true);
-}
-
-fn erase_drone(model: &mut Model, id: i32) {
+fn _erase_drone(model: &mut Model, id: i32) {
     let voice = Voice::from_i32(id);
     model.particle_system.kill_voice(&voice);
     model.particle_system.forces.recalculate_once();

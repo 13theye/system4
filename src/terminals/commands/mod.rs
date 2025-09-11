@@ -9,7 +9,7 @@ use std::fmt;
 
 /// All possible commands that can be parsed
 #[derive(Debug, Clone)]
-pub enum Command {
+pub enum TerminalCommand {
     CreateDrone(drone::DroneConfig),
     ModifyDrone {
         voice: i32,
@@ -17,14 +17,14 @@ pub enum Command {
     },
 }
 
-impl fmt::Display for Command {
+impl fmt::Display for TerminalCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Command::CreateDrone(config) => {
+            TerminalCommand::CreateDrone(config) => {
                 writeln!(f, "CreateDrone:")?;
                 write!(f, "{}", config)
             }
-            Command::ModifyDrone { voice, config } => {
+            TerminalCommand::ModifyDrone { voice, config } => {
                 writeln!(f, "ModifyDrone voice {}:", voice)?;
                 write!(f, "{}", config)
             }
@@ -33,7 +33,7 @@ impl fmt::Display for Command {
 }
 
 /// Trait for command builders that follow the builder pattern
-pub trait CommandBuilder {
+pub trait TerminalCommandBuilder {
     type Config;
 
     fn new() -> Self;

@@ -7,7 +7,7 @@
 //   drone(1).brightness(0.1).volume(0.5).gravity(0.7).set();
 
 use super::{
-    commands::Command,
+    commands::TerminalCommand,
     parsing::{CommandParser, ParseError},
     tokens::Tokenizer,
 };
@@ -15,7 +15,7 @@ use super::{
 pub struct NTerminal;
 
 impl NTerminal {
-    pub fn parse_command(input: &str) -> Result<Command, ParseError> {
+    pub fn parse_command(input: &str) -> Result<TerminalCommand, ParseError> {
         let mut tokenizer = Tokenizer::new(input);
         let tokens = tokenizer.tokenize()?;
 

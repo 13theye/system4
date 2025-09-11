@@ -2,7 +2,7 @@
 //
 // Multi-line command input for NTerminal
 
-use super::{new_terminal::NTerminal, Command, ParseError};
+use super::{new_terminal::NTerminal, TerminalCommand, ParseError};
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -14,7 +14,7 @@ pub struct CommandInput {
     /// Whether the last command had an error
     last_error: Option<ParseError>,
     /// Successfully parsed command waiting for execution
-    pending_command: Option<Command>,
+    pending_command: Option<TerminalCommand>,
     /// Last successful command execution message
     last_success: Option<String>,
 }
@@ -39,7 +39,7 @@ impl CommandInput {
     }
 
     /// Try to execute the current command text
-    pub fn try_execute(&mut self) -> Option<Command> {
+    pub fn try_execute(&mut self) -> Option<TerminalCommand> {
         match NTerminal::parse_command(&self.raw_text) {
             Ok(command) => {
                 self.last_error = None;
@@ -115,7 +115,7 @@ impl CommandInput {
     }
 
     /// Take the pending command (consuming it)
-    pub fn take_pending_command(&mut self) -> Option<Command> {
+    pub fn take_pending_command(&mut self) -> Option<TerminalCommand> {
         self.pending_command.take()
     }
 
