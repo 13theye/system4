@@ -3,11 +3,7 @@
 // Command extension for Model
 
 use super::Voice;
-use crate::{
-    forces::{WindCircle, WindCircleParams},
-    model::Model,
-    terminals::commands::drone::DroneConfig,
-};
+use crate::{forces::WindCircleParams, model::Model, terminals::commands::drone::DroneConfig};
 use nannou::prelude::*;
 use nannou::wgpu::{Device, Queue};
 
@@ -158,7 +154,7 @@ impl Model {
 
     /// Get the position offset factor of a Voice ("vibration")
     pub fn get_vibration_offset_factor(&self, voice: Voice) -> f32 {
-        self.particle_system.get_position_offset_factor(voice)
+        self.particle_system.get_vibration_factor(voice)
     }
 
     pub fn get_volume(&self, voice: Voice) -> f32 {
@@ -229,26 +225,9 @@ impl Model {
                 // Convert voice ID to Voice enum
                 let voice = Voice::from_i32(config.voice);
 
-                let center = vec2(config.center_x, config.center_y);
-
-                let circle = WindCircle::new(
-                    self.id_generator.generate(),
-                    voice,
-                    center,
-                    config.outer_radius,
-                    config.inner_radius,
-                    config.force,
-                    config.gravity,
-                );
-
-                let _ = self.particle_system.begin_voice(
-                    &mut self.id_generator,
-                    voice,
-                    circle,
-                    config.brightness,
-                    config.volume,
-                    config.trail,
-                );
+                let _ = self
+                    .particle_system
+                    .begin_voice(&mut self.id_generator, voice, &config);
 
                 self.osc_send.send_drone_on_off(config.voice, 1);
                 self.particle_system.set_is_spawning(&voice, true);
@@ -261,35 +240,49 @@ impl Model {
                 self.particle_system.forces.set_strength(&voice, 0.0);
             }
             CommandInner::ModifyDrone { voice, config } => {
-                // Apply selective modifications based on config values
-                // This will be implemented when we add modify functionality
-                // For now, treat it like CreateDrone but for the specified voice
-                self.particle_system
-                    .set_alpha_limit(&voice, config.brightness);
-                self.particle_system.set_volume(&voice, config.volume);
-                self.particle_system.set_feedback(&voice, config.feedback);
-                self.particle_system
-                    .forces
-                    .set_outer_radius(&voice, config.outer_radius);
-                self.particle_system
-                    .forces
-                    .set_inner_radius(&voice, config.inner_radius);
-                self.particle_system
-                    .forces
-                    .set_strength(&voice, config.force.min(30.0));
-                self.particle_system
-                    .forces
-                    .set_center_bias(&voice, config.gravity);
-                self.particle_system
-                    .forces
-                    .set_angle_variation(&voice, config.noise);
-                self.particle_system
-                    .set_position_offset_factor(&voice, config.vibration);
+                // Apply selective modifications - only set parameters that are Some(value)
+                if let Some(brightness) = config.brightness {
+                    self.particle_system.set_alpha_limit(&voice, brightness);
+                }
+                if let Some(volume) = config.volume {
+                    self.particle_system.set_volume(&voice, volume);
+                }
+                if let Some(feedback) = config.feedback {
+                    self.particle_system.set_feedback(&voice, feedback);
+                }
+                if let Some(outer_radius) = config.outer_radius {
+                    self.particle_system
+                        .forces
+                        .set_outer_radius(&voice, outer_radius);
+                }
+                if let Some(inner_radius) = config.inner_radius {
+                    self.particle_system
+                        .forces
+                        .set_inner_radius(&voice, inner_radius);
+                }
+                if let Some(force) = config.force {
+                    self.particle_system
+                        .forces
+                        .set_strength(&voice, force.min(30.0));
+                }
+                if let Some(gravity) = config.gravity {
+                    self.particle_system.forces.set_center_bias(&voice, gravity);
+                }
+                if let Some(noise) = config.noise {
+                    self.particle_system.forces.set_noise(&voice, noise);
+                }
+                if let Some(vibration) = config.vibration {
+                    self.particle_system.set_vibration_factor(&voice, vibration);
+                }
 
-                if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
-                    circle
-                        .params_mut()
-                        .set_center(vec2(config.center_x, config.center_y));
+                // Handle center position - only update if at least one coordinate is specified
+                if config.center_x.is_some() || config.center_y.is_some() {
+                    if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
+                        let current_center = circle.params().center;
+                        let new_x = config.center_x.unwrap_or(current_center.x);
+                        let new_y = config.center_y.unwrap_or(current_center.y);
+                        circle.params_mut().set_center(vec2(new_x, new_y));
+                    }
                 }
             }
             CommandInner::Alpha { voice, value } => {
@@ -315,13 +308,10 @@ impl Model {
                 self.particle_system.forces.set_center_bias(&voice, value);
             }
             CommandInner::Noise { voice, value } => {
-                self.particle_system
-                    .forces
-                    .set_angle_variation(&voice, value);
+                self.particle_system.forces.set_noise(&voice, value);
             }
             CommandInner::Vibration { voice, value } => {
-                self.particle_system
-                    .set_position_offset_factor(&voice, value);
+                self.particle_system.set_vibration_factor(&voice, value);
             }
             CommandInner::ForceCenterX { voice, value } => {
                 if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
@@ -364,18 +354,18 @@ pub fn make_drone_command(
 
     let config = DroneConfig {
         voice: voice_id,
-        brightness,
-        volume,
-        gravity,
-        force,
-        trail: feedback,     // OSC "trail" maps to feedback
-        outer_radius: 800.0, // Default values
-        inner_radius: 200.0,
-        noise: 0.0,
-        vibration: 0.1,
-        feedback,
-        center_x: 0.0,
-        center_y: 0.0,
+        brightness: Some(brightness),
+        volume: Some(volume),
+        gravity: Some(gravity),
+        force: Some(force),
+        //trail: Some(trail),        // OSC "trail" maps to feedback
+        outer_radius: Some(800.0), // Default values
+        inner_radius: Some(200.0),
+        noise: Some(0.0),
+        vibration: Some(0.1),
+        feedback: Some(feedback),
+        center_x: Some(0.0),
+        center_y: Some(0.0),
         additional_parameters: std::collections::HashMap::new(),
     };
 

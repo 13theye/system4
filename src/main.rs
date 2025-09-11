@@ -558,40 +558,13 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
                 use nannou::winit::event::VirtualKeyCode;
 
                 match key {
-                    VirtualKeyCode::Return | VirtualKeyCode::NumpadEnter => {
-                        // Try to execute if command ends with semicolon
-                        if model.command_input.is_ready_for_execution() {
-                            if let Some(command) = model.command_input.try_execute() {
-                                println!("Executing command: {:?}", command);
-                                
-                                // Execute the command using unified VoiceCommand system
-                                match command {
-                                    TerminalCommand::CreateDrone(config) => {
-                                        let voice_command = config.to_create_command(CommandSource::Terminal);
-                                        println!("Queuing CreateDrone command with config: {:?}", config);
-                                        model.queue_command(voice_command);
-                                    }
-                                    TerminalCommand::ModifyDrone { voice, config } => {
-                                        let voice_enum = Voice::from_i32(voice);
-                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
-                                        println!("Queuing ModifyDrone command for voice: {:?} with config: {:?}", voice, config);
-                                        model.queue_command(voice_command);
-                                    }
-                                }
-                                
-                                // Clear the input after successful execution
-                                model.command_input.clear();
-                            }
-                            // Note: Error feedback is now shown in UI status section
-                        }
-                        // Note: Status feedback is now shown in UI status section
-                    }
                     VirtualKeyCode::Escape => {
                         model.command_input.clear();
                     }
                     _ => {
                         // Handle character input
                         // Note: This is simplified - in a real app you'd want proper text input handling
+                        // Note: Enter key handling now moved to egui TextEdit response system
                     }
                 }
             }
@@ -1192,15 +1165,45 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 .max_width(380.0)
                                                 .max_height(150.0)
                                                 .show(ui, |ui| {
-                                                    ui.add(
+                                                    // Use TextEdit with proper Enter key handling
+                                                    let response = ui.add(
                                                         egui::TextEdit::multiline(&mut model.command_input)
                                                             .font(egui::TextStyle::Body)
                                                             .frame(false)
+                                                            .min_size(egui::vec2(280.0, 150.0))
                                                             .interactive(true)
                                                             .desired_width(f32::INFINITY)
                                                             .lock_focus(true)
                                                             .hint_text("Type command here...")
                                                     );
+                                                    
+                                                    // Handle Enter key press through egui input system
+                                                    // Check for Enter key pressed while the text field has focus
+                                                    if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                                        && model.command_input.is_ready_for_execution() {
+                                                            if let Some(command) = model.command_input.try_execute() {
+                                                                println!("Executing command: {:?}", command);
+                                                                
+                                                                // Execute the command using unified VoiceCommand system
+                                                                match command {
+                                                                    TerminalCommand::CreateDrone(config) => {
+                                                                        let voice_command = config.to_create_command(CommandSource::Terminal);
+                                                                        println!("Queuing CreateDrone command with config: {:?}", config);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::ModifyDrone { voice, config } => {
+                                                                        let voice_enum = Voice::from_i32(voice);
+                                                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
+                                                                        println!("Queuing ModifyDrone command for voice: {:?} with config: {:?}", voice, config);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                }
+                                                                
+                                                                // Clear the input after successful execution
+                                                                model.command_input.clear();
+                                                            }
+                                                        }
+                                                    
                                                 });
                                         });
 

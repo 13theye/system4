@@ -472,6 +472,7 @@ impl WindCircle {
         width: f32,
         strength: f32,
         center_bias: f32,
+        noise: f32,
     ) -> Self {
         let config = WindCircleParams {
             center,
@@ -479,7 +480,7 @@ impl WindCircle {
             inner_radius: width,
             strength,
             center_bias,
-            angle_variation: 0.0, // Default to no vibration
+            noise,
             dirty: true,
         };
         Self {
@@ -697,7 +698,7 @@ pub struct WindCircleParams {
     /// 0.0 = purely tangential, 1.0 = purely radial inward, 2.0 = tangential in the opposite direction
     pub center_bias: f32,
     /// 0.0-1.0 factor for random angle variation, where 1.0 = full ±90° deviation
-    pub angle_variation: f32,
+    pub noise: f32,
     /// True if settings changed and cells need recalculation
     pub dirty: bool,
 }
@@ -744,10 +745,10 @@ impl WindCircleParams {
     }
 
     /// Set the angle variation of the WindCircle
-    pub fn set_angle_variation(&mut self, angle_variation: f32) {
-        let clamped_variation = angle_variation.clamp(0.0, 1.0);
-        if self.angle_variation != clamped_variation {
-            self.angle_variation = clamped_variation;
+    pub fn set_noise(&mut self, noise: f32) {
+        let clamped_noise = noise.clamp(0.0, 1.0);
+        if self.noise != clamped_noise {
+            self.noise = clamped_noise;
             self.dirty = true;
         }
     }

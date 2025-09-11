@@ -190,25 +190,20 @@ impl TerminalCommandBuilder for DroneBuilder {
     }
 
     fn build(self) -> DroneConfig {
-        let (default_center_x, default_center_y) = match self.voice {
-            Some(1) => (-1280.0, 0.0),
-            Some(4) => (1280.0, 0.0),
-            _ => (0.0, 0.0),
-        };
         DroneConfig {
-            voice: self.voice.unwrap_or(1),                   // Default to Voice1
-            brightness: self.brightness.unwrap_or(0.7),       // Default brightness
-            volume: self.volume.unwrap_or(0.5),               // Default volume
-            gravity: self.gravity.unwrap_or(0.0),             // Default gravity
-            force: self.force.unwrap_or(10.0),                // Default force
-            trail: self.trail.unwrap_or(0.0),                 // Default trail
-            outer_radius: self.outer_radius.unwrap_or(800.0), // Default outer radius
-            inner_radius: self.inner_radius.unwrap_or(200.0), // Default inner radius
-            noise: self.noise.unwrap_or(0.0),                 // Default noise/angle variation
-            vibration: self.vibration.unwrap_or(0.1),         // Default vibration/position offset
-            feedback: self.feedback.unwrap_or(0.0),           // Default feedback
-            center_x: self.center_x.unwrap_or(default_center_x), // Default center X
-            center_y: self.center_y.unwrap_or(default_center_y), // Default center Y
+            voice: self.voice.unwrap_or(1),  // Voice is always required
+            brightness: self.brightness,     // None = unchanged, Some = set to value
+            volume: self.volume,             // None = unchanged, Some = set to value
+            gravity: self.gravity,           // None = unchanged, Some = set to value
+            force: self.force,               // None = unchanged, Some = set to value
+            feedback: self.feedback,         // None = unchanged, Some = set to value
+            outer_radius: self.outer_radius, // None = unchanged, Some = set to value
+            inner_radius: self.inner_radius, // None = unchanged, Some = set to value
+            noise: self.noise,               // None = unchanged, Some = set to value
+            vibration: self.vibration,       // None = unchanged, Some = set to value
+            //trail: self.trail,         // None = unchanged, Some = set to value
+            center_x: self.center_x, // None = unchanged, Some = set to value
+            center_y: self.center_y, // None = unchanged, Some = set to value
             additional_parameters: self.parameters,
         }
     }
@@ -217,18 +212,18 @@ impl TerminalCommandBuilder for DroneBuilder {
 #[derive(Debug, Clone)]
 pub struct DroneConfig {
     pub voice: i32,
-    pub brightness: f32,
-    pub volume: f32,
-    pub gravity: f32,
-    pub force: f32,
-    pub trail: f32,
-    pub outer_radius: f32,
-    pub inner_radius: f32,
-    pub noise: f32,
-    pub vibration: f32,
-    pub feedback: f32,
-    pub center_x: f32,
-    pub center_y: f32,
+    pub brightness: Option<f32>,
+    pub volume: Option<f32>,
+    pub gravity: Option<f32>,
+    pub force: Option<f32>,
+    pub feedback: Option<f32>,
+    pub outer_radius: Option<f32>,
+    pub inner_radius: Option<f32>,
+    pub noise: Option<f32>,
+    pub vibration: Option<f32>,
+    //pub trail: Option<f32>,
+    pub center_x: Option<f32>,
+    pub center_y: Option<f32>,
     pub additional_parameters: HashMap<String, ParameterValue>,
 }
 
@@ -268,18 +263,56 @@ impl fmt::Display for DroneConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "DroneConfig {{")?;
         writeln!(f, "  voice: {}", self.voice)?;
-        writeln!(f, "  brightness: {}", self.brightness)?;
-        writeln!(f, "  volume: {}", self.volume)?;
-        writeln!(f, "  gravity: {}", self.gravity)?;
-        writeln!(f, "  force: {}", self.force)?;
-        writeln!(f, "  trail: {}", self.trail)?;
-        writeln!(f, "  outer_radius: {}", self.outer_radius)?;
-        writeln!(f, "  inner_radius: {}", self.inner_radius)?;
-        writeln!(f, "  noise: {}", self.noise)?;
-        writeln!(f, "  vibration: {}", self.vibration)?;
-        writeln!(f, "  feedback: {}", self.feedback)?;
-        writeln!(f, "  center_x: {}", self.center_x)?;
-        writeln!(f, "  center_y: {}", self.center_y)?;
+
+        // Display optional parameters - show "unchanged" for None values
+        match self.brightness {
+            Some(val) => writeln!(f, "  brightness: {}", val)?,
+            None => writeln!(f, "  brightness: unchanged")?,
+        }
+        match self.volume {
+            Some(val) => writeln!(f, "  volume: {}", val)?,
+            None => writeln!(f, "  volume: unchanged")?,
+        }
+        match self.gravity {
+            Some(val) => writeln!(f, "  gravity: {}", val)?,
+            None => writeln!(f, "  gravity: unchanged")?,
+        }
+        match self.force {
+            Some(val) => writeln!(f, "  force: {}", val)?,
+            None => writeln!(f, "  force: unchanged")?,
+        }
+        match self.feedback {
+            Some(val) => writeln!(f, "  trail: {}", val)?,
+            None => writeln!(f, "  trail: unchanged")?,
+        }
+        match self.outer_radius {
+            Some(val) => writeln!(f, "  outer_radius: {}", val)?,
+            None => writeln!(f, "  outer_radius: unchanged")?,
+        }
+        match self.inner_radius {
+            Some(val) => writeln!(f, "  inner_radius: {}", val)?,
+            None => writeln!(f, "  inner_radius: unchanged")?,
+        }
+        match self.noise {
+            Some(val) => writeln!(f, "  noise: {}", val)?,
+            None => writeln!(f, "  noise: unchanged")?,
+        }
+        match self.vibration {
+            Some(val) => writeln!(f, "  vibration: {}", val)?,
+            None => writeln!(f, "  vibration: unchanged")?,
+        }
+        match self.feedback {
+            Some(val) => writeln!(f, "  feedback: {}", val)?,
+            None => writeln!(f, "  feedback: unchanged")?,
+        }
+        match self.center_x {
+            Some(val) => writeln!(f, "  center_x: {}", val)?,
+            None => writeln!(f, "  center_x: unchanged")?,
+        }
+        match self.center_y {
+            Some(val) => writeln!(f, "  center_y: {}", val)?,
+            None => writeln!(f, "  center_y: unchanged")?,
+        }
 
         if !self.additional_parameters.is_empty() {
             writeln!(f, "  additional_parameters: {{")?;

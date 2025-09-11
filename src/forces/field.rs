@@ -53,13 +53,15 @@ impl ForceFields {
         }
 
         // Collect per-circle angle variations
-        let circle_angle_variations: std::collections::HashMap<usize, f32> = self.wind_circles
+        let circle_angle_variations: std::collections::HashMap<usize, f32> = self
+            .wind_circles
             .iter()
-            .map(|circle| (circle.id, circle.params().angle_variation))
+            .map(|circle| (circle.id, circle.params().noise))
             .collect();
 
         // Update each cell with per-circle angle variations
-        self.wind_field.par_force_update_all(rng, &circle_angle_variations);
+        self.wind_field
+            .par_force_update_all(rng, &circle_angle_variations);
     }
 
     /// Update all Winds in this ForceField
@@ -67,7 +69,8 @@ impl ForceFields {
         // Use a dummy RNG and empty variations for compatibility
         let mut dummy_rng = nannou::rand::thread_rng();
         let empty_variations = std::collections::HashMap::new();
-        self.wind_field.par_force_update_all(&mut dummy_rng, &empty_variations);
+        self.wind_field
+            .par_force_update_all(&mut dummy_rng, &empty_variations);
     }
 
     /// Apply all applicable forces to a particle with mass variation factor
@@ -203,14 +206,14 @@ impl ForceFields {
     /// Get the angle variation of a WindCircle for a given Voice
     pub fn get_angle_variation(&self, voice: &Voice) -> f32 {
         self.get_wind_circle_params(*voice)
-            .map(|params| params.angle_variation)
+            .map(|params| params.noise)
             .unwrap_or(0.0)
     }
 
     /// Set the angle variation of WindCircle for a given Voice
-    pub fn set_angle_variation(&mut self, voice: &Voice, angle_variation: f32) {
+    pub fn set_noise(&mut self, voice: &Voice, noise: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_angle_variation(angle_variation);
+            circle.params_mut().set_noise(noise);
         } else {
             println!("Wind circle not found for {:?}", voice);
         }

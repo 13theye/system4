@@ -14,6 +14,7 @@ use crate::{
     forces::{ForceFields, WindCircle},
     model::GpuBuffers,
     particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
+    terminals::commands::drone::DroneConfig,
     utils::IdGenerator,
     view::Mask,
     voice::Voice,
@@ -60,7 +61,7 @@ pub struct ParticleSystem {
     pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
 
     // Position offset parameters
-    pub position_offset_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
+    pub vibration_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
 }
 
 impl ParticleSystem {
@@ -108,7 +109,7 @@ impl ParticleSystem {
             mass_variation_amount: 0.05, // 5% variation by default
 
             // Initialize position offset parameters
-            position_offset_factors: HashMap::new(),
+            vibration_factors: HashMap::new(),
         }
     }
 
@@ -119,20 +120,50 @@ impl ParticleSystem {
         &mut self,
         id_generator: &mut IdGenerator,
         voice: Voice,
-        circle: WindCircle,
-        alpha: f32,
-        volume: f32,
-        feedback: f32,
+        config: &DroneConfig,
     ) -> Rect {
+        // Apply defaults for create operations
+        let (default_center_x, default_center_y) = match config.voice {
+            1 => (-1280.0, 0.0),
+            4 => (1280.0, 0.0),
+            _ => (0.0, 0.0),
+        };
+
+        // Extract config or use defaults
+        let brightness = config.brightness.unwrap_or(0.7);
+        let volume = config.volume.unwrap_or(0.5);
+        let gravity = config.gravity.unwrap_or(0.0);
+        let force = config.force.unwrap_or(10.0);
+        let feedback = config.feedback.unwrap_or(0.0);
+        let outer_radius = config.outer_radius.unwrap_or(800.0);
+        let inner_radius = config.inner_radius.unwrap_or(200.0);
+        let center_x = config.center_x.unwrap_or(default_center_x);
+        let center_y = config.center_y.unwrap_or(default_center_y);
+        let noise = config.noise.unwrap_or(0.0);
+        let vibration = config.vibration.unwrap_or(0.0);
+
+        // WindCircle creation
+        let center = vec2(center_x, center_y);
+        let circle = WindCircle::new(
+            id_generator.generate(),
+            voice,
+            center,
+            outer_radius,
+            inner_radius,
+            force,
+            gravity,
+            noise,
+        );
+
         if self.masks.contains_key(&voice) {
             self.masks.remove(&voice);
         }
 
         let mask = Mask::make_drone(voice);
 
-        let spawn_rate_factor = 1.0;
-
         // Create particle emitters
+
+        let spawn_rate_factor = 1.0;
 
         /*
         let emitter_left = LinearEmitter::new(
@@ -181,9 +212,10 @@ impl ParticleSystem {
 
         // Set the particle system params
         self.color_limits.insert(voice, self.default_particle_color);
-        self.set_alpha_limit(&voice, alpha);
+        self.set_alpha_limit(&voice, brightness);
         self.set_volume(&voice, volume);
         self.set_feedback(&voice, feedback);
+        self.set_vibration_factor(&voice, vibration);
 
         // Add the wind circle to the forces
         self.forces.add_wind_circle(circle);
@@ -223,7 +255,7 @@ impl ParticleSystem {
         let position_offset_factors: HashMap<Voice, f32> = self
             .particles
             .keys()
-            .map(|voice| (*voice, self.get_position_offset_factor(*voice)))
+            .map(|voice| (*voice, self.get_vibration_factor(*voice)))
             .collect();
 
         for (voice, particles) in self.particles.iter_mut() {
@@ -459,20 +491,17 @@ impl ParticleSystem {
         self.mass_variation_amount
     }
 
-    /********************* Position Offset methods ********************************** */
+    /********************* Vibration (Position Offset) methods ********************************** */
 
     /// Set the position offset factor for a given voice
-    pub fn set_position_offset_factor(&mut self, voice: &Voice, factor: f32) {
-        let clamped_factor = factor.clamp(0.0, 1.0);
-        self.position_offset_factors.insert(*voice, clamped_factor);
+    pub fn set_vibration_factor(&mut self, voice: &Voice, vibration: f32) {
+        let clamped_vibration = vibration.clamp(0.0, 1.0);
+        self.vibration_factors.insert(*voice, clamped_vibration);
     }
 
     /// Get the position offset factor for a given voice (defaults to 0.0 if not set)
-    pub fn get_position_offset_factor(&self, voice: Voice) -> f32 {
-        self.position_offset_factors
-            .get(&voice)
-            .copied()
-            .unwrap_or(0.0)
+    pub fn get_vibration_factor(&self, voice: Voice) -> f32 {
+        self.vibration_factors.get(&voice).copied().unwrap_or(0.0)
     }
 
     /********************* Accessor/Helper methods ********************************** */

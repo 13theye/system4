@@ -176,6 +176,11 @@ impl egui::TextBuffer for CommandInput {
     }
 
     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
+        // If command is ready for execution and we're inserting a newline, don't insert it
+        if self.is_ready_for_execution() && text == "\n" {
+            return 0; // Consume the newline without inserting it
+        }
+        
         let byte_index = self.byte_index_from_char_index(char_index);
         self.raw_text.insert_str(byte_index, text);
         self.update_display();
