@@ -41,7 +41,7 @@ pub enum OscCommand {
         id: i32,
         val: f32,
     },
-    ParticlesTrail {
+    ParticlesFeedback {
         id: i32,
         val: f32,
     },
@@ -285,10 +285,10 @@ impl OscController {
                                 .push(OscCommand::ParticlesGravity { id: *id, val: *val });
                         }
                     }
-                    "/sys4/particles/trail" => {
+                    "/sys4/particles/feedback" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             self.command_queue
-                                .push(OscCommand::ParticlesTrail { id: *id, val: *val });
+                                .push(OscCommand::ParticlesFeedback { id: *id, val: *val });
                         }
                     }
                     "/sys4/particles/noise" => {

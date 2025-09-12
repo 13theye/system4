@@ -127,6 +127,7 @@ fn get_command_key(command: &Command) -> String {
     }
 }
 
+/// Extension of Model that add controller functions
 impl Model {
     /// Get the params of a circle
     pub fn get_wind_circle_params(&self, voice: Voice) -> Option<&WindCircleParams> {
@@ -238,6 +239,7 @@ impl Model {
                 self.particle_system.set_volume(&voice, 0.0);
                 self.particle_system.set_feedback(&voice, 0.0);
                 self.particle_system.forces.set_strength(&voice, 0.0);
+                self.osc_send.send_drone_on_off(voice.to_i32(), 0);
             }
             CommandInner::ModifyDrone { voice, config } => {
                 // Apply selective modifications - only set parameters that are Some(value)
