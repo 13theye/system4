@@ -6,130 +6,10 @@ use nannou_osc as osc;
 use std::error::Error;
 
 use crate::config::OscSendConfig;
-
-#[derive(Debug)]
-pub enum OscCommand {
-    ParticlesAlpha {
-        id: i32,
-        val: f32,
-    },
-    ParticlesNumParticles {
-        id: i32,
-        val: f32,
-    },
-    ParticlesForce {
-        id: i32,
-        val: f32,
-    },
-    ParticlesInnerRadius {
-        id: i32,
-        val: f32,
-    },
-    ParticlesOuterRadius {
-        id: i32,
-        val: f32,
-    },
-    ParticlesCenterX {
-        id: i32,
-        val: f32,
-    },
-    ParticlesCenterY {
-        id: i32,
-        val: f32,
-    },
-    ParticlesGravity {
-        id: i32,
-        val: f32,
-    },
-    ParticlesFeedback {
-        id: i32,
-        val: f32,
-    },
-    ParticlesNoise {
-        id: i32,
-        val: f32,
-    },
-    ParticlesVibration {
-        id: i32,
-        val: f32,
-    },
-
-    MaskChangeBounds {
-        id: i32,
-        x: i32,
-        y: i32,
-        w: i32,
-        h: i32,
-        duration: f32,
-    },
-
-    // New mask commands for RenderWindow integration
-    MaskCreate {
-        id: i32,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        effect_preset: Option<String>,
-        layer: i32,
-    },
-    MaskDelete {
-        id: i32,
-    },
-    MaskResize {
-        id: i32,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    },
-    MaskSetEffect {
-        id: i32,
-        effect_preset: Option<String>,
-    },
-    MaskSetEffectParam {
-        id: i32,
-        param_name: String,
-        value: f32,
-    },
-    MaskEnable {
-        id: i32,
-        enabled: bool,
-    },
-    MaskSetLayer {
-        id: i32,
-        layer: i32,
-    },
-
-    TermBrightness {
-        id: i32,
-        val: f32,
-    },
-    TermVolume {
-        id: i32,
-        val: f32,
-    },
-    TermForce {
-        id: i32,
-        val: f32,
-    },
-    TermShake {
-        id: i32,
-        val: f32,
-    },
-    TermFeedback {
-        id: i32,
-        val: f32,
-    },
-    TermClear {
-        id: i32,
-    },
-
-    TermDroneOnOff {
-        id: i32,
-        val: i32,
-    },
-}
+use crate::voice::{
+    controller::{Command, CommandInner, CommandSource},
+    Voice,
+};
 
 pub struct OscSender {
     sender: osc::Sender,
@@ -217,7 +97,6 @@ impl OscSender {
 }
 
 pub struct OscController {
-    command_queue: Vec<OscCommand>,
     receiver: osc::Receiver,
 }
 
@@ -225,91 +104,119 @@ impl OscController {
     pub fn new(port: u16) -> Result<Self, Box<dyn Error>> {
         let receiver = osc::receiver(port)?;
 
-        Ok(Self {
-            command_queue: Vec::new(),
-            receiver,
-        })
+        Ok(Self { receiver })
     }
 
-    pub fn process_messages(&mut self) {
+    pub fn process_messages(&mut self) -> Vec<Command> {
+        let mut commands = Vec::new();
         for (packet, _addr) in self.receiver.try_iter() {
             for message in packet.into_msgs() {
                 match message.addr.as_str() {
                     /********************* Particle Commands *************************** */
                     "/sys4/particles/alpha" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesAlpha { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::Alpha { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/numParticles" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesNumParticles { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::Volume { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/force" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            let voice = Voice::from_i32(*id);
                             let val = val * 30.0;
-                            self.command_queue
-                                .push(OscCommand::ParticlesForce { id: *id, val });
+                            commands.push(Command::new(
+                                CommandInner::Strength { voice, value: val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/innerRadius" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesInnerRadius { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::InnerRadius { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/outerRadius" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesOuterRadius { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::OuterRadius { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys2/particles/centerX" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesCenterX { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::ForceCenterX { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/centerY" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesCenterY { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::ForceCenterY { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/gravity" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesGravity { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::CenterBias { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/feedback" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesFeedback { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::Feedback { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/noise" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesNoise { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::Noise { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     "/sys4/particles/vibration" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            self.command_queue
-                                .push(OscCommand::ParticlesVibration { id: *id, val: *val });
+                            let voice = Voice::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::Vibration { voice, value: *val },
+                                CommandSource::Osc,
+                            ));
                         }
                     }
                     _ => {}
                 }
             }
         }
-    }
-
-    pub fn take_commands(&mut self) -> Vec<OscCommand> {
-        std::mem::take(&mut self.command_queue)
+        commands
     }
 }

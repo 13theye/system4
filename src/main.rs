@@ -23,7 +23,7 @@ use system4::{
     config::*,
     fps::FpsManager,
     model::Model,
-    osc::{OscCommand, OscController, OscSender},
+    osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
     terminals::{command_input::CommandInput, commands::TerminalCommand},
     utils::IdGenerator,
@@ -355,15 +355,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     update_control_ui(app, model);
 
     // Process OSC commands
-    model.osc.process_messages();
-    let commands = model.osc.take_commands();
-    process_osc(model, commands);
-
-    // Update feedback render params
-    controller::update_feedback(model, device, queue);
+    let mut commands = model.osc.process_messages();
+    model.command_queue.append(&mut commands);
 
     // Process unified command queue with priority resolution
     model.process_command_queue();
+
+    // Update feedback render params
+    controller::update_feedback(model, device, queue);
 
     // Update particle system
     model
@@ -1368,64 +1367,6 @@ fn draw_bounds(app: &App, model: &Model) {
 
 // ************************ OSC   *************************************
 
-fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
-    let mut command_queue = Vec::<Command>::new();
-
-    for command in commands {
-        match command {
-            OscCommand::ParticlesGravity { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::CenterBias { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesTrail { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::Feedback { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesNumParticles { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::Volume { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesCenterX { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::ForceCenterX { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesCenterY { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::ForceCenterY { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesAlpha { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::Alpha { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesForce { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::Strength { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesInnerRadius { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::InnerRadius { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesOuterRadius { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::OuterRadius { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesNoise { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::Noise { voice, value: val }, CommandSource::Osc));
-            }
-            OscCommand::ParticlesVibration { id, val } => {
-                let voice = Voice::from_i32(id);
-                command_queue.push(Command::new(CommandInner::Vibration { voice, value: val }, CommandSource::Osc));
-            }
-            _ => {}
-        }
-    }
-
-    // Queue all OSC voice commands for priority processing
-    for command in command_queue {
-        model.queue_command(command);
-    }
-}
 
 
 fn _erase_drone(model: &mut Model, id: i32) {

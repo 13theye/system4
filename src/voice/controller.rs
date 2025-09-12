@@ -381,7 +381,7 @@ pub fn erase_drone_command(voice: Voice, source: CommandSource) -> Command {
 
 /********** Functions for changing renderer properties ***************** */
 
-/// Update the "Feedback" feature
+/// Update the "Feedback" feature because it's owned by the model's renderer
 pub fn update_feedback(model: &mut Model, device: &Device, queue: &Queue) {
     // Read feedback value for segment length before updating particle system
     let voice1_feedback = model.get_feedback(Voice::Voice1);
