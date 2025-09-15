@@ -213,6 +213,11 @@ impl Model {
             }
         }
 
+        // Process commands through drone parameter displays
+        for command in &final_commands {
+            self.terminal_manager.borrow_mut().process_command_for_drone_displays(command);
+        }
+
         // Execute all final commands
         for command in final_commands {
             self.execute_command(command);

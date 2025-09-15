@@ -1,6 +1,6 @@
-// src/terminals/new_terminal.rs
+// src/terminals/terminal.rs
 //
-// NTerminal: Builder Pattern Pseudocode Parser
+// Terminal: Builder Pattern Pseudocode Parser
 //
 // Parses commands like:
 //   makeDrone(1).brightness(0.1).volume(0.5).gravity(0.7).begin();
@@ -12,9 +12,9 @@ use super::{
     tokens::Tokenizer,
 };
 
-pub struct NTerminal;
+pub struct Terminal {}
 
-impl NTerminal {
+impl Terminal {
     pub fn parse_command(input: &str) -> Result<TerminalCommand, ParseError> {
         let mut tokenizer = Tokenizer::new(input);
         let tokens = tokenizer.tokenize()?;

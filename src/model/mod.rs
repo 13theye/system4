@@ -6,7 +6,7 @@ use crate::{
     fps::FpsManager,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
-    terminals::command_input::CommandInput,
+    terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
     voice::{controller::Command, Voice},
 };
@@ -81,6 +81,9 @@ pub struct Model {
 
     // Command input for NTerminal
     pub command_input: CommandInput,
+
+    // Terminal view manager for on-screen display
+    pub terminal_manager: RefCell<TerminalViewManager>,
 
     // Unified command queue with priority resolution
     pub command_queue: Vec<Command>,

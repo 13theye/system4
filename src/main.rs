@@ -25,7 +25,7 @@ use system4::{
     model::Model,
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
-    terminals::{command_input::CommandInput, commands::TerminalCommand},
+    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}},
     utils::IdGenerator,
     voice::{controller::{Command, CommandInner, CommandSource}, Voice},
 };
@@ -279,6 +279,55 @@ fn model(app: &App) -> Model {
         performer_rect.top() - 10.0,
     ));
 
+    // Create terminal view manager
+    let mut terminal_manager = TerminalViewManager::new();
+    
+    // Set up terminal parameters for command display
+    let terminal_params = TerminalViewParams {
+        origin: vec2(0.0, 0.0),
+        num_lines: 7,
+        width: 600.0,
+        line_spacing: 5.0,
+        bright_color: rgba(0.0, 1.0, 0.0, 1.0),     // Bright green
+        regular_color: rgba(0.0, 0.7, 0.0, 0.8),    // Dimmer green
+        color_fade_secs: 2.0,
+        chars_per_second: 6.0,
+        font: font.clone(),
+        font_size: 16,
+    };
+    
+    terminal_manager.add_new_terminal_view("main", Voice::Voice1, terminal_params);
+
+    // Set up drone parameter displays for each voice
+    let drone_params_voice1 = TerminalViewParams {
+        origin: vec2(-400.0, -150.0),  // Below main terminal
+        num_lines: 1,               // Single line for parameters
+        width: 800.0,
+        line_spacing: 5.0,
+        bright_color: rgba(1.0, 1.0, 0.0, 1.0),     // Bright yellow for updates
+        regular_color: rgba(0.8, 0.8, 0.6, 0.8),    // Dimmer yellow
+        color_fade_secs: 3.0,       // Longer fade for parameters
+        chars_per_second: 20.0,     // Faster typing for parameters
+        font: font.clone(),
+        font_size: 14,
+    };
+
+    let drone_params_voice4 = TerminalViewParams {
+        origin: vec2(-400.0, -190.0),  // Below voice 1 parameters
+        num_lines: 1,
+        width: 800.0,
+        line_spacing: 5.0,
+        bright_color: rgba(0.0, 1.0, 1.0, 1.0),     // Bright cyan for voice 4
+        regular_color: rgba(0.0, 0.7, 0.7, 0.8),    // Dimmer cyan
+        color_fade_secs: 3.0,
+        chars_per_second: 20.0,
+        font: font.clone(),
+        font_size: 14,
+    };
+
+    terminal_manager.add_drone_parameters_display(Voice::Voice1, drone_params_voice1);
+    terminal_manager.add_drone_parameters_display(Voice::Voice4, drone_params_voice4);
+
     Model {
         particle_system,
         osc,
@@ -314,6 +363,7 @@ fn model(app: &App) -> Model {
         show_bounds: false,
         show_forces: false,
         command_input: CommandInput::new(),
+        terminal_manager: RefCell::new(terminal_manager),
         command_queue: Vec::new(),
         active_tab: 0,
     }
@@ -473,12 +523,23 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     }
     // End Rendering context
 
+    // Update and draw terminal view as overlay on top of post-processed texture
+    if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_terminal_view("main") {
+        terminal_view.update(&model.audience_draw);
+    }
+
+    // Update and draw drone parameter displays
+    model.terminal_manager.borrow_mut().update_drone_parameter_displays(&model.audience_draw);
+
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
-        // Then draw over the texture
-        let _ = model.audience_draw.to_frame(app, &frame);
+        
     }
+
+    // Draw over the texture
+    let _ = model.audience_draw.to_frame(app, &frame);
+
 }
 
 fn performer_view(app: &App, model: &Model, frame: Frame) {
@@ -506,6 +567,7 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
             .particle_system
             .draw_forces(&model.performer_draw, scale_x, scale_y);
     }
+
 
     // Then draw over the texture
     let _ = model.performer_draw.to_frame(app, &frame);
@@ -1175,6 +1237,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                             .lock_focus(true)
                                                             .hint_text("Type command here...")
                                                     );
+
+                                                    // Update terminal display with live command text
+                                                    if response.changed() {
+                                                        model.terminal_manager.borrow_mut().update_from_command_input("main", &model.command_input);
+                                                    }
                                                     
                                                     // Handle Enter key press through egui input system
                                                     // Check for Enter key pressed while the text field has focus
@@ -1200,6 +1267,9 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 
                                                                 // Clear the input after successful execution
                                                                 model.command_input.clear();
+                                                                
+                                                                // Clear the terminal display
+                                                                model.terminal_manager.borrow_mut().clear_terminal("main");
                                                             }
                                                         }
                                                     
@@ -1277,9 +1347,9 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     ui.add_space(15.0);
                                     ui.heading("Syntax Guide");
                                     ui.add_space(5.0);
-                                    ui.label("• Create: drone.new().params().build();");
-                                    ui.label("• Modify: drone.get(\"name\").params().set();");
-                                    ui.label("• Parameters: name(), brightness(), volume()");
+                                    ui.label("• Create: makeDrone(voice).params().begin();");
+                                    ui.label("• Modify: drone(voice).params().set();");
+                                    ui.label("• Parameters:brightness(), volume(), gravity(), etc");
                                     ui.label("• Values: strings in \"quotes\", numbers");
                                     }); // end right column scroll area
                                 }); // end right column

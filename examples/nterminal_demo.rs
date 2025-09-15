@@ -2,8 +2,8 @@
 //
 // Demo of the NTerminal builder pattern parser
 
-use system4::terminals::new_terminal::NTerminal;
+use system4::terminals::terminal::Terminal;
 
 fn main() {
-    NTerminal::demo();
+    Terminal::demo();
 }

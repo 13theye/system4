@@ -2,7 +2,7 @@
 //
 // Multi-line command input for NTerminal
 
-use super::{new_terminal::NTerminal, TerminalCommand, ParseError};
+use super::{terminal::Terminal, ParseError, TerminalCommand};
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -40,7 +40,7 @@ impl CommandInput {
 
     /// Try to execute the current command text
     pub fn try_execute(&mut self) -> Option<TerminalCommand> {
-        match NTerminal::parse_command(&self.raw_text) {
+        match Terminal::parse_command(&self.raw_text) {
             Ok(command) => {
                 self.last_error = None;
                 self.last_success = Some(format!("Command executed: {:?}", command));
@@ -128,7 +128,7 @@ impl CommandInput {
     pub fn get_examples() -> Vec<&'static str> {
         vec![
             "makeDrone(1).brightness(0.8).outerRadius(500.0).begin();",
-            "makeDrone().force(15.5).noise(0.3).feedback(0.9).begin();",
+            "makeDrone(4).force(15.5).noise(0.3).feedback(0.9).begin();",
             "drone(1).brightness(0.2).centerX(100.0).centerY(-50.0).set();",
         ]
     }
@@ -180,7 +180,7 @@ impl egui::TextBuffer for CommandInput {
         if self.is_ready_for_execution() && text == "\n" {
             return 0; // Consume the newline without inserting it
         }
-        
+
         let byte_index = self.byte_index_from_char_index(char_index);
         self.raw_text.insert_str(byte_index, text);
         self.update_display();
