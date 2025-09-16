@@ -9,3 +9,4 @@ pub mod tokens;
 // Re-export key types for public API
 pub use commands::TerminalCommand;
 pub use parsing::{ParameterValue, ParseError};
+pub use terminal_view::TextJustification;

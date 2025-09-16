@@ -13,24 +13,52 @@ pub struct ParameterUpdate {
     pub last_updated: Instant,
 }
 
+// Fixed parameter order for consistent line positioning
+const PARAMETER_ORDER: &[&str] = &[
+    "brightness",
+    "volume",
+    "gravity",
+    "force",
+    "feedback",
+    "outerRadius",
+    "innerRadius",
+    "noise",
+    "vibration",
+    "centerX",
+    "centerY",
+    "centerBias",
+];
+
 pub struct DroneParametersDisplay {
     terminal_view: TerminalView,
     voice: Voice,
     parameters: HashMap<String, ParameterUpdate>,
+    parameter_to_line: HashMap<String, usize>,
 }
 
 impl DroneParametersDisplay {
     pub fn new(voice: Voice, params: TerminalViewParams) -> Self {
         let mut terminal_view = TerminalView::new(voice, params);
+        let mut parameter_to_line = HashMap::new();
 
-        // Add initial placeholder text
-        let placeholder = format!("Voice {} - Waiting for parameters...", voice.to_i32());
-        terminal_view.add_text(&placeholder, false);
+        // Add initial header
+        let header = format!("Voice {} Parameters:", voice.to_i32());
+        terminal_view.add_text(&header, false);
+
+        // Pre-populate all parameter lines with default values
+        for (index, &param_name) in PARAMETER_ORDER.iter().enumerate() {
+            parameter_to_line.insert(param_name.to_string(), index + 1); // +1 for header line
+
+            // Add placeholder line with default value using direct line update
+            let placeholder_line = format!("{}(-.--)", param_name);
+            terminal_view.update_line_at_index(index + 1, &placeholder_line, true);
+        }
 
         Self {
             terminal_view,
             voice,
             parameters: HashMap::new(),
+            parameter_to_line,
         }
     }
 
@@ -64,14 +92,14 @@ impl DroneParametersDisplay {
                     self.update_parameter("innerRadius", *value, now);
                 }
             }
-            crate::voice::controller::CommandInner::Strength { voice, value } => {
+            crate::voice::controller::CommandInner::Force { voice, value } => {
                 if *voice == self.voice {
-                    self.update_parameter("gravity", *value, now);
+                    self.update_parameter("force", *value, now);
                 }
             }
-            crate::voice::controller::CommandInner::CenterBias { voice, value } => {
+            crate::voice::controller::CommandInner::Gravity { voice, value } => {
                 if *voice == self.voice {
-                    self.update_parameter("centerBias", *value, now);
+                    self.update_parameter("gravity", *value, now);
                 }
             }
             crate::voice::controller::CommandInner::Noise { voice, value } => {
@@ -109,7 +137,11 @@ impl DroneParametersDisplay {
     }
 
     /// Process DroneConfig to extract parameter updates
-    fn process_drone_config(&mut self, config: &crate::terminals::commands::drone::DroneConfig, now: Instant) {
+    fn process_drone_config(
+        &mut self,
+        config: &crate::terminals::commands::drone::DroneConfig,
+        now: Instant,
+    ) {
         if let Some(brightness) = config.brightness {
             self.update_parameter("brightness", brightness, now);
         }
@@ -152,42 +184,33 @@ impl DroneParametersDisplay {
             ParameterUpdate {
                 value,
                 last_updated: timestamp,
-            }
+            },
         );
-        self.refresh_display();
+        self.update_parameter_line(name, value, timestamp);
     }
 
-    /// Generate the display string and update the terminal view
-    fn refresh_display(&mut self) {
-        if self.parameters.is_empty() {
-            // Show a placeholder when no parameters are set
-            let placeholder = format!("Voice {} - No parameters set", self.voice.to_i32());
-            self.terminal_view.clear();
-            self.terminal_view.add_text(&placeholder, false);
-            return;
-        }
+    /// Update a specific parameter line in the terminal view
+    fn update_parameter_line(&mut self, name: &str, value: f32, timestamp: Instant) {
+        let Some(&line_index) = self.parameter_to_line.get(name) else {
+            return; // Parameter not found in mapping
+        };
 
-        // Sort parameters by name for consistent display order
-        let mut sorted_params: Vec<_> = self.parameters.iter().collect();
-        sorted_params.sort_by_key(|(name, _)| *name);
+        // Format the parameter line
+        let line_text = format!("{}({:.2})", name, value);
 
-        // Format as "param(value) | param(value)..."
-        let display_parts: Vec<String> = sorted_params
-            .iter()
-            .map(|(name, update)| format!("{}({:.2})", name, update.value))
-            .collect();
-
-        let display_text = display_parts.join(" | ");
-
-        // Check if any parameter was updated recently for color highlighting
+        // Check if this parameter was updated recently for highlighting
         let now = Instant::now();
-        let has_recent_update = self.parameters.values().any(|update| {
-            now.duration_since(update.last_updated).as_secs_f32() < 2.0
-        });
+        let was_recently_updated = now.duration_since(timestamp).as_secs_f32() < 0.1; // Very recent
 
-        // Clear the terminal and add the new line
-        self.terminal_view.clear();
-        self.terminal_view.add_text(&display_text, has_recent_update);
+        // Update the specific line directly in the terminal view
+        self.update_line_at_index(line_index, &line_text, was_recently_updated);
+    }
+
+    /// Update a specific line in the terminal view by index
+    fn update_line_at_index(&mut self, line_index: usize, text: &str, should_highlight: bool) {
+        // Use the new update_line_at_index method to update in place
+        self.terminal_view
+            .update_line_at_index(line_index, text, should_highlight);
     }
 
     /// Update the terminal view (handles animations, etc.)

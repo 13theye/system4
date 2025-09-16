@@ -52,11 +52,11 @@ pub enum CommandInner {
         voice: Voice,
         value: f32,
     },
-    Strength {
+    Force {
         voice: Voice,
         value: f32,
     },
-    CenterBias {
+    Gravity {
         voice: Voice,
         value: f32,
     },
@@ -117,8 +117,8 @@ fn get_command_key(command: &Command) -> String {
         CommandInner::Feedback { voice, .. } => format!("Feedback_{:?}", voice),
         CommandInner::OuterRadius { voice, .. } => format!("OuterRadius_{:?}", voice),
         CommandInner::InnerRadius { voice, .. } => format!("InnerRadius_{:?}", voice),
-        CommandInner::Strength { voice, .. } => format!("Strength_{:?}", voice),
-        CommandInner::CenterBias { voice, .. } => format!("CenterBias_{:?}", voice),
+        CommandInner::Force { voice, .. } => format!("Strength_{:?}", voice),
+        CommandInner::Gravity { voice, .. } => format!("CenterBias_{:?}", voice),
         CommandInner::Noise { voice, .. } => format!("AngleVariation_{:?}", voice),
         CommandInner::Vibration { voice, .. } => format!("Vibration_{:?}", voice),
         CommandInner::ForceCenterX { voice, .. } => format!("ForceCenterX_{:?}", voice),
@@ -215,7 +215,9 @@ impl Model {
 
         // Process commands through drone parameter displays
         for command in &final_commands {
-            self.terminal_manager.borrow_mut().process_command_for_drone_displays(command);
+            self.terminal_manager
+                .borrow_mut()
+                .process_command_for_drone_displays(command);
         }
 
         // Execute all final commands
@@ -307,11 +309,11 @@ impl Model {
             CommandInner::InnerRadius { voice, value } => {
                 self.particle_system.forces.set_inner_radius(&voice, value);
             }
-            CommandInner::Strength { voice, value } => {
+            CommandInner::Force { voice, value } => {
                 let strength = value.min(30.0); // 30 is the max strength of the wind circle
                 self.particle_system.forces.set_strength(&voice, strength);
             }
-            CommandInner::CenterBias { voice, value } => {
+            CommandInner::Gravity { voice, value } => {
                 self.particle_system.forces.set_center_bias(&voice, value);
             }
             CommandInner::Noise { voice, value } => {

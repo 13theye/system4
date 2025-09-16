@@ -25,7 +25,7 @@ use system4::{
     model::Model,
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
-    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}},
+    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
     voice::{controller::{Command, CommandInner, CommandSource}, Voice},
 };
@@ -173,6 +173,7 @@ fn model(app: &App) -> Model {
     let performer_draw = nannou::Draw::new();
     let control_draw = nannou::Draw::new();
 
+
     // Set up effects pipeline
 
     let lo_config = TextureConfig {
@@ -193,6 +194,7 @@ fn model(app: &App) -> Model {
         format: wgpu::TextureFormat::Rgba16Float,
     };
 
+
     // Create particle renderer
     let particle_renderer1: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
     let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
@@ -203,11 +205,13 @@ fn model(app: &App) -> Model {
     let segment_renderer4 = SegmentRenderer::new(device, hi_config, 25000, segment_params);
 
     // Create pipeline textures
+    rendering.create_named_texture(device, "terminal", hi_config);
     rendering.create_named_texture(device, "particles", hi_config);
     rendering.create_named_texture(device, "heatmap", hi_config);
     //rendering.create_named_texture(device, "particle_processed", hi_config);
     rendering.create_named_texture(device, "heatmap_processed", hi_config);
     rendering.create_named_texture(device, "processed_composited", hi_config);
+    rendering.create_named_texture(device, "post-processed", hi_config);
 
     let particle_effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
@@ -244,6 +248,7 @@ fn model(app: &App) -> Model {
     let effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
         .input_texture("particles")
+        .output_texture("post-processed")
         .brightness_extract(med_config, 0.7)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
@@ -253,6 +258,17 @@ fn model(app: &App) -> Model {
 
     if let Ok(effect) = effects {
         rendering.add_multi_pipeline("effects", effect);
+    }
+
+    let final_composite = PipelineBuilder::new()
+        .name("Final overlay composite")
+        .input_textures(&["terminal", "post-processed"])
+        .simple_additive_composite(hi_config, 1.0)
+        .build(device);
+
+    if let Ok(effect) = final_composite {
+        rendering.add_multi_pipeline("final composite", effect);
+
     }
 
     // Set up egui
@@ -284,45 +300,48 @@ fn model(app: &App) -> Model {
     
     // Set up terminal parameters for command display
     let terminal_params = TerminalViewParams {
-        origin: vec2(0.0, 0.0),
+        origin: vec2(-500.0, 1000.0),
         num_lines: 7,
-        width: 600.0,
+        width: 1000.0,
         line_spacing: 5.0,
-        bright_color: rgba(0.0, 1.0, 0.0, 1.0),     // Bright green
-        regular_color: rgba(0.0, 0.7, 0.0, 0.8),    // Dimmer green
-        color_fade_secs: 2.0,
+        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
+        regular_color: rgba(0.2, 0.2, 0.2, 0.8),
+        color_fade_secs: 1.0,
         chars_per_second: 6.0,
         font: font.clone(),
-        font_size: 16,
+        font_size: 32,
+        justification: TextJustification::BottomLeft,
     };
     
     terminal_manager.add_new_terminal_view("main", Voice::Voice1, terminal_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
-        origin: vec2(-400.0, -150.0),  // Below main terminal
-        num_lines: 1,               // Single line for parameters
-        width: 800.0,
+        origin: vec2(-1900.0, -1050.0),  // Below main terminal
+        num_lines: 15,              // Multiple lines for individual parameters
+        width: 1000.0,
         line_spacing: 5.0,
-        bright_color: rgba(1.0, 1.0, 0.0, 1.0),     // Bright yellow for updates
-        regular_color: rgba(0.8, 0.8, 0.6, 0.8),    // Dimmer yellow
-        color_fade_secs: 3.0,       // Longer fade for parameters
-        chars_per_second: 20.0,     // Faster typing for parameters
+        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
+        regular_color: rgba(0.3, 0.3, 0.3, 0.8),
+        color_fade_secs: 1.5,
+        chars_per_second: 6.0,     // Faster typing for parameters
         font: font.clone(),
-        font_size: 14,
+        font_size: 22,
+        justification: TextJustification::BottomLeft,
     };
 
     let drone_params_voice4 = TerminalViewParams {
-        origin: vec2(-400.0, -190.0),  // Below voice 1 parameters
-        num_lines: 1,
-        width: 800.0,
+        origin: vec2(1900.0, -1050.0),  // Below voice 1 parameters
+        num_lines: 15,
+        width: 1000.0,
         line_spacing: 5.0,
-        bright_color: rgba(0.0, 1.0, 1.0, 1.0),     // Bright cyan for voice 4
-        regular_color: rgba(0.0, 0.7, 0.7, 0.8),    // Dimmer cyan
-        color_fade_secs: 3.0,
-        chars_per_second: 20.0,
+        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
+        regular_color: rgba(0.3, 0.3, 0.3, 0.8),
+        color_fade_secs: 1.5,
+        chars_per_second: 6.0,
         font: font.clone(),
-        font_size: 14,
+        font_size: 22,
+        justification: TextJustification::BottomRight,
     };
 
     terminal_manager.add_drone_parameters_display(Voice::Voice1, drone_params_voice1);
@@ -516,6 +535,21 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
+        // Update and draw terminal view as overlay on top of post-processed texture
+        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_terminal_view("main") {
+            terminal_view.update(&rendering.draw);
+        }
+
+        // Update and draw drone parameter displays
+        model.terminal_manager.borrow_mut().update_drone_parameter_displays(&rendering.draw);
+
+        // Encode Nannou Draw
+        rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
+
+        if let Err(e) = rendering.execute_named_pipeline("final composite", device, &mut encoder) {
+            eprintln!("Error executing final composite pipeline: {}", e);
+        }
+
         rendering.submit_command_encoder(device, queue, encoder);
 
         // Update reshaper if needed (could be cached in Model)
@@ -523,18 +557,11 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     }
     // End Rendering context
 
-    // Update and draw terminal view as overlay on top of post-processed texture
-    if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_terminal_view("main") {
-        terminal_view.update(&model.audience_draw);
-    }
-
-    // Update and draw drone parameter displays
-    model.terminal_manager.borrow_mut().update_drone_parameter_displays(&model.audience_draw);
 
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
-        
+
     }
 
     // Draw over the texture
@@ -831,7 +858,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(
-                                                Command::new(CommandInner::Strength {
+                                                Command::new(CommandInner::Force {
                                                     voice: Voice::Voice1,
                                                     value: strength,
                                                 }, CommandSource::Ui),
@@ -849,7 +876,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(
-                                                Command::new(CommandInner::CenterBias {
+                                                Command::new(CommandInner::Gravity {
                                                     voice: Voice::Voice1,
                                                     value: center_bias,
                                                 }, CommandSource::Ui),
@@ -1075,7 +1102,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(
-                                                Command::new(CommandInner::Strength {
+                                                Command::new(CommandInner::Force {
                                                     voice: Voice::Voice4,
                                                     value: strength,
                                                 }, CommandSource::Ui),
@@ -1093,7 +1120,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(
-                                                Command::new(CommandInner::CenterBias {
+                                                Command::new(CommandInner::Gravity {
                                                     voice: Voice::Voice4,
                                                     value: center_bias,
                                                 }, CommandSource::Ui),

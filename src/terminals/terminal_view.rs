@@ -6,6 +6,14 @@ use std::{collections::HashMap, time::Instant};
 use super::{command_input::CommandInput, drone_parameters_display::DroneParametersDisplay};
 use crate::voice::{controller::Command, Voice};
 
+#[derive(Clone, Copy, Debug)]
+pub enum TextJustification {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
 #[derive(Default)]
 /// Struct to collect and manager TerminalView updates
 pub struct TerminalViewManager {
@@ -83,12 +91,18 @@ impl TerminalViewManager {
     }
 
     /// Get a drone parameter display for a specific voice
-    pub fn get_drone_parameters_display(&mut self, voice: Voice) -> Option<&mut DroneParametersDisplay> {
+    pub fn get_drone_parameters_display(
+        &mut self,
+        voice: Voice,
+    ) -> Option<&mut DroneParametersDisplay> {
         self.drone_parameter_displays.get_mut(&voice)
     }
 
     /// Get a drone parameter display for display/drawing (immutable access)
-    pub fn get_drone_parameters_display_for_display(&self, voice: Voice) -> Option<&DroneParametersDisplay> {
+    pub fn get_drone_parameters_display_for_display(
+        &self,
+        voice: Voice,
+    ) -> Option<&DroneParametersDisplay> {
         self.drone_parameter_displays.get(&voice)
     }
 
@@ -113,7 +127,43 @@ pub struct TerminalView {
 impl TerminalView {
     pub fn new(voice: Voice, params: TerminalViewParams) -> Self {
         let (line_positions, total_height) = generate_line_positions(&params);
-        let rect = Rect::from_x_y_w_h(params.origin.x, params.origin.y, params.width, total_height);
+
+        // Calculate rect based on justification - origin defines the specified corner
+        let rect = match params.justification {
+            TextJustification::TopLeft => {
+                Rect::from_x_y_w_h(
+                    params.origin.x + params.width / 2.0,
+                    params.origin.y - total_height / 2.0,
+                    params.width,
+                    total_height
+                )
+            }
+            TextJustification::TopRight => {
+                Rect::from_x_y_w_h(
+                    params.origin.x - params.width / 2.0,
+                    params.origin.y - total_height / 2.0,
+                    params.width,
+                    total_height
+                )
+            }
+            TextJustification::BottomLeft => {
+                Rect::from_x_y_w_h(
+                    params.origin.x + params.width / 2.0,
+                    params.origin.y + total_height / 2.0,
+                    params.width,
+                    total_height
+                )
+            }
+            TextJustification::BottomRight => {
+                Rect::from_x_y_w_h(
+                    params.origin.x - params.width / 2.0,
+                    params.origin.y + total_height / 2.0,
+                    params.width,
+                    total_height
+                )
+            }
+        };
+
         let lines = vec![None; params.num_lines];
 
         Self {
@@ -136,14 +186,38 @@ impl TerminalView {
 
     /// Add a pre-created Line object (helper for add_text and live updates)
     fn add_text_line(&mut self, line: Line) {
-        let idx = self.get_next_line_idx();
-
-        if idx < self.params.num_lines {
-            self.lines.insert(idx, Some(line));
-        } else {
-            self.lines.rotate_left(1);
-            self.lines.insert(self.params.num_lines - 1, Some(line));
+        match self.params.justification {
+            TextJustification::TopLeft | TextJustification::TopRight => {
+                // Top justification: add lines at the end, rotate left when full
+                let idx = self.get_next_line_idx();
+                if idx < self.params.num_lines {
+                    self.lines.insert(idx, Some(line));
+                } else {
+                    self.lines.rotate_left(1);
+                    self.lines.insert(self.params.num_lines - 1, Some(line));
+                }
+            }
+            TextJustification::BottomLeft | TextJustification::BottomRight => {
+                // Bottom justification: add lines at the beginning, shift everything down
+                if self.lines.iter().all(|l| l.is_some()) {
+                    // Terminal is full, remove the bottom line and add new line at top
+                    self.lines.rotate_right(1);
+                }
+                self.lines[0] = Some(line);
+            }
         }
+    }
+
+    /// Update a specific line in place without affecting other lines
+    pub fn update_line_at_index(&mut self, index: usize, text: &str, does_fade: bool) {
+        if index >= self.params.num_lines {
+            return; // Index out of bounds
+        }
+
+        let mut line = Line::new_from_str(text, self.params.bright_color, does_fade);
+        // Show all characters immediately (no typewriter effect)
+        line.show_all_chars();
+        self.lines[index] = Some(line);
     }
 
     /// Update terminal display from CommandInput - convenience method for integration
@@ -164,13 +238,32 @@ impl TerminalView {
                 0
             };
 
-            // Place lines directly in their final positions without rotation
-            for (display_idx, line_text) in lines.iter().skip(start_idx).enumerate() {
-                if !line_text.trim().is_empty() || *line_text == *first_line {
-                    // Create line with immediate display (no typewriter effect)
-                    let mut new_line = Line::new_from_str(line_text, self.params.bright_color, false);
-                    new_line.char_idx = new_line.chars.len(); // Show all characters immediately
-                    self.lines[display_idx] = Some(new_line);
+            // Place lines based on justification
+            match self.params.justification {
+                TextJustification::TopLeft | TextJustification::TopRight => {
+                    // Top justification: place lines top to bottom
+                    for (display_idx, line_text) in lines.iter().skip(start_idx).enumerate() {
+                        if !line_text.trim().is_empty() || *line_text == *first_line {
+                            let mut new_line =
+                                Line::new_from_str(line_text, self.params.bright_color, false);
+                            new_line.char_idx = new_line.chars.len(); // Show all characters immediately
+                            self.lines[display_idx] = Some(new_line);
+                        }
+                    }
+                }
+                TextJustification::BottomLeft | TextJustification::BottomRight => {
+                    // Bottom justification: place lines from bottom up
+                    let displayed_lines: Vec<&str> = lines.iter().skip(start_idx).copied().collect();
+                    for (i, line_text) in displayed_lines.iter().enumerate() {
+                        if !line_text.trim().is_empty() || *line_text == *first_line {
+                            let mut new_line =
+                                Line::new_from_str(line_text, self.params.bright_color, false);
+                            new_line.char_idx = new_line.chars.len(); // Show all characters immediately
+                            // Place from bottom: last line goes at bottom index
+                            let display_idx = self.params.num_lines - displayed_lines.len() + i;
+                            self.lines[display_idx] = Some(new_line);
+                        }
+                    }
                 }
             }
         }
@@ -242,7 +335,6 @@ impl TerminalView {
         }
     }
 
-
     pub fn draw(&self, draw: &Draw) {
         for (idx, line) in self.lines.iter().enumerate() {
             let Some(line) = line else {
@@ -257,16 +349,28 @@ impl TerminalView {
 
             let text = line.chars[..line.char_idx].iter().collect::<String>();
 
-            draw.text(&text)
-                .left_justify()
+            // Convert corner-based position to center-based position for nannou
+            // pos.x is always the left edge of the text area, so center is pos.x + width/2
+            let center_x = pos.x + self.params.width / 2.0;
+
+            let text_builder = draw.text(&text)
                 .w(self.params.width)
                 .color(line.color)
                 .font_size(self.params.font_size)
                 .font(font)
-                .x_y(pos.x, pos.y);
+                .x_y(center_x, pos.y);
+
+            // Apply appropriate text justification based on terminal justification
+            match self.params.justification {
+                TextJustification::TopLeft | TextJustification::BottomLeft => {
+                    text_builder.left_justify();
+                }
+                TextJustification::TopRight | TextJustification::BottomRight => {
+                    text_builder.right_justify();
+                }
+            }
         }
     }
-
 }
 
 pub struct TerminalViewParams {
@@ -280,6 +384,7 @@ pub struct TerminalViewParams {
     pub chars_per_second: f32,
     pub font: Font,
     pub font_size: u32,
+    pub justification: TextJustification,
 }
 
 /// Struct defining a Line of text with properties for animations
@@ -317,6 +422,11 @@ impl Line {
         self.char_idx = ((line_length as f32 * t) as usize).min(line_length);
         self.last_text_update = now;
     }
+
+    /// Show all characters immediately (skip typewriter effect)
+    pub fn show_all_chars(&mut self) {
+        self.char_idx = self.chars.len();
+    }
 }
 
 // Generate the positions of the lines in the terminal, also return total height
@@ -325,17 +435,22 @@ fn generate_line_positions(params: &TerminalViewParams) -> (Vec<Vec2>, f32) {
     let line_height = params.font_size as f32 + params.line_spacing * 2.0;
     let total_height = line_height * params.num_lines as f32;
 
-    // Start from the top of the terminal and go down
-    let top_y = params.origin.y + total_height / 2.0;
+    // Calculate base positions based on justification
+    let (base_x, start_y) = match params.justification {
+        TextJustification::TopLeft => (params.origin.x, params.origin.y),
+        TextJustification::TopRight => (params.origin.x - params.width, params.origin.y),
+        TextJustification::BottomLeft => (params.origin.x, params.origin.y + total_height),
+        TextJustification::BottomRight => (params.origin.x - params.width, params.origin.y + total_height),
+    };
 
+    // All justifications flow lines downward, but start from different Y positions
     for i in 0..params.num_lines {
-        line_positions.insert(
-            i,
-            Vec2::new(
-                params.origin.x,
-                top_y - (i as f32 + 0.5) * line_height, // Center each line within its slot
-            ),
-        );
+        let line_offset = (i as f32 + 0.5) * line_height;
+
+        line_positions.push(Vec2::new(
+            base_x,
+            start_y - line_offset, // All lines go down from start_y
+        ));
     }
 
     (line_positions, total_height)

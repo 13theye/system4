@@ -136,7 +136,7 @@ impl OscController {
                             let voice = Voice::from_i32(*id);
                             let val = val * 30.0;
                             commands.push(Command::new(
-                                CommandInner::Strength { voice, value: val },
+                                CommandInner::Force { voice, value: val },
                                 CommandSource::Osc,
                             ));
                         }
@@ -181,7 +181,7 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = Voice::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::CenterBias { voice, value: *val },
+                                CommandInner::Gravity { voice, value: *val },
                                 CommandSource::Osc,
                             ));
                         }

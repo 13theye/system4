@@ -146,7 +146,7 @@ impl ForceFields {
             circle.remove_from_field(&mut self.wind_field, true);
             println!("Removed wind circle for {:?}", voice);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 
@@ -162,7 +162,7 @@ impl ForceFields {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_center_bias(bias);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 
@@ -171,7 +171,7 @@ impl ForceFields {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_strength(strength);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 
@@ -180,7 +180,7 @@ impl ForceFields {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_outer_radius(radius);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 
@@ -189,7 +189,7 @@ impl ForceFields {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_inner_radius(val);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 
@@ -199,7 +199,7 @@ impl ForceFields {
             circle.params_mut().set_outer_radius(radius);
             circle.params_mut().set_inner_radius(radius - width);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 
@@ -215,7 +215,7 @@ impl ForceFields {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_noise(noise);
         } else {
-            println!("Wind circle not found for {:?}", voice);
+            println!("OSC: Wind circle not found for {:?}", voice);
         }
     }
 }
