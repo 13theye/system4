@@ -1,7 +1,7 @@
 /// src/particle/emitter.rs
 ///
 /// The thing that spits out particles
-use crate::{particle::Particle, groups::Voice};
+use crate::{groups::VoiceId, particle::Particle};
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
@@ -13,13 +13,13 @@ pub trait Emitter {
     fn set_enabled(&mut self, is_enabled: bool);
     fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32);
     fn get_spawn_rate_factor(&self) -> f32;
-    fn parent_voice(&self) -> Voice;
+    fn parent_voice(&self) -> VoiceId;
     fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32);
 }
 
 pub struct FullScreenRandomEmitter {
     pub id: usize,
-    pub parent_voice: Voice,
+    pub parent_voice: VoiceId,
     pub max_spawn_rate: f32,
     pub spawn_area: Rect,
     pub spawn_rate_factor: f32,
@@ -29,7 +29,7 @@ pub struct FullScreenRandomEmitter {
 impl FullScreenRandomEmitter {
     pub fn new(
         id: usize,
-        parent_voice: Voice,
+        parent_voice: VoiceId,
         spawn_area: Rect,
         max_spawn_rate: f32,
         spawn_rate_factor: f32,
@@ -97,7 +97,7 @@ impl Emitter for FullScreenRandomEmitter {
         self.spawn_rate_factor
     }
 
-    fn parent_voice(&self) -> Voice {
+    fn parent_voice(&self) -> VoiceId {
         self.parent_voice
     }
 
@@ -115,7 +115,7 @@ impl Emitter for FullScreenRandomEmitter {
 /// Radiates particles outward from that point in any direction
 pub struct PointEmitter {
     pub id: usize,
-    pub parent_voice: Voice,
+    pub parent_voice: VoiceId,
     pub origin: Vec2,
     pub max_spawn_rate: f32,
     pub spawn_rate_factor: f32,
@@ -125,7 +125,7 @@ pub struct PointEmitter {
 impl PointEmitter {
     pub fn new(
         id: usize,
-        parent_voice: Voice,
+        parent_voice: VoiceId,
         origin: Vec2,
         max_spawn_rate: f32,
         spawn_rate_factor: f32,
@@ -201,7 +201,7 @@ impl Emitter for PointEmitter {
         self.spawn_rate_factor
     }
 
-    fn parent_voice(&self) -> Voice {
+    fn parent_voice(&self) -> VoiceId {
         self.parent_voice
     }
 
@@ -217,11 +217,11 @@ impl Emitter for PointEmitter {
 /// An emitter defined by a center point, a start point, and an end point
 /// Emits particles anywhere along the line
 pub struct LinearEmitter {
-    pub id: usize,           // unique id for this emitter
-    pub parent_voice: Voice, // voice that this emitter belongs to
-    pub midpoint: Vec2,      // Center point
-    pub start: Vec2,         // Start point
-    pub end: Vec2,           // End point
+    pub id: usize,             // unique id for this emitter
+    pub parent_voice: VoiceId, // voice that this emitter belongs to
+    pub midpoint: Vec2,        // Center point
+    pub start: Vec2,           // Start point
+    pub end: Vec2,             // End point
     pub direction: EmitDirection,
     pub max_spawn_rate: f32,
     pub spawn_rate_factor: f32,
@@ -239,7 +239,7 @@ pub enum EmitDirection {
 impl LinearEmitter {
     pub fn new(
         id: usize,
-        parent_voice: Voice,
+        parent_voice: VoiceId,
         start: Vec2,
         end: Vec2,
         direction: EmitDirection,
@@ -335,7 +335,7 @@ impl Emitter for LinearEmitter {
         self.spawn_rate_factor
     }
 
-    fn parent_voice(&self) -> Voice {
+    fn parent_voice(&self) -> VoiceId {
         self.parent_voice
     }
 

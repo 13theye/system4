@@ -4,7 +4,7 @@ use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
 use super::{command_input::CommandInput, drone_parameters_display::DroneParametersDisplay};
-use crate::{groups::Voice, model::controller::Command};
+use crate::{groups::VoiceId, model::controller::Command};
 
 #[derive(Clone, Copy, Debug)]
 pub enum TextJustification {
@@ -18,7 +18,7 @@ pub enum TextJustification {
 /// Struct to collect and manager TerminalView updates
 pub struct TerminalViewManager {
     terminal_views: HashMap<String, TerminalView>,
-    drone_parameter_displays: HashMap<Voice, DroneParametersDisplay>,
+    drone_parameter_displays: HashMap<VoiceId, DroneParametersDisplay>,
 }
 
 impl TerminalViewManager {
@@ -29,7 +29,7 @@ impl TerminalViewManager {
         }
     }
 
-    pub fn add_new_terminal_view(&mut self, name: &str, voice: Voice, params: TerminalViewParams) {
+    pub fn add_new_terminal_view(&mut self, name: &str, voice: VoiceId, params: TerminalViewParams) {
         let terminal_view = TerminalView::new(voice, params);
         self.terminal_views.insert(name.to_owned(), terminal_view);
     }
@@ -71,7 +71,7 @@ impl TerminalViewManager {
     }
 
     /// Add a new drone parameters display for a voice
-    pub fn add_drone_parameters_display(&mut self, voice: Voice, params: TerminalViewParams) {
+    pub fn add_drone_parameters_display(&mut self, voice: VoiceId, params: TerminalViewParams) {
         let display = DroneParametersDisplay::new(voice, params);
         self.drone_parameter_displays.insert(voice, display);
     }
@@ -93,7 +93,7 @@ impl TerminalViewManager {
     /// Get a drone parameter display for a specific voice
     pub fn get_drone_parameters_display(
         &mut self,
-        voice: Voice,
+        voice: VoiceId,
     ) -> Option<&mut DroneParametersDisplay> {
         self.drone_parameter_displays.get_mut(&voice)
     }
@@ -101,7 +101,7 @@ impl TerminalViewManager {
     /// Get a drone parameter display for display/drawing (immutable access)
     pub fn get_drone_parameters_display_for_display(
         &self,
-        voice: Voice,
+        voice: VoiceId,
     ) -> Option<&DroneParametersDisplay> {
         self.drone_parameter_displays.get(&voice)
     }
@@ -119,13 +119,13 @@ pub struct TerminalView {
     lines: Vec<Option<Line>>,
     line_positions: Vec<Vec2>,
 
-    voice: Voice,
+    voice: VoiceId,
     params: TerminalViewParams,
     rect: Rect,
 }
 
 impl TerminalView {
-    pub fn new(voice: Voice, params: TerminalViewParams) -> Self {
+    pub fn new(voice: VoiceId, params: TerminalViewParams) -> Self {
         let (line_positions, total_height) = generate_line_positions(&params);
 
         // Calculate rect based on justification - origin defines the specified corner

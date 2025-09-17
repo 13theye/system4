@@ -6,7 +6,7 @@ pub mod controller;
 
 use crate::{
     fps::FpsManager,
-    groups::Voice,
+    groups::VoiceId,
     model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
@@ -50,7 +50,7 @@ pub struct Model {
     pub control_draw: nannou::Draw,
 
     // Rendering engine
-    pub gpu_buffers: HashMap<Voice, GpuBuffers>,
+    pub gpu_buffers: HashMap<VoiceId, GpuBuffers>,
     pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
     pub particle_renderer1: ParticleRenderer,
@@ -105,7 +105,7 @@ impl Drop for Model {
 }
 
 fn erase_drone(model: &mut Model, id: i32) {
-    let voice = Voice::from_i32(id);
+    let voice = VoiceId::from_i32(id);
     model.particle_system.kill_voice(&voice);
     model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);

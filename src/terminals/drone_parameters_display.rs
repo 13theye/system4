@@ -4,7 +4,7 @@
 
 use super::terminal_view::{TerminalView, TerminalViewParams};
 use crate::{
-    groups::Voice,
+    groups::VoiceId,
     model::controller::{Command, CommandInner},
 };
 use nannou::prelude::*;
@@ -34,13 +34,13 @@ const PARAMETER_ORDER: &[&str] = &[
 
 pub struct DroneParametersDisplay {
     terminal_view: TerminalView,
-    voice: Voice,
+    voice: VoiceId,
     parameters: HashMap<String, ParameterUpdate>,
     parameter_to_line: HashMap<String, usize>,
 }
 
 impl DroneParametersDisplay {
-    pub fn new(voice: Voice, params: TerminalViewParams) -> Self {
+    pub fn new(voice: VoiceId, params: TerminalViewParams) -> Self {
         let mut terminal_view = TerminalView::new(voice, params);
         let mut parameter_to_line = HashMap::new();
 
@@ -238,7 +238,7 @@ impl DroneParametersDisplay {
     }
 
     /// Get the voice this display is tracking
-    pub fn voice(&self) -> Voice {
+    pub fn voice(&self) -> VoiceId {
         self.voice
     }
 }

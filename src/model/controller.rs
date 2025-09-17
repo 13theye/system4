@@ -3,7 +3,7 @@
 // Command extension for Model
 
 use crate::{
-    forces::WindCircleParams, groups::Voice, model::Model, terminals::commands::drone::DroneConfig,
+    forces::WindCircleParams, groups::VoiceId, model::Model, terminals::commands::drone::DroneConfig,
 };
 use nannou::prelude::*;
 use nannou::wgpu::{Device, Queue};
@@ -27,58 +27,58 @@ pub enum CommandInner {
         config: DroneConfig,
     },
     EraseDrone {
-        voice: Voice,
+        voice: VoiceId,
     },
     ModifyDrone {
-        voice: Voice,
+        voice: VoiceId,
         config: DroneConfig,
     },
     Alpha {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     Volume {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     Feedback {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     OuterRadius {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     InnerRadius {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     Force {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     Gravity {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     Noise {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     Vibration {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     ForceCenterX {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     ForceCenterY {
-        voice: Voice,
+        voice: VoiceId,
         value: f32,
     },
     MaskChangeBounds {
-        voice: Voice,
+        voice: VoiceId,
         rect: Rect,
         duration: f32,
     },
@@ -131,12 +131,12 @@ fn get_command_key(command: &Command) -> String {
 /// Extension of Model that add controller functions
 impl Model {
     /// Get the params of a circle
-    pub fn get_wind_circle_params(&self, voice: Voice) -> Option<&WindCircleParams> {
+    pub fn get_wind_circle_params(&self, voice: VoiceId) -> Option<&WindCircleParams> {
         self.particle_system.forces.get_wind_circle_params(voice)
     }
 
     /// Get the alpha limit of a Voice ("brightness")
-    pub fn get_alpha_limit(&self, voice: Voice) -> f32 {
+    pub fn get_alpha_limit(&self, voice: VoiceId) -> f32 {
         self.particle_system
             .alpha_limits
             .get(&voice)
@@ -145,21 +145,21 @@ impl Model {
     }
 
     /// Get the center bias of a Voice's WindCircle ("gravity")
-    pub fn get_center_bias(&mut self, voice: Voice) -> f32 {
+    pub fn get_center_bias(&mut self, voice: VoiceId) -> f32 {
         self.particle_system.forces.get_center_bias(&voice)
     }
 
     /// Get the angle variation of a Voice's WindCircle ("noise")
-    pub fn get_angle_variation(&self, voice: Voice) -> f32 {
+    pub fn get_angle_variation(&self, voice: VoiceId) -> f32 {
         self.particle_system.forces.get_angle_variation(&voice)
     }
 
     /// Get the position offset factor of a Voice ("vibration")
-    pub fn get_vibration_offset_factor(&self, voice: Voice) -> f32 {
+    pub fn get_vibration_offset_factor(&self, voice: VoiceId) -> f32 {
         self.particle_system.get_vibration_factor(voice)
     }
 
-    pub fn get_volume(&self, voice: Voice) -> f32 {
+    pub fn get_volume(&self, voice: VoiceId) -> f32 {
         self.particle_system
             .particle_num_factors
             .get(&voice)
@@ -167,7 +167,7 @@ impl Model {
             .unwrap_or(1.0)
     }
 
-    pub fn get_feedback(&self, voice: Voice) -> f32 {
+    pub fn get_feedback(&self, voice: VoiceId) -> f32 {
         self.particle_system
             .feedback
             .get(&voice)
@@ -232,7 +232,7 @@ impl Model {
         match command.command {
             CommandInner::CreateDrone { config } => {
                 // Convert voice ID to Voice enum
-                let voice = Voice::from_i32(config.voice);
+                let voice = VoiceId::from_i32(config.voice);
 
                 let _ = self
                     .particle_system
@@ -383,7 +383,7 @@ pub fn make_drone_command(
 }
 
 /// Create an erase drone command using the unified command system
-pub fn erase_drone_command(voice: Voice, source: CommandSource) -> Command {
+pub fn erase_drone_command(voice: VoiceId, source: CommandSource) -> Command {
     Command::new(CommandInner::EraseDrone { voice }, source)
 }
 
@@ -392,8 +392,8 @@ pub fn erase_drone_command(voice: Voice, source: CommandSource) -> Command {
 /// Update the "Feedback" feature because it's owned by the model's renderer
 pub fn update_feedback(model: &mut Model, device: &Device, queue: &Queue) {
     // Read feedback value for segment length before updating particle system
-    let voice1_feedback = model.get_feedback(Voice::Voice1);
-    let voice4_feedback = model.get_feedback(Voice::Voice4);
+    let voice1_feedback = model.get_feedback(VoiceId::Voice1);
+    let voice4_feedback = model.get_feedback(VoiceId::Voice4);
 
     // Update segment length based on Voice1 feedback slider
     model

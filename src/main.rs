@@ -26,7 +26,7 @@ use system4::{
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
     terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
-    groups::Voice,
+    groups::VoiceId,
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
@@ -312,7 +312,7 @@ fn model(app: &App) -> Model {
         justification: TextJustification::BottomLeft,
     };
     
-    terminal_manager.add_new_terminal_view("main", Voice::Voice1, terminal_params);
+    terminal_manager.add_new_terminal_view("main", VoiceId::Voice1, terminal_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
@@ -343,8 +343,8 @@ fn model(app: &App) -> Model {
         justification: TextJustification::BottomRight,
     };
 
-    terminal_manager.add_drone_parameters_display(Voice::Voice1, drone_params_voice1);
-    terminal_manager.add_drone_parameters_display(Voice::Voice4, drone_params_voice4);
+    terminal_manager.add_drone_parameters_display(VoiceId::Voice1, drone_params_voice1);
+    terminal_manager.add_drone_parameters_display(VoiceId::Voice4, drone_params_voice4);
 
     Model {
         particle_system,
@@ -464,11 +464,11 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         let empty_gpu_buffer = &EMPTY_GPU_BUFFER;
         let gpu_buffer1 = model
             .gpu_buffers
-            .get(&Voice::Voice1)
+            .get(&VoiceId::Voice1)
             .unwrap_or(empty_gpu_buffer);
         let gpu_buffer4 = model
             .gpu_buffers
-            .get(&Voice::Voice4)
+            .get(&VoiceId::Voice4)
             .unwrap_or(empty_gpu_buffer);
 
         // Encode particles
@@ -674,19 +674,19 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let width = rect.w() - 5.0;
 
     // Extract all parameters before creating egui context to avoid borrowing conflicts
-    let voice1_circle_params = model.get_wind_circle_params(Voice::Voice1).cloned();
-    let voice1_alpha = model.get_alpha_limit(Voice::Voice1);
-    let voice1_volume = model.get_volume(Voice::Voice1);
-    let voice1_feedback = model.get_feedback(Voice::Voice1);
-    let voice1_angle_variation = model.get_angle_variation(Voice::Voice1);
-    let voice1_vibration_offset = model.get_vibration_offset_factor(Voice::Voice1);
+    let voice1_circle_params = model.get_wind_circle_params(VoiceId::Voice1).cloned();
+    let voice1_alpha = model.get_alpha_limit(VoiceId::Voice1);
+    let voice1_volume = model.get_volume(VoiceId::Voice1);
+    let voice1_feedback = model.get_feedback(VoiceId::Voice1);
+    let voice1_angle_variation = model.get_angle_variation(VoiceId::Voice1);
+    let voice1_vibration_offset = model.get_vibration_offset_factor(VoiceId::Voice1);
 
-    let voice4_circle_params = model.get_wind_circle_params(Voice::Voice4).cloned();
-    let voice4_alpha = model.get_alpha_limit(Voice::Voice4);
-    let voice4_volume = model.get_volume(Voice::Voice4);
-    let voice4_feedback = model.get_feedback(Voice::Voice4);
-    let voice4_angle_variation = model.get_angle_variation(Voice::Voice4);
-    let voice4_vibration_offset = model.get_vibration_offset_factor(Voice::Voice4);
+    let voice4_circle_params = model.get_wind_circle_params(VoiceId::Voice4).cloned();
+    let voice4_alpha = model.get_alpha_limit(VoiceId::Voice4);
+    let voice4_volume = model.get_volume(VoiceId::Voice4);
+    let voice4_feedback = model.get_feedback(VoiceId::Voice4);
+    let voice4_angle_variation = model.get_angle_variation(VoiceId::Voice4);
+    let voice4_vibration_offset = model.get_vibration_offset_factor(VoiceId::Voice4);
 
     let ctx = model.egui.begin_frame();
 
@@ -790,7 +790,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::OuterRadius {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: radius,
                                                 }, CommandSource::Ui),
                                             );
@@ -808,7 +808,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::InnerRadius {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: inner_radius,
                                                 }, CommandSource::Ui),
                                             );
@@ -825,7 +825,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Alpha {
-                                                voice: Voice::Voice1,
+                                                voice: VoiceId::Voice1,
                                                 value: alpha,
                                             }, CommandSource::Ui));
                                         }
@@ -841,7 +841,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Volume {
-                                                voice: Voice::Voice1,
+                                                voice: VoiceId::Voice1,
                                                 value: volume,
                                             }, CommandSource::Ui));
                                         }
@@ -858,7 +858,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Force {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: strength,
                                                 }, CommandSource::Ui),
                                             );
@@ -876,7 +876,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Gravity {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: center_bias,
                                                 }, CommandSource::Ui),
                                             );
@@ -894,7 +894,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Noise {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: angle_variation,
                                                 }, CommandSource::Ui),
                                             );
@@ -912,7 +912,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Vibration {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: vibration_offset,
                                                 }, CommandSource::Ui),
                                             );
@@ -930,7 +930,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Feedback {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: feedback,
                                                 }, CommandSource::Ui),
                                             );
@@ -947,7 +947,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::ForceCenterX {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: center_x,
                                                 }, CommandSource::Ui),
                                             );
@@ -964,7 +964,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::ForceCenterY {
-                                                    voice: Voice::Voice1,
+                                                    voice: VoiceId::Voice1,
                                                     value: center_y,
                                                 }, CommandSource::Ui),
                                             );
@@ -1034,7 +1034,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::OuterRadius {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: radius,
                                                 }, CommandSource::Ui),
                                             );
@@ -1052,7 +1052,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::InnerRadius {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: inner_radius,
                                                 }, CommandSource::Ui),
                                             );
@@ -1069,7 +1069,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Alpha {
-                                                voice: Voice::Voice4,
+                                                voice: VoiceId::Voice4,
                                                 value: alpha,
                                             }, CommandSource::Ui));
                                         }
@@ -1085,7 +1085,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Volume {
-                                                voice: Voice::Voice4,
+                                                voice: VoiceId::Voice4,
                                                 value: volume,
                                             }, CommandSource::Ui));
                                         }
@@ -1102,7 +1102,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Force {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: strength,
                                                 }, CommandSource::Ui),
                                             );
@@ -1120,7 +1120,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Gravity {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: center_bias,
                                                 }, CommandSource::Ui),
                                             );
@@ -1138,7 +1138,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Noise {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: angle_variation,
                                                 }, CommandSource::Ui),
                                             );
@@ -1156,7 +1156,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Vibration {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: vibration_offset,
                                                 }, CommandSource::Ui),
                                             );
@@ -1174,7 +1174,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Feedback {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: feedback,
                                                 }, CommandSource::Ui),
                                             );
@@ -1191,7 +1191,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::ForceCenterX {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: center_x,
                                                 }, CommandSource::Ui),
                                             );
@@ -1208,7 +1208,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::ForceCenterY {
-                                                    voice: Voice::Voice4,
+                                                    voice: VoiceId::Voice4,
                                                     value: center_y,
                                                 }, CommandSource::Ui),
                                             );
@@ -1284,7 +1284,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         command_queue.push(voice_command);
                                                                     }
                                                                     TerminalCommand::ModifyDrone { voice, config } => {
-                                                                        let voice_enum = Voice::from_i32(voice);
+                                                                        let voice_enum = VoiceId::from_i32(voice);
                                                                         let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
                                                                         println!("Queuing ModifyDrone command for voice: {:?} with config: {:?}", voice, config);
                                                                         command_queue.push(voice_command);
@@ -1466,7 +1466,7 @@ fn draw_bounds(app: &App, model: &Model) {
 
 
 fn _erase_drone(model: &mut Model, id: i32) {
-    let voice = Voice::from_i32(id);
+    let voice = VoiceId::from_i32(id);
     model.particle_system.kill_voice(&voice);
     model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);

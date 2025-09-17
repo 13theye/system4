@@ -3,7 +3,7 @@
 // Drone command builder and configuration
 
 use super::TerminalCommandBuilder;
-use crate::groups::Voice;
+use crate::groups::VoiceId;
 use crate::model::controller::{Command, CommandInner, CommandSource};
 use crate::terminals::parsing::{ParameterValue, ParseError};
 use std::collections::HashMap;
@@ -239,7 +239,7 @@ impl DroneConfig {
     }
 
     /// Convert this DroneConfig to a ModifyDrone VoiceCommand for the specified voice
-    pub fn to_modify_command(&self, voice: Voice, source: CommandSource) -> Command {
+    pub fn to_modify_command(&self, voice: VoiceId, source: CommandSource) -> Command {
         Command::new(
             CommandInner::ModifyDrone {
                 voice,
@@ -250,11 +250,11 @@ impl DroneConfig {
     }
 
     /// Convert this DroneConfig's voice ID to a Voice enum
-    pub fn voice_enum(&self) -> Voice {
+    pub fn voice_enum(&self) -> VoiceId {
         match self.voice {
-            1 => Voice::Voice1,
-            4 => Voice::Voice4,
-            _ => Voice::Voice1, // Default fallback
+            1 => VoiceId::Voice1,
+            4 => VoiceId::Voice4,
+            _ => VoiceId::Voice1, // Default fallback
         }
     }
 }

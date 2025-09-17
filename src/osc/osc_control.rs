@@ -7,7 +7,7 @@ use std::error::Error;
 
 use crate::{
     config::OscSendConfig,
-    groups::Voice,
+    groups::VoiceId,
     model::controller::{Command, CommandInner, CommandSource},
 };
 
@@ -115,7 +115,7 @@ impl OscController {
                     /********************* Particle Commands *************************** */
                     "/sys4/particles/alpha" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Alpha { voice, value: *val },
                                 CommandSource::Osc,
@@ -124,7 +124,7 @@ impl OscController {
                     }
                     "/sys4/particles/numParticles" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Volume { voice, value: *val },
                                 CommandSource::Osc,
@@ -133,7 +133,7 @@ impl OscController {
                     }
                     "/sys4/particles/force" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             let val = val * 30.0;
                             commands.push(Command::new(
                                 CommandInner::Force { voice, value: val },
@@ -143,7 +143,7 @@ impl OscController {
                     }
                     "/sys4/particles/innerRadius" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::InnerRadius { voice, value: *val },
                                 CommandSource::Osc,
@@ -152,7 +152,7 @@ impl OscController {
                     }
                     "/sys4/particles/outerRadius" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::OuterRadius { voice, value: *val },
                                 CommandSource::Osc,
@@ -161,7 +161,7 @@ impl OscController {
                     }
                     "/sys2/particles/centerX" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::ForceCenterX { voice, value: *val },
                                 CommandSource::Osc,
@@ -170,7 +170,7 @@ impl OscController {
                     }
                     "/sys4/particles/centerY" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::ForceCenterY { voice, value: *val },
                                 CommandSource::Osc,
@@ -179,7 +179,7 @@ impl OscController {
                     }
                     "/sys4/particles/gravity" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Gravity { voice, value: *val },
                                 CommandSource::Osc,
@@ -188,7 +188,7 @@ impl OscController {
                     }
                     "/sys4/particles/feedback" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Feedback { voice, value: *val },
                                 CommandSource::Osc,
@@ -197,7 +197,7 @@ impl OscController {
                     }
                     "/sys4/particles/noise" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Noise { voice, value: *val },
                                 CommandSource::Osc,
@@ -206,7 +206,7 @@ impl OscController {
                     }
                     "/sys4/particles/vibration" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Vibration { voice, value: *val },
                                 CommandSource::Osc,

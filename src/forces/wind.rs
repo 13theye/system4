@@ -2,7 +2,7 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, groups::Voice, particle::Particle};
+use crate::{forces::CellIdx, groups::VoiceId, particle::Particle};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -473,7 +473,7 @@ impl WindField {
 #[derive(Clone)]
 pub struct WindCircle {
     pub id: usize,
-    pub parent_voice: Voice,
+    pub parent_voice: VoiceId,
     cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
     params: WindCircleParams, // Params of the circle
 }
@@ -481,7 +481,7 @@ pub struct WindCircle {
 impl WindCircle {
     pub fn new(
         id: usize,
-        parent_voice: Voice,
+        parent_voice: VoiceId,
         center: Vec2,
         radius: f32,
         width: f32,
@@ -635,6 +635,14 @@ impl WindCircle {
         } else {
             None
         }
+    }
+
+    /// Returns a bounding Rect in screen coordinates that encompasses the entire WindCircle
+    pub fn rect(&self) -> Rect {
+        let center = self.params.center;
+        let outer_radius = self.params.outer_radius;
+
+        Rect::from_x_y_w_h(center.x, center.y, outer_radius * 2.0, outer_radius * 2.0)
     }
 
     /******************* Methods to change circle properties *******************/

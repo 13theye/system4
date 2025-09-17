@@ -5,10 +5,10 @@
 use nannou::{prelude::*, rand::rngs::ThreadRng};
 use std::collections::HashMap;
 
-use crate::{rhythm::Rhythm, groups::Voice};
+use crate::{rhythm::Rhythm, groups::VoiceId};
 
 pub struct RhythmSystem {
-    pub rhythms: HashMap<Voice, Rhythm>,
+    pub rhythms: HashMap<VoiceId, Rhythm>,
 
     pub rnd: ThreadRng,
 }

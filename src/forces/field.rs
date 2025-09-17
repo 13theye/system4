@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     forces::wind::{WindCircle, WindCircleParams, WindField},
+    groups::VoiceId,
     particle::Particle,
-    groups::Voice,
 };
 
 /// The ForceField tracks the forces that are acting on the particles.
@@ -96,7 +96,7 @@ impl ForceFields {
     }
 
     /// Returns a BTreeMap of all WindCircleParams by Voice
-    pub fn get_wind_circle_params_all(&self) -> BTreeMap<Voice, WindCircleParams> {
+    pub fn get_wind_circle_params_all(&self) -> BTreeMap<VoiceId, WindCircleParams> {
         self.wind_circles
             .iter()
             .map(|circle| (circle.parent_voice, circle.params().clone()))
@@ -104,7 +104,7 @@ impl ForceFields {
     }
 
     /// Returns WindCircleParams for a given Voice (if it exists)
-    pub fn get_wind_circle_params(&self, voice: Voice) -> Option<&WindCircleParams> {
+    pub fn get_wind_circle_params(&self, voice: VoiceId) -> Option<&WindCircleParams> {
         self.wind_circles
             .iter()
             .find(|circle| circle.parent_voice == voice)
@@ -112,7 +112,7 @@ impl ForceFields {
     }
 
     /// Returns a mutable ref to WindCircleParams for a given Voice (if it exists)
-    pub fn get_wind_circle_params_mut(&mut self, voice: Voice) -> Option<&mut WindCircleParams> {
+    pub fn get_wind_circle_params_mut(&mut self, voice: VoiceId) -> Option<&mut WindCircleParams> {
         self.wind_circles
             .iter_mut()
             .find(|circle| circle.parent_voice == voice)
@@ -120,14 +120,14 @@ impl ForceFields {
     }
 
     /// Returns a mutable reference to WindCircle for a given Voice (if it exists)
-    pub fn get_wind_circle_mut(&mut self, voice: Voice) -> Option<&mut WindCircle> {
+    pub fn get_wind_circle_mut(&mut self, voice: VoiceId) -> Option<&mut WindCircle> {
         self.wind_circles
             .iter_mut()
             .find(|circle| circle.parent_voice == voice)
     }
 
     /// Returns true if a WindCircle exists for the given Voice
-    pub fn has_circle_for_voice(&self, voice: &Voice) -> bool {
+    pub fn has_circle_for_voice(&self, voice: &VoiceId) -> bool {
         self.wind_circles
             .iter()
             .any(|circle| circle.parent_voice == *voice)
@@ -136,7 +136,7 @@ impl ForceFields {
     /******************* OSC command compatibility methods ********************* */
 
     /// Remove WindCircle for a given Voice
-    pub fn remove_wind(&mut self, voice: &Voice) {
+    pub fn remove_wind(&mut self, voice: &VoiceId) {
         if let Some(index) = self
             .wind_circles
             .iter()
@@ -151,14 +151,14 @@ impl ForceFields {
     }
 
     /// Get the center vias of a WindCircle for a given Voice
-    pub fn get_center_bias(&mut self, voice: &Voice) -> f32 {
+    pub fn get_center_bias(&mut self, voice: &VoiceId) -> f32 {
         self.get_wind_circle_params(*voice)
             .map(|params| params.center_bias)
             .unwrap_or(0.0)
     }
 
     /// Set the center bias of WindCircle for a given Voice
-    pub fn set_center_bias(&mut self, voice: &Voice, bias: f32) {
+    pub fn set_center_bias(&mut self, voice: &VoiceId, bias: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_center_bias(bias);
         } else {
@@ -167,7 +167,7 @@ impl ForceFields {
     }
 
     /// Set the strength of WindCircle for a given Voice
-    pub fn set_strength(&mut self, voice: &Voice, strength: f32) {
+    pub fn set_strength(&mut self, voice: &VoiceId, strength: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_strength(strength);
         } else {
@@ -176,7 +176,7 @@ impl ForceFields {
     }
 
     /// Set the outer radius of WindCircle for a given Voice
-    pub fn set_outer_radius(&mut self, voice: &Voice, radius: f32) {
+    pub fn set_outer_radius(&mut self, voice: &VoiceId, radius: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_outer_radius(radius);
         } else {
@@ -185,7 +185,7 @@ impl ForceFields {
     }
 
     /// Set the inner radius of WindCircle for a given Voice
-    pub fn set_inner_radius(&mut self, voice: &Voice, val: f32) {
+    pub fn set_inner_radius(&mut self, voice: &VoiceId, val: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_inner_radius(val);
         } else {
@@ -194,7 +194,7 @@ impl ForceFields {
     }
 
     /// Set the outer and inner radius of a WindCircle by Voice
-    pub fn set_circle_dims(&mut self, voice: &Voice, radius: f32, width: f32) {
+    pub fn set_circle_dims(&mut self, voice: &VoiceId, radius: f32, width: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_outer_radius(radius);
             circle.params_mut().set_inner_radius(radius - width);
@@ -204,14 +204,14 @@ impl ForceFields {
     }
 
     /// Get the angle variation of a WindCircle for a given Voice
-    pub fn get_angle_variation(&self, voice: &Voice) -> f32 {
+    pub fn get_angle_variation(&self, voice: &VoiceId) -> f32 {
         self.get_wind_circle_params(*voice)
             .map(|params| params.noise)
             .unwrap_or(0.0)
     }
 
     /// Set the angle variation of WindCircle for a given Voice
-    pub fn set_noise(&mut self, voice: &Voice, noise: f32) {
+    pub fn set_noise(&mut self, voice: &VoiceId, noise: f32) {
         if let Some(circle) = self.get_wind_circle_mut(*voice) {
             circle.params_mut().set_noise(noise);
         } else {
