@@ -5,10 +5,10 @@
 use nannou_osc as osc;
 use std::error::Error;
 
-use crate::config::OscSendConfig;
-use crate::groups::{
-    controller::{Command, CommandInner, CommandSource},
-    Voice,
+use crate::{
+    config::OscSendConfig,
+    groups::Voice,
+    model::controller::{Command, CommandInner, CommandSource},
 };
 
 pub struct OscSender {

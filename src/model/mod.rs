@@ -2,9 +2,12 @@
 //
 // The main App Model
 
+pub mod controller;
+
 use crate::{
     fps::FpsManager,
-    groups::{controller::Command, Voice},
+    groups::Voice,
+    model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},

@@ -3,7 +3,10 @@
 // Live display of drone parameters with color highlighting for recent updates
 
 use super::terminal_view::{TerminalView, TerminalViewParams};
-use crate::groups::{controller::Command, Voice};
+use crate::{
+    groups::Voice,
+    model::controller::{Command, CommandInner},
+};
 use nannou::prelude::*;
 use std::{collections::HashMap, time::Instant};
 
@@ -67,67 +70,67 @@ impl DroneParametersDisplay {
         let now = Instant::now();
 
         match &command.command {
-            crate::groups::controller::CommandInner::Alpha { voice, value } => {
+            CommandInner::Alpha { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("brightness", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::Volume { voice, value } => {
+            CommandInner::Volume { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("volume", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::Feedback { voice, value } => {
+            CommandInner::Feedback { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("feedback", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::OuterRadius { voice, value } => {
+            CommandInner::OuterRadius { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("outerRadius", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::InnerRadius { voice, value } => {
+            CommandInner::InnerRadius { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("innerRadius", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::Force { voice, value } => {
+            CommandInner::Force { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("force", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::Gravity { voice, value } => {
+            CommandInner::Gravity { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("gravity", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::Noise { voice, value } => {
+            CommandInner::Noise { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("noise", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::Vibration { voice, value } => {
+            CommandInner::Vibration { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("vibration", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::ForceCenterX { voice, value } => {
+            CommandInner::ForceCenterX { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("centerX", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::ForceCenterY { voice, value } => {
+            CommandInner::ForceCenterY { voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("centerY", *value, now);
                 }
             }
-            crate::groups::controller::CommandInner::CreateDrone { config } => {
+            CommandInner::CreateDrone { config } => {
                 if config.voice_enum() == self.voice {
                     self.process_drone_config(config, now);
                 }
             }
-            crate::groups::controller::CommandInner::ModifyDrone { voice, config } => {
+            CommandInner::ModifyDrone { voice, config } => {
                 if *voice == self.voice {
                     self.process_drone_config(config, now);
                 }

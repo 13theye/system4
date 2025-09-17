@@ -4,7 +4,7 @@ use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
 use super::{command_input::CommandInput, drone_parameters_display::DroneParametersDisplay};
-use crate::groups::{controller::Command, Voice};
+use crate::{groups::Voice, model::controller::Command};
 
 #[derive(Clone, Copy, Debug)]
 pub enum TextJustification {
