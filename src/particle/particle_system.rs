@@ -165,12 +165,11 @@ impl ParticleSystem {
 
         let spawn_rate_factor = 1.0;
 
-        /*
         let emitter_left = LinearEmitter::new(
             id_generator.generate(),
             voice,
-            mask.rect.top_left(),
-            mask.rect.mid_left(),
+            self.bounds_rect.top_left(),
+            self.bounds_rect.mid_left(),
             EmitDirection::East,
             self.global_max_spawn_rate,
             spawn_rate_factor,
@@ -179,13 +178,14 @@ impl ParticleSystem {
         let emitter_right = LinearEmitter::new(
             id_generator.generate(),
             voice,
-            mask.rect.mid_right(),
-            mask.rect.bottom_right(),
+            self.bounds_rect.mid_right(),
+            self.bounds_rect.bottom_right(),
             EmitDirection::West,
             self.global_max_spawn_rate,
             spawn_rate_factor,
         );
 
+        /*
         let emitter_center = PointEmitter::new(
             id_generator.generate(),
             voice,
@@ -205,8 +205,8 @@ impl ParticleSystem {
         );
 
         // Add the emitters
-        //self.emitters.push(Box::new(emitter_left)); //emitter_left);
-        //self.emitters.push(Box::new(emitter_right));
+        self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        self.emitters.push(Box::new(emitter_right));
         //self.emitters.push(Box::new(emitter_center));
         self.emitters.push(Box::new(emitter_full));
 
