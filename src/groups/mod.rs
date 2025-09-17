@@ -1,4 +1,4 @@
-// src/voice/mod.rs
+// src/groups/mod.rs
 
 pub mod controller;
 

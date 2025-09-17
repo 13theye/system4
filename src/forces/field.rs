@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use crate::{
     forces::wind::{WindCircle, WindCircleParams, WindField},
     particle::Particle,
-    voice::Voice,
+    groups::Voice,
 };
 
 /// The ForceField tracks the forces that are acting on the particles.

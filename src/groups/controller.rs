@@ -2,8 +2,9 @@
 //
 // Command extension for Model
 
-use super::Voice;
-use crate::{forces::WindCircleParams, model::Model, terminals::commands::drone::DroneConfig};
+use crate::{
+    forces::WindCircleParams, groups::Voice, model::Model, terminals::commands::drone::DroneConfig,
+};
 use nannou::prelude::*;
 use nannou::wgpu::{Device, Queue};
 

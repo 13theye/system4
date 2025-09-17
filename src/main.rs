@@ -9,7 +9,7 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, SegmentRenderer};
 use nnpipe::*;
-use system4::voice::controller;
+use system4::groups::controller;
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -27,7 +27,7 @@ use system4::{
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
     terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
-    voice::{controller::{Command, CommandInner, CommandSource}, Voice},
+    groups::{controller::{Command, CommandInner, CommandSource}, Voice},
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;

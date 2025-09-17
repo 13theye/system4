@@ -2,7 +2,7 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, particle::Particle, voice::Voice};
+use crate::{forces::CellIdx, groups::Voice, particle::Particle};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -19,6 +19,7 @@ const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
 /// The force is then added to the particle's acceleration.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Wind {
+    // direction is a unit vector
     direction: Vec2,
     strength: f32,
 }
@@ -40,7 +41,7 @@ impl Wind {
 
     /// Apply the Wind to a Particle with mass variation factor
     pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
-        // Activate the particle if not already
+        // Activate the particle
         particle.activate();
 
         // Calculate the x and y components of particle's current velocity
@@ -383,11 +384,17 @@ impl WindField {
             let vector_scale = 3.0; // Increased scale for better visibility
             let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
 
-            draw.arrow()
+            draw.line()
                 .start(cell.origin * vec2(scale_x, scale_y))
                 .end(vector_end * vec2(scale_x, scale_y))
                 .color(rgba(0.0, 0.8, 1.0, 0.2))
-                .stroke_weight(0.5);
+                .stroke_weight(5.0);
+
+            draw.rect()
+                .xy(vector_end * vec2(scale_x, scale_y))
+                .wh(vec2(20.0 * scale_x, 20.0 * scale_y))
+                .color(rgba(1.0, 0.0, 0.0, 0.2))
+                .stroke_weight(0.0);
         }
     }
 
@@ -428,12 +435,20 @@ impl WindField {
     /// Draw a grid of rectangles that represent the cells -- slow but more accurate
     pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         for cell in &self.cells {
+            let color: Rgba = if let Some(wind) = cell.combined_wind {
+                let h = wind.direction.y.atan2(wind.direction.x) / (2.0 * PI);
+                let s = wind.strength / 30.0;
+                Rgba::from(hsv(h, s, 1.0))
+            } else {
+                rgba(0.0, 0.0, 0.0, 0.0)
+            };
+
             draw.rect()
                 .xy(cell.origin * vec2(scale_x, scale_y))
                 .w_h(self.cell_size.x * scale_x, self.cell_size.y * scale_y)
                 .stroke_color(rgba(0.3, 0.3, 0.3, 0.3))
                 .stroke_weight(1.0)
-                .no_fill();
+                .color(color);
         }
     }
 

@@ -3,9 +3,9 @@
 // Drone command builder and configuration
 
 use super::TerminalCommandBuilder;
+use crate::groups::controller::{Command, CommandInner, CommandSource};
+use crate::groups::Voice;
 use crate::terminals::parsing::{ParameterValue, ParseError};
-use crate::voice::controller::{Command, CommandInner, CommandSource};
-use crate::voice::Voice;
 use std::collections::HashMap;
 use std::fmt;
 

@@ -6,7 +6,7 @@ use nannou_osc as osc;
 use std::error::Error;
 
 use crate::config::OscSendConfig;
-use crate::voice::{
+use crate::groups::{
     controller::{Command, CommandInner, CommandSource},
     Voice,
 };

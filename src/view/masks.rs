@@ -2,7 +2,7 @@
 //
 // This module defines the masks that can be used with the ParticleSystem.
 
-use crate::voice::Voice;
+use crate::groups::Voice;
 use nannou::prelude::*;
 use std::time::Instant;
 

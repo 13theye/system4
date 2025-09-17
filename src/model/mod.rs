@@ -4,11 +4,11 @@
 
 use crate::{
     fps::FpsManager,
+    groups::{controller::Command, Voice},
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
-    voice::{controller::Command, Voice},
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;

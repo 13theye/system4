@@ -12,12 +12,12 @@ use rayon::prelude::*;
 use crate::particle::emitter::FullScreenRandomEmitter;
 use crate::{
     forces::{ForceFields, WindCircle},
+    groups::Voice,
     model::GpuBuffers,
     particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
     terminals::commands::drone::DroneConfig,
     utils::IdGenerator,
     view::Mask,
-    voice::Voice,
 };
 
 pub const EMPTY_GPU_BUFFER: GpuBuffers = (Vec::new(), Vec::new());
@@ -587,7 +587,7 @@ impl ParticleSystem {
     /// Draw the forces and emitters
     pub fn draw_forces(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         self.draw_origin(draw, scale_x, scale_y);
-        self.forces.wind_field.draw(draw, scale_x, scale_y, 25);
+        self.forces.wind_field.draw(draw, scale_x, scale_y, 27);
         self.draw_emitters(draw, scale_x, scale_y);
         for circle in self.forces.wind_circles.iter() {
             circle.draw_center(draw, scale_x, scale_y);
