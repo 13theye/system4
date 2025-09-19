@@ -41,6 +41,7 @@ pub struct Voice {
 
     pub emitters: Vec<Box<dyn Emitter>>,
     pub wind_circles: HashMap<usize, WindCircle>,
+    wind_circle_idx: usize,
 }
 
 impl Voice {
@@ -51,7 +52,14 @@ impl Voice {
             bounds_rect: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
             emitters: Vec::new(),
             wind_circles: HashMap::new(),
+            wind_circle_idx: 0,
         }
+    }
+
+    fn issue_wind_circle_idx(&mut self) -> usize {
+        let idx = self.wind_circle_idx;
+        self.wind_circle_idx += 1;
+        idx
     }
 
     pub fn begin_drone(
@@ -84,7 +92,7 @@ impl Voice {
         // WindCircle creation
         let center = vec2(center_x, center_y);
         let circle = WindCircle::new(
-            id_generator.generate(),
+            self.issue_wind_circle_idx(),
             self.id,
             center,
             outer_radius,
@@ -211,6 +219,52 @@ impl Voice {
         self.bounds_rect = self.calculate_bounds();
     }
 
+    /// Set the outer radius of a WindCircle
+    pub fn set_circle_outer_radius(&mut self, id: usize, value: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.params_mut().set_outer_radius(value);
+        } else {
+            println!(
+                "Voice {} set OR: Wind circle not found for id: {}",
+                self.id, id
+            );
+        }
+    }
+
+    /// Set the inner radius of a WindCircle
+    pub fn set_circle_inner_radius(&mut self, id: usize, value: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.params_mut().set_inner_radius(value);
+        } else {
+            println!(
+                "Voice {} set IR: Wind circle not found for id: {}",
+                self.id, id
+            );
+        }
+    }
+
+    pub fn set_circle_center_x(&mut self, id: usize, value: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.params_mut().set_center_x(value);
+        } else {
+            println!(
+                "Voice {} set CX: Wind circle not found for id: {}",
+                self.id, id
+            );
+        }
+    }
+
+    pub fn set_circle_center_y(&mut self, id: usize, value: f32) {
+        if let Some(circle) = self.wind_circles.get_mut(&id) {
+            circle.params_mut().set_center_y(value);
+        } else {
+            println!(
+                "Voice {} set CY: Wind circle not found for id: {}",
+                self.id, id
+            );
+        }
+    }
+
     /// Set the gravity of a WindCircle
     pub fn set_circle_gravity(&mut self, id: usize, value: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
@@ -236,31 +290,7 @@ impl Voice {
     }
 
     /// Set the outer radius of a WindCircle
-    pub fn set_circle_outer_radius(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_outer_radius(value);
-        } else {
-            println!(
-                "Voice {} set OR: Wind circle not found for id: {}",
-                self.id, id
-            );
-        }
-    }
-
-    /// Set the inner radius of a WindCircle
-    pub fn set_circle_inner_radius(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_inner_radius(value);
-        } else {
-            println!(
-                "Voice {} set IR: Wind circle not found for id: {}",
-                self.id, id
-            );
-        }
-    }
-
-    /// Set the outer radius of a WindCircle
-    pub fn set_noise(&mut self, id: usize, value: f32) {
+    pub fn set_circle_noise(&mut self, id: usize, value: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
             circle.params_mut().set_noise(value);
         } else {

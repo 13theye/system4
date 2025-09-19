@@ -11,8 +11,13 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum TerminalCommand {
     CreateDrone(drone::DroneConfig),
-    ModifyDrone {
+    ModifyVoice {
         voice: i32,
+        config: drone::DroneConfig,
+    },
+    ModifyVoiceCircle {
+        voice: i32,
+        circle: i32,
         config: drone::DroneConfig,
     },
 }
@@ -24,8 +29,16 @@ impl fmt::Display for TerminalCommand {
                 writeln!(f, "CreateDrone:")?;
                 write!(f, "{}", config)
             }
-            TerminalCommand::ModifyDrone { voice, config } => {
+            TerminalCommand::ModifyVoice { voice, config } => {
                 writeln!(f, "ModifyDrone voice {}:", voice)?;
+                write!(f, "{}", config)
+            }
+            TerminalCommand::ModifyVoiceCircle {
+                voice,
+                circle,
+                config,
+            } => {
+                writeln!(f, "ModifyDrone voice {} circle {}:", voice, circle)?;
                 write!(f, "{}", config)
             }
         }

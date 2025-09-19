@@ -34,7 +34,7 @@ const PARAMETER_ORDER: &[&str] = &[
 
 pub struct DroneParametersDisplay {
     terminal_view: TerminalView,
-    voice: VoiceId,
+    voice_id: VoiceId,
     parameters: HashMap<String, ParameterUpdate>,
     parameter_to_line: HashMap<String, usize>,
 }
@@ -59,7 +59,7 @@ impl DroneParametersDisplay {
 
         Self {
             terminal_view,
-            voice,
+            voice_id: voice,
             parameters: HashMap::new(),
             parameter_to_line,
         }
@@ -70,63 +70,66 @@ impl DroneParametersDisplay {
         let now = Instant::now();
 
         match &command.command {
-            CommandInner::Alpha { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Alpha { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("brightness", *value, now);
                 }
             }
-            CommandInner::Volume { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Volume { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("volume", *value, now);
                 }
             }
-            CommandInner::Feedback { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Feedback {
+                voice_id: voice,
+                value,
+            } => {
+                if *voice == self.voice_id {
                     self.update_parameter("feedback", *value, now);
                 }
             }
-            CommandInner::OuterRadius { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::OuterRadius { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("outerRadius", *value, now);
                 }
             }
-            CommandInner::InnerRadius { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::InnerRadius { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("innerRadius", *value, now);
                 }
             }
-            CommandInner::Force { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Force { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("force", *value, now);
                 }
             }
-            CommandInner::Gravity { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Gravity { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("gravity", *value, now);
                 }
             }
-            CommandInner::Noise { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Noise { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("noise", *value, now);
                 }
             }
-            CommandInner::Vibration { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::Vibration { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("vibration", *value, now);
                 }
             }
-            CommandInner::ForceCenterX { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::ForceCenterX { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("centerX", *value, now);
                 }
             }
-            CommandInner::ForceCenterY { voice_id: voice, value } => {
-                if *voice == self.voice {
+            CommandInner::ForceCenterY { voice_id, value } => {
+                if *voice_id == self.voice_id {
                     self.update_parameter("centerY", *value, now);
                 }
             }
             CommandInner::CreateDrone { config } => {
-                if config.voice_enum() == self.voice {
+                if config.voice_enum() == self.voice_id {
                     self.process_drone_config(config, now);
                 }
             }
@@ -134,7 +137,7 @@ impl DroneParametersDisplay {
                 voice_id: voice,
                 config,
             } => {
-                if *voice == self.voice {
+                if *voice == self.voice_id {
                     self.process_drone_config(config, now);
                 }
             }
@@ -242,6 +245,6 @@ impl DroneParametersDisplay {
 
     /// Get the voice this display is tracking
     pub fn voice(&self) -> VoiceId {
-        self.voice
+        self.voice_id
     }
 }

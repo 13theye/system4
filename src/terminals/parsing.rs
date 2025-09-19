@@ -108,6 +108,7 @@ impl CommandParser {
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
         let mut found_set = false;
+        let mut circle_id: Option<i32> = None;
 
         // Parse method chain
         while self.position < self.tokens.len() {
@@ -121,6 +122,24 @@ impl CommandParser {
                     self.expect_token(&Token::RightParen)?;
                     found_set = true;
                     break;
+                } else if method_name == "circle" {
+                    // Parse circle ID
+                    self.expect_token(&Token::LeftParen)?;
+                    circle_id = match self.current_token() {
+                        Some(Token::Number(n)) => {
+                            let id = *n as i32;
+                            self.position += 1;
+                            Some(id)
+                        }
+                        Some(token) => {
+                            return Err(ParseError::UnexpectedToken {
+                                expected: "circle ID number".to_string(),
+                                found: format!("{:?}", token),
+                            })
+                        }
+                        None => return Err(ParseError::UnexpectedEnd),
+                    };
+                    self.expect_token(&Token::RightParen)?;
                 } else {
                     // Parse method call with parameter
                     self.expect_token(&Token::LeftParen)?;
@@ -143,10 +162,19 @@ impl CommandParser {
             self.expect_token(&Token::Semicolon)?;
         }
 
-        Ok(TerminalCommand::ModifyDrone {
-            voice: voice_id,
-            config: builder.build(),
-        })
+        // Return appropriate command based on whether circle was specified
+        if let Some(circle) = circle_id {
+            Ok(TerminalCommand::ModifyVoiceCircle {
+                voice: voice_id,
+                circle,
+                config: builder.build(),
+            })
+        } else {
+            Ok(TerminalCommand::ModifyVoice {
+                voice: voice_id,
+                config: builder.build(),
+            })
+        }
     }
 
     fn parse_make_drone_command(&mut self) -> Result<TerminalCommand, ParseError> {

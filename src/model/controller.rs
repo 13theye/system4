@@ -8,7 +8,6 @@ use crate::{
     model::Model,
     terminals::commands::drone::DroneConfig,
 };
-use nannou::prelude::*;
 use nannou::wgpu::{Device, Queue};
 
 #[derive(Debug, Clone)]
@@ -48,36 +47,45 @@ pub enum CommandInner {
         voice_id: VoiceId,
         value: f32,
     },
-    OuterRadius {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    InnerRadius {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    Force {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    Gravity {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    Noise {
-        voice_id: VoiceId,
-        value: f32,
-    },
     Vibration {
         voice_id: VoiceId,
         value: f32,
     },
+
+    OuterRadius {
+        voice_id: VoiceId,
+        circle_id: usize,
+        value: f32,
+    },
+    InnerRadius {
+        voice_id: VoiceId,
+        circle_id: usize,
+        value: f32,
+    },
+    Force {
+        voice_id: VoiceId,
+        circle_id: usize,
+        value: f32,
+    },
+    Gravity {
+        voice_id: VoiceId,
+        circle_id: usize,
+        value: f32,
+    },
+    Noise {
+        voice_id: VoiceId,
+        circle_id: usize,
+        value: f32,
+    },
+
     ForceCenterX {
         voice_id: VoiceId,
+        circle_id: usize,
         value: f32,
     },
     ForceCenterY {
         voice_id: VoiceId,
+        circle_id: usize,
         value: f32,
     },
 }
@@ -151,6 +159,16 @@ fn get_command_key(command: &Command) -> String {
 
 /// Extension of Model that add controller functions
 impl Model {
+    /// Get all wind circle IDs for a voice
+    pub fn get_wind_circle_ids(&self, voice: VoiceId) -> Vec<usize> {
+        let Some(voice) = self.voices.get(&voice) else {
+            return Vec::new();
+        };
+        let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();
+        ids.sort();
+        ids
+    }
+
     /// Get the params of a circle
     pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
         let voice = self.voices.get(&voice)?;
@@ -179,8 +197,8 @@ impl Model {
             .unwrap_or(0.0)
     }
 
-    /// Get the angle variation of a Voice's WindCircle ("noise")
-    pub fn get_angle_variation(&self, voice: VoiceId, id: usize) -> f32 {
+    /// Get the angle variation of a Voice's WindCircle by id ("noise")
+    pub fn get_noise(&self, voice: VoiceId, id: usize) -> f32 {
         let Some(voice) = self.voices.get(&voice) else {
             return 0.0;
         };
@@ -336,6 +354,8 @@ impl Model {
                     };
                     voice.set_feedback(feedback);
                 }
+
+                /*
                 if let Some(outer_radius) = config.outer_radius {
                     self.particle_system
                         .forces
@@ -366,6 +386,7 @@ impl Model {
                     voice.set_vibration(vibration);
                 }
 
+
                 // Handle center position - only update if at least one coordinate is specified
                 if config.center_x.is_some() || config.center_y.is_some() {
                     if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice_id)
@@ -376,7 +397,9 @@ impl Model {
                         circle.params_mut().set_center(vec2(new_x, new_y));
                     }
                 }
+                */
             }
+
             CommandInner::Alpha { voice_id, value } => {
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
                     return;
@@ -395,53 +418,85 @@ impl Model {
                 };
                 voice.set_feedback(value);
             }
-            CommandInner::OuterRadius { voice_id, value } => {
-                self.particle_system
-                    .forces
-                    .set_outer_radius(&voice_id, value);
-            }
-            CommandInner::InnerRadius { voice_id, value } => {
-                self.particle_system
-                    .forces
-                    .set_inner_radius(&voice_id, value);
-            }
-            CommandInner::Force { voice_id, value } => {
-                let strength = value.min(30.0); // 30 is the max strength of the wind circle
-                self.particle_system
-                    .forces
-                    .set_strength(&voice_id, strength);
-            }
-            CommandInner::Gravity {
-                voice_id: voice,
-                value,
-            } => {
-                self.particle_system.forces.set_center_bias(&voice, value);
-            }
-            CommandInner::Noise { voice_id, value } => {
-                self.particle_system.forces.set_noise(&voice_id, value);
-            }
             CommandInner::Vibration { voice_id, value } => {
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
                     return;
                 };
                 voice.set_vibration(value);
             }
-            CommandInner::ForceCenterX {
-                voice_id: voice,
+            CommandInner::OuterRadius {
+                voice_id,
+                circle_id,
                 value,
             } => {
-                if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
-                    let current_y = circle.params().center.y;
-                    circle.params_mut().set_center(vec2(value, current_y));
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+
+                voice.set_circle_outer_radius(circle_id, value);
+            }
+            CommandInner::InnerRadius {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+
+                voice.set_circle_inner_radius(circle_id, value);
+            }
+            CommandInner::Force {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                let strength = value.min(30.0); // 30 is the max strength of the wind circle
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+
+                voice.set_circle_force(circle_id, strength);
+            }
+            CommandInner::Gravity {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+
+                voice.set_circle_gravity(circle_id, value);
+            }
+            CommandInner::Noise {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+
+                voice.set_circle_noise(circle_id, value);
+            }
+
+            CommandInner::ForceCenterX {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_center_x(circle_id, value);
                 }
             }
             CommandInner::ForceCenterY {
-                voice_id: voice,
+                voice_id,
+                circle_id,
                 value,
             } => {
-                if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
-                    let current_x = circle.params().center.x;
-                    circle.params_mut().set_center(vec2(current_x, value));
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_center_y(circle_id, value);
                 }
             }
         }

@@ -725,11 +725,39 @@ pub struct WindCircleParams {
     pub dirty: bool,
 }
 
+impl Default for WindCircleParams {
+    fn default() -> Self {
+        Self {
+            center: Vec2::ZERO,
+            outer_radius: 0.0,
+            inner_radius: 0.0,
+            force: 0.0,
+            gravity: 0.0,
+            noise: 0.0,
+            dirty: true,
+        }
+    }
+}
+
 impl WindCircleParams {
     /// Set the center of the WindCircle
     pub fn set_center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_center_x(&mut self, x: f32) {
+        if self.center.x != x {
+            self.center.x = x;
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_center_y(&mut self, y: f32) {
+        if self.center.y != y {
+            self.center.y = y;
             self.dirty = true;
         }
     }

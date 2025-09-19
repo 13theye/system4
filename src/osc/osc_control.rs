@@ -138,12 +138,15 @@ impl OscController {
                         }
                     }
                     "/sys4/particles/force" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             let val = val * 30.0;
                             commands.push(Command::new(
                                 CommandInner::Force {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
                                     value: val,
                                 },
                                 CommandSource::Osc,
@@ -151,11 +154,14 @@ impl OscController {
                         }
                     }
                     "/sys4/particles/innerRadius" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::InnerRadius {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
                                     value: *val,
                                 },
                                 CommandSource::Osc,
@@ -163,11 +169,14 @@ impl OscController {
                         }
                     }
                     "/sys4/particles/outerRadius" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::OuterRadius {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
                                     value: *val,
                                 },
                                 CommandSource::Osc,
@@ -175,11 +184,15 @@ impl OscController {
                         }
                     }
                     "/sys2/particles/centerX" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::ForceCenterX {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
+
                                     value: *val,
                                 },
                                 CommandSource::Osc,
@@ -187,11 +200,14 @@ impl OscController {
                         }
                     }
                     "/sys4/particles/centerY" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::ForceCenterY {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
                                     value: *val,
                                 },
                                 CommandSource::Osc,
@@ -199,11 +215,14 @@ impl OscController {
                         }
                     }
                     "/sys4/particles/gravity" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Gravity {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
                                     value: *val,
                                 },
                                 CommandSource::Osc,
@@ -223,11 +242,14 @@ impl OscController {
                         }
                     }
                     "/sys4/particles/noise" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
                                 CommandInner::Noise {
                                     voice_id: voice,
+                                    circle_id: *circle_id as usize,
                                     value: *val,
                                 },
                                 CommandSource::Osc,
