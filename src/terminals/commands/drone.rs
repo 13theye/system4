@@ -242,7 +242,7 @@ impl DroneConfig {
     pub fn to_modify_command(&self, voice: VoiceId, source: CommandSource) -> Command {
         Command::new(
             CommandInner::ModifyDrone {
-                voice,
+                voice_id: voice,
                 config: self.clone(),
             },
             source,

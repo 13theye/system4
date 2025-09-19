@@ -70,57 +70,57 @@ impl DroneParametersDisplay {
         let now = Instant::now();
 
         match &command.command {
-            CommandInner::Alpha { voice, value } => {
+            CommandInner::Alpha { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("brightness", *value, now);
                 }
             }
-            CommandInner::Volume { voice, value } => {
+            CommandInner::Volume { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("volume", *value, now);
                 }
             }
-            CommandInner::Feedback { voice, value } => {
+            CommandInner::Feedback { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("feedback", *value, now);
                 }
             }
-            CommandInner::OuterRadius { voice, value } => {
+            CommandInner::OuterRadius { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("outerRadius", *value, now);
                 }
             }
-            CommandInner::InnerRadius { voice, value } => {
+            CommandInner::InnerRadius { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("innerRadius", *value, now);
                 }
             }
-            CommandInner::Force { voice, value } => {
+            CommandInner::Force { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("force", *value, now);
                 }
             }
-            CommandInner::Gravity { voice, value } => {
+            CommandInner::Gravity { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("gravity", *value, now);
                 }
             }
-            CommandInner::Noise { voice, value } => {
+            CommandInner::Noise { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("noise", *value, now);
                 }
             }
-            CommandInner::Vibration { voice, value } => {
+            CommandInner::Vibration { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("vibration", *value, now);
                 }
             }
-            CommandInner::ForceCenterX { voice, value } => {
+            CommandInner::ForceCenterX { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("centerX", *value, now);
                 }
             }
-            CommandInner::ForceCenterY { voice, value } => {
+            CommandInner::ForceCenterY { voice_id: voice, value } => {
                 if *voice == self.voice {
                     self.update_parameter("centerY", *value, now);
                 }
@@ -130,7 +130,10 @@ impl DroneParametersDisplay {
                     self.process_drone_config(config, now);
                 }
             }
-            CommandInner::ModifyDrone { voice, config } => {
+            CommandInner::ModifyDrone {
+                voice_id: voice,
+                config,
+            } => {
                 if *voice == self.voice {
                     self.process_drone_config(config, now);
                 }

@@ -117,7 +117,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Alpha { voice, value: *val },
+                                CommandInner::Alpha {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -126,7 +129,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Volume { voice, value: *val },
+                                CommandInner::Volume {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -136,7 +142,10 @@ impl OscController {
                             let voice = VoiceId::from_i32(*id);
                             let val = val * 30.0;
                             commands.push(Command::new(
-                                CommandInner::Force { voice, value: val },
+                                CommandInner::Force {
+                                    voice_id: voice,
+                                    value: val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -145,7 +154,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::InnerRadius { voice, value: *val },
+                                CommandInner::InnerRadius {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -154,7 +166,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::OuterRadius { voice, value: *val },
+                                CommandInner::OuterRadius {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -163,7 +178,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::ForceCenterX { voice, value: *val },
+                                CommandInner::ForceCenterX {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -172,7 +190,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::ForceCenterY { voice, value: *val },
+                                CommandInner::ForceCenterY {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -181,7 +202,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Gravity { voice, value: *val },
+                                CommandInner::Gravity {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -190,7 +214,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Feedback { voice, value: *val },
+                                CommandInner::Feedback {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -199,7 +226,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Noise { voice, value: *val },
+                                CommandInner::Noise {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }
@@ -208,7 +238,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Vibration { voice, value: *val },
+                                CommandInner::Vibration {
+                                    voice_id: voice,
+                                    value: *val,
+                                },
                                 CommandSource::Osc,
                             ));
                         }

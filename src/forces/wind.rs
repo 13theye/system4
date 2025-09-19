@@ -241,14 +241,13 @@ impl WindField {
     pub fn par_force_update_all(
         &mut self,
         rng: &mut nannou::rand::rngs::ThreadRng,
-        circle_angle_variations: &std::collections::HashMap<usize, f32>,
+        circle_noise_values: &HashMap<usize, f32>,
     ) {
         use nannou::rand::Rng;
 
         // Pre-compute random variations for all cells for each circle that has angle variation
-        let mut cell_variations: std::collections::HashMap<usize, Vec<f32>> =
-            std::collections::HashMap::new();
-        for (&circle_id, &variation_factor) in circle_angle_variations.iter() {
+        let mut cell_variations: HashMap<usize, Vec<f32>> = HashMap::new();
+        for (&circle_id, &variation_factor) in circle_noise_values.iter() {
             if variation_factor > 0.0 {
                 let variations: Vec<f32> = self
                     .cells
@@ -493,8 +492,8 @@ impl WindCircle {
             center,
             outer_radius: radius,
             inner_radius: width,
-            strength,
-            center_bias,
+            force: strength,
+            gravity: center_bias,
             noise,
             dirty: true,
         };
@@ -507,16 +506,16 @@ impl WindCircle {
     }
 
     /// Recalculate wind within each grid inside this circle, if the parameters have changed
-    pub fn update(&mut self, field: &mut WindField, show_forces: bool) {
+    pub fn update(&mut self, field: &mut WindField) {
         if self.has_changes() {
-            self.remove_from_field(field, show_forces);
-            self.cell_idxs = self.apply_to_field(field, show_forces);
+            self.remove_from_field(field);
+            self.cell_idxs = self.apply_to_field(field);
             self.clear_changes();
         }
     }
 
     /// Remove the circle's wind from the field
-    pub fn remove_from_field(&mut self, field: &mut WindField, _show_forces: bool) {
+    pub fn remove_from_field(&mut self, field: &mut WindField) {
         for cell_idx in self.cell_idxs.iter() {
             let Some(cell) = field.get_mut_cell(cell_idx.x, cell_idx.y) else {
                 continue;
@@ -536,7 +535,7 @@ impl WindCircle {
 
     /// Add the circle's wind to the field, return the cells that were affected.
     /// The total numerical force for each cell is calculated once per frame in a later step.
-    pub fn apply_to_field(&self, field: &mut WindField, _show_forces: bool) -> Vec<CellIdx> {
+    pub fn apply_to_field(&self, field: &mut WindField) -> Vec<CellIdx> {
         // Calculate bounding box using direct parameter access
         let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
 
@@ -612,7 +611,7 @@ impl WindCircle {
             let tangent_dir = vec2(radius_dir.y, -radius_dir.x); // tangential, 90° CCW from radial
 
             // Rotate the tangent vector by bias * 90 degrees
-            let angle = params.center_bias * -std::f32::consts::FRAC_PI_2; // π/2 = 90°
+            let angle = params.gravity * -std::f32::consts::FRAC_PI_2; // π/2 = 90°
 
             let sin_a = angle.sin();
             let cos_a = angle.cos();
@@ -631,7 +630,7 @@ impl WindCircle {
                 .normalize();
              */
 
-            Some(Wind::new_with(blended_direction, params.strength))
+            Some(Wind::new_with(blended_direction, params.force))
         } else {
             None
         }
@@ -717,9 +716,9 @@ pub struct WindCircleParams {
     /// inner hole radius
     pub inner_radius: f32,
     /// strength of the wind
-    pub strength: f32,
+    pub force: f32,
     /// 0.0 = purely tangential, 1.0 = purely radial inward, 2.0 = tangential in the opposite direction
-    pub center_bias: f32,
+    pub gravity: f32,
     /// 0.0-1.0 factor for random angle variation, where 1.0 = full ±90° deviation
     pub noise: f32,
     /// True if settings changed and cells need recalculation
@@ -752,17 +751,17 @@ impl WindCircleParams {
     }
 
     /// Set the strength of the WindCircle
-    pub fn set_strength(&mut self, strength: f32) {
-        if self.strength != strength {
-            self.strength = strength;
+    pub fn set_force(&mut self, force: f32) {
+        if self.force != force {
+            self.force = force;
             self.dirty = true;
         }
     }
 
     /// Set the center bias of the WindCircle
-    pub fn set_center_bias(&mut self, center_bias: f32) {
-        if self.center_bias != center_bias {
-            self.center_bias = center_bias;
+    pub fn set_gravity(&mut self, gravity: f32) {
+        if self.gravity != gravity {
+            self.gravity = gravity;
             self.dirty = true;
         }
     }

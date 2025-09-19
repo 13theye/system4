@@ -2,11 +2,11 @@
 ///
 /// Force field for field-based forces
 use nannou::prelude::*;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use crate::{
-    forces::wind::{WindCircle, WindCircleParams, WindField},
-    groups::VoiceId,
+    forces::wind::WindField,
+    groups::{Voice, VoiceId},
     particle::Particle,
 };
 
@@ -17,7 +17,7 @@ pub struct ForceFields {
     pub wind_field: WindField,
 
     // Force objects
-    pub wind_circles: Vec<WindCircle>,
+    //pub wind_circles: Vec<WindCircle>,
 
     // Origin in the World Coordinate Space
     origin: Vec2,
@@ -36,7 +36,7 @@ impl ForceFields {
 
         Self {
             wind_field: WindField::new(origin, bounds_size, grid_cols, grid_rows),
-            wind_circles: Vec::new(),
+            //wind_circles: Vec::new(),
             origin,
             bounds_size,
             grid_cols,
@@ -45,30 +45,33 @@ impl ForceFields {
         }
     }
 
-    /// Update all circles in this ForceField with per-circle angle variations
-    pub fn update(&mut self, show_forces: bool, rng: &mut nannou::rand::rngs::ThreadRng) {
-        // Update the wind circle meta-force
-        for circle in self.wind_circles.iter_mut() {
-            circle.update(&mut self.wind_field, show_forces);
+    /// Update ForceField with all Voices' WindCircles with per-circle angle variations
+    pub fn update(
+        &mut self,
+        voices: &mut HashMap<VoiceId, Voice>,
+        rng: &mut nannou::rand::rngs::ThreadRng,
+    ) {
+        let mut circle_noise_values: HashMap<usize, f32> = HashMap::new();
+
+        // Update each circle and collect per-circle noise values
+        for voice in voices.values_mut() {
+            // Update the wind circle meta-force
+            for circle in voice.wind_circles.values_mut() {
+                circle.update(&mut self.wind_field);
+                circle_noise_values.insert(circle.id, circle.params().noise);
+            }
         }
 
-        // Collect per-circle angle variations
-        let circle_angle_variations: std::collections::HashMap<usize, f32> = self
-            .wind_circles
-            .iter()
-            .map(|circle| (circle.id, circle.params().noise))
-            .collect();
-
-        // Update each cell with per-circle angle variations
+        // Update each cell and use per-circle angle variations
         self.wind_field
-            .par_force_update_all(rng, &circle_angle_variations);
+            .par_force_update_all(rng, &circle_noise_values);
     }
 
     /// Update all Winds in this ForceField
     pub fn force_update_all(&mut self) {
         // Use a dummy RNG and empty variations for compatibility
         let mut dummy_rng = nannou::rand::thread_rng();
-        let empty_variations = std::collections::HashMap::new();
+        let empty_variations = HashMap::new();
         self.wind_field
             .par_force_update_all(&mut dummy_rng, &empty_variations);
     }
@@ -85,6 +88,7 @@ impl ForceFields {
         self.force_update_all();
     }
 
+    /*
     /// Add a WindCircle to this ForceField (replaces existing circle for same voice)
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
         println!("Added wind circle for {:?}", circle.parent_voice);
@@ -132,92 +136,7 @@ impl ForceFields {
             .iter()
             .any(|circle| circle.parent_voice == *voice)
     }
-
-    /******************* OSC command compatibility methods ********************* */
-
-    /// Remove WindCircle for a given Voice
-    pub fn remove_wind(&mut self, voice: &VoiceId) {
-        if let Some(index) = self
-            .wind_circles
-            .iter()
-            .position(|circle| circle.parent_voice == *voice)
-        {
-            let mut circle = self.wind_circles.remove(index);
-            circle.remove_from_field(&mut self.wind_field, true);
-            println!("Removed wind circle for {:?}", voice);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
-
-    /// Get the center vias of a WindCircle for a given Voice
-    pub fn get_center_bias(&mut self, voice: &VoiceId) -> f32 {
-        self.get_wind_circle_params(*voice)
-            .map(|params| params.center_bias)
-            .unwrap_or(0.0)
-    }
-
-    /// Set the center bias of WindCircle for a given Voice
-    pub fn set_center_bias(&mut self, voice: &VoiceId, bias: f32) {
-        if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_center_bias(bias);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
-
-    /// Set the strength of WindCircle for a given Voice
-    pub fn set_strength(&mut self, voice: &VoiceId, strength: f32) {
-        if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_strength(strength);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
-
-    /// Set the outer radius of WindCircle for a given Voice
-    pub fn set_outer_radius(&mut self, voice: &VoiceId, radius: f32) {
-        if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_outer_radius(radius);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
-
-    /// Set the inner radius of WindCircle for a given Voice
-    pub fn set_inner_radius(&mut self, voice: &VoiceId, val: f32) {
-        if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_inner_radius(val);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
-
-    /// Set the outer and inner radius of a WindCircle by Voice
-    pub fn set_circle_dims(&mut self, voice: &VoiceId, radius: f32, width: f32) {
-        if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_outer_radius(radius);
-            circle.params_mut().set_inner_radius(radius - width);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
-
-    /// Get the angle variation of a WindCircle for a given Voice
-    pub fn get_angle_variation(&self, voice: &VoiceId) -> f32 {
-        self.get_wind_circle_params(*voice)
-            .map(|params| params.noise)
-            .unwrap_or(0.0)
-    }
-
-    /// Set the angle variation of WindCircle for a given Voice
-    pub fn set_noise(&mut self, voice: &VoiceId, noise: f32) {
-        if let Some(circle) = self.get_wind_circle_mut(*voice) {
-            circle.params_mut().set_noise(noise);
-        } else {
-            println!("OSC: Wind circle not found for {:?}", voice);
-        }
-    }
+     */
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

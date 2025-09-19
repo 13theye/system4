@@ -3,7 +3,10 @@
 // Command extension for Model
 
 use crate::{
-    forces::WindCircleParams, groups::VoiceId, model::Model, terminals::commands::drone::DroneConfig,
+    forces::WindCircleParams,
+    groups::{Voice, VoiceId},
+    model::Model,
+    terminals::commands::drone::DroneConfig,
 };
 use nannou::prelude::*;
 use nannou::wgpu::{Device, Queue};
@@ -27,60 +30,55 @@ pub enum CommandInner {
         config: DroneConfig,
     },
     EraseDrone {
-        voice: VoiceId,
+        voice_id: VoiceId,
     },
     ModifyDrone {
-        voice: VoiceId,
+        voice_id: VoiceId,
         config: DroneConfig,
     },
     Alpha {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     Volume {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     Feedback {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     OuterRadius {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     InnerRadius {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     Force {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     Gravity {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     Noise {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     Vibration {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     ForceCenterX {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
     },
     ForceCenterY {
-        voice: VoiceId,
+        voice_id: VoiceId,
         value: f32,
-    },
-    MaskChangeBounds {
-        voice: VoiceId,
-        rect: Rect,
-        duration: f32,
     },
 }
 
@@ -106,73 +104,135 @@ fn get_command_key(command: &Command) -> String {
         CommandInner::CreateDrone { config } => {
             format!("CreateDrone_{}", config.voice)
         }
-        CommandInner::EraseDrone { voice } => {
+        CommandInner::EraseDrone { voice_id: voice } => {
             format!("EraseDrone_{:?}", voice)
         }
-        CommandInner::ModifyDrone { voice, .. } => {
+        CommandInner::ModifyDrone {
+            voice_id: voice, ..
+        } => {
             format!("ModifyDrone_{:?}", voice)
         }
         // Parameter commands that conflict by voice+parameter type
-        CommandInner::Alpha { voice, .. } => format!("Alpha_{:?}", voice),
-        CommandInner::Volume { voice, .. } => format!("Volume_{:?}", voice),
-        CommandInner::Feedback { voice, .. } => format!("Feedback_{:?}", voice),
-        CommandInner::OuterRadius { voice, .. } => format!("OuterRadius_{:?}", voice),
-        CommandInner::InnerRadius { voice, .. } => format!("InnerRadius_{:?}", voice),
-        CommandInner::Force { voice, .. } => format!("Strength_{:?}", voice),
-        CommandInner::Gravity { voice, .. } => format!("CenterBias_{:?}", voice),
-        CommandInner::Noise { voice, .. } => format!("AngleVariation_{:?}", voice),
-        CommandInner::Vibration { voice, .. } => format!("Vibration_{:?}", voice),
-        CommandInner::ForceCenterX { voice, .. } => format!("ForceCenterX_{:?}", voice),
-        CommandInner::ForceCenterY { voice, .. } => format!("ForceCenterY_{:?}", voice),
-        CommandInner::MaskChangeBounds { voice, .. } => format!("MaskChangeBounds_{:?}", voice),
+        CommandInner::Alpha {
+            voice_id: voice, ..
+        } => format!("Alpha_{:?}", voice),
+        CommandInner::Volume {
+            voice_id: voice, ..
+        } => format!("Volume_{:?}", voice),
+        CommandInner::Feedback {
+            voice_id: voice, ..
+        } => format!("Feedback_{:?}", voice),
+        CommandInner::OuterRadius {
+            voice_id: voice, ..
+        } => format!("OuterRadius_{:?}", voice),
+        CommandInner::InnerRadius {
+            voice_id: voice, ..
+        } => format!("InnerRadius_{:?}", voice),
+        CommandInner::Force {
+            voice_id: voice, ..
+        } => format!("Strength_{:?}", voice),
+        CommandInner::Gravity {
+            voice_id: voice, ..
+        } => format!("CenterBias_{:?}", voice),
+        CommandInner::Noise {
+            voice_id: voice, ..
+        } => format!("AngleVariation_{:?}", voice),
+        CommandInner::Vibration {
+            voice_id: voice, ..
+        } => format!("Vibration_{:?}", voice),
+        CommandInner::ForceCenterX {
+            voice_id: voice, ..
+        } => format!("ForceCenterX_{:?}", voice),
+        CommandInner::ForceCenterY {
+            voice_id: voice, ..
+        } => format!("ForceCenterY_{:?}", voice),
     }
 }
 
 /// Extension of Model that add controller functions
 impl Model {
     /// Get the params of a circle
-    pub fn get_wind_circle_params(&self, voice: VoiceId) -> Option<&WindCircleParams> {
-        self.particle_system.forces.get_wind_circle_params(voice)
+    pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
+        let voice = self.voices.get(&voice)?;
+        voice.wind_circles.get(&id).map(|circle| circle.params())
     }
 
     /// Get the alpha limit of a Voice ("brightness")
     pub fn get_alpha_limit(&self, voice: VoiceId) -> f32 {
-        self.particle_system
-            .alpha_limits
-            .get(&voice)
-            .copied()
-            .unwrap_or(1.0)
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice.params.alpha_limit
     }
 
     /// Get the center bias of a Voice's WindCircle ("gravity")
-    pub fn get_center_bias(&mut self, voice: VoiceId) -> f32 {
-        self.particle_system.forces.get_center_bias(&voice)
+    pub fn get_center_bias(&mut self, voice: VoiceId, id: usize) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice
+            .wind_circles
+            .get(&id)
+            .map(|circle| circle.params().gravity)
+            .unwrap_or(0.0)
     }
 
     /// Get the angle variation of a Voice's WindCircle ("noise")
-    pub fn get_angle_variation(&self, voice: VoiceId) -> f32 {
-        self.particle_system.forces.get_angle_variation(&voice)
+    pub fn get_angle_variation(&self, voice: VoiceId, id: usize) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice
+            .wind_circles
+            .get(&id)
+            .map(|circle| circle.params().noise)
+            .unwrap_or(0.0)
     }
 
     /// Get the position offset factor of a Voice ("vibration")
-    pub fn get_vibration_offset_factor(&self, voice: VoiceId) -> f32 {
-        self.particle_system.get_vibration_factor(voice)
+    pub fn get_vibration(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice.params.vibration
     }
 
     pub fn get_volume(&self, voice: VoiceId) -> f32 {
-        self.particle_system
-            .particle_num_factors
-            .get(&voice)
-            .copied()
-            .unwrap_or(1.0)
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice.params.volume
     }
 
     pub fn get_feedback(&self, voice: VoiceId) -> f32 {
-        self.particle_system
-            .feedback
-            .get(&voice)
-            .copied()
-            .unwrap_or(0.0)
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice.params.feedback
+    }
+
+    /// End a voice -- remove its wind circles and remove it from the hashmap
+    pub fn kill_voice(&mut self, voice_id: VoiceId) {
+        // Remove voice's wind circles from force field
+        let Some(voice) = self.voices.get_mut(&voice_id) else {
+            return;
+        };
+
+        let wind_field = &mut self.particle_system.forces.wind_field;
+
+        for (id, circle) in voice.wind_circles.iter_mut() {
+            circle.remove_from_field(wind_field);
+            println!("Controller: Removed wind circle for {:?}", id);
+        }
+
+        // Remove the voice from the hashmap
+        self.voices.remove(&voice_id);
     }
 
     /// Add a command to the queue for later processing
@@ -232,62 +292,84 @@ impl Model {
         match command.command {
             CommandInner::CreateDrone { config } => {
                 // Convert voice ID to Voice enum
-                let voice = VoiceId::from_i32(config.voice);
+                let voice_id = VoiceId::from_i32(config.voice);
 
-                let _ = self
-                    .particle_system
-                    .begin_voice(&mut self.id_generator, voice, &config);
+                if self.voices.get(&voice_id).is_some() {
+                    // Voice already exists, do nothing
+                    println!("Controller: Voice {} already exists", voice_id);
+                    return;
+                }
+
+                let mut voice = Voice::new_with_id(voice_id);
+
+                voice.begin_drone(
+                    &config,
+                    self.particle_system.default_particle_color,
+                    self.particle_system.global_max_spawn_rate,
+                    &mut self.id_generator,
+                );
 
                 self.osc_send.send_drone_on_off(config.voice, 1);
-                self.particle_system.set_is_spawning(&voice, true);
+                voice.set_is_spawning(true);
             }
-            CommandInner::EraseDrone { voice } => {
-                // Reset drone parameters to default values
-                self.particle_system.set_alpha_limit(&voice, 0.0);
-                self.particle_system.set_volume(&voice, 0.0);
-                self.particle_system.set_feedback(&voice, 0.0);
-                self.particle_system.forces.set_strength(&voice, 0.0);
-                self.osc_send.send_drone_on_off(voice.to_i32(), 0);
+            CommandInner::EraseDrone { voice_id } => {
+                self.kill_voice(voice_id);
+                self.osc_send.send_drone_on_off(voice_id.to_i32(), 0);
             }
-            CommandInner::ModifyDrone { voice, config } => {
+            CommandInner::ModifyDrone { voice_id, config } => {
                 // Apply selective modifications - only set parameters that are Some(value)
                 if let Some(brightness) = config.brightness {
-                    self.particle_system.set_alpha_limit(&voice, brightness);
+                    let Some(voice) = self.voices.get_mut(&voice_id) else {
+                        return;
+                    };
+                    voice.set_alpha_limit(brightness);
                 }
                 if let Some(volume) = config.volume {
-                    self.particle_system.set_volume(&voice, volume);
+                    let Some(voice) = self.voices.get_mut(&voice_id) else {
+                        return;
+                    };
+                    voice.set_volume(volume);
                 }
                 if let Some(feedback) = config.feedback {
-                    self.particle_system.set_feedback(&voice, feedback);
+                    let Some(voice) = self.voices.get_mut(&voice_id) else {
+                        return;
+                    };
+                    voice.set_feedback(feedback);
                 }
                 if let Some(outer_radius) = config.outer_radius {
                     self.particle_system
                         .forces
-                        .set_outer_radius(&voice, outer_radius);
+                        .set_outer_radius(&voice_id, outer_radius);
                 }
                 if let Some(inner_radius) = config.inner_radius {
                     self.particle_system
                         .forces
-                        .set_inner_radius(&voice, inner_radius);
+                        .set_inner_radius(&voice_id, inner_radius);
                 }
                 if let Some(force) = config.force {
                     self.particle_system
                         .forces
-                        .set_strength(&voice, force.min(30.0));
+                        .set_strength(&voice_id, force.min(30.0));
                 }
                 if let Some(gravity) = config.gravity {
-                    self.particle_system.forces.set_center_bias(&voice, gravity);
+                    self.particle_system
+                        .forces
+                        .set_center_bias(&voice_id, gravity);
                 }
                 if let Some(noise) = config.noise {
-                    self.particle_system.forces.set_noise(&voice, noise);
+                    self.particle_system.forces.set_noise(&voice_id, noise);
                 }
                 if let Some(vibration) = config.vibration {
-                    self.particle_system.set_vibration_factor(&voice, vibration);
+                    let Some(voice) = self.voices.get_mut(&voice_id) else {
+                        return;
+                    };
+                    voice.set_vibration(vibration);
                 }
 
                 // Handle center position - only update if at least one coordinate is specified
                 if config.center_x.is_some() || config.center_y.is_some() {
-                    if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
+                    if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice_id)
+                    {
                         let current_center = circle.params().center;
                         let new_x = config.center_x.unwrap_or(current_center.x);
                         let new_y = config.center_y.unwrap_or(current_center.y);
@@ -295,53 +377,71 @@ impl Model {
                     }
                 }
             }
-            CommandInner::Alpha { voice, value } => {
-                self.particle_system.set_alpha_limit(&voice, value);
+            CommandInner::Alpha { voice_id, value } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+                voice.set_alpha_limit(value);
             }
-            CommandInner::Volume { voice, value } => {
-                self.particle_system.set_volume(&voice, value);
+            CommandInner::Volume { voice_id, value } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+                voice.set_volume(value);
             }
-            CommandInner::Feedback { voice, value } => {
-                self.particle_system.set_feedback(&voice, value);
+            CommandInner::Feedback { voice_id, value } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+                voice.set_feedback(value);
             }
-            CommandInner::OuterRadius { voice, value } => {
-                self.particle_system.forces.set_outer_radius(&voice, value);
+            CommandInner::OuterRadius { voice_id, value } => {
+                self.particle_system
+                    .forces
+                    .set_outer_radius(&voice_id, value);
             }
-            CommandInner::InnerRadius { voice, value } => {
-                self.particle_system.forces.set_inner_radius(&voice, value);
+            CommandInner::InnerRadius { voice_id, value } => {
+                self.particle_system
+                    .forces
+                    .set_inner_radius(&voice_id, value);
             }
-            CommandInner::Force { voice, value } => {
+            CommandInner::Force { voice_id, value } => {
                 let strength = value.min(30.0); // 30 is the max strength of the wind circle
-                self.particle_system.forces.set_strength(&voice, strength);
+                self.particle_system
+                    .forces
+                    .set_strength(&voice_id, strength);
             }
-            CommandInner::Gravity { voice, value } => {
+            CommandInner::Gravity {
+                voice_id: voice,
+                value,
+            } => {
                 self.particle_system.forces.set_center_bias(&voice, value);
             }
-            CommandInner::Noise { voice, value } => {
-                self.particle_system.forces.set_noise(&voice, value);
+            CommandInner::Noise { voice_id, value } => {
+                self.particle_system.forces.set_noise(&voice_id, value);
             }
-            CommandInner::Vibration { voice, value } => {
-                self.particle_system.set_vibration_factor(&voice, value);
+            CommandInner::Vibration { voice_id, value } => {
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    return;
+                };
+                voice.set_vibration(value);
             }
-            CommandInner::ForceCenterX { voice, value } => {
+            CommandInner::ForceCenterX {
+                voice_id: voice,
+                value,
+            } => {
                 if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
                     let current_y = circle.params().center.y;
                     circle.params_mut().set_center(vec2(value, current_y));
                 }
             }
-            CommandInner::ForceCenterY { voice, value } => {
+            CommandInner::ForceCenterY {
+                voice_id: voice,
+                value,
+            } => {
                 if let Some(circle) = self.particle_system.forces.get_wind_circle_mut(voice) {
                     let current_x = circle.params().center.x;
                     circle.params_mut().set_center(vec2(current_x, value));
-                }
-            }
-            CommandInner::MaskChangeBounds {
-                voice,
-                rect,
-                duration,
-            } => {
-                if let Some(mask) = self.particle_system.masks.get_mut(&voice) {
-                    mask.change_bounds(rect, duration);
                 }
             }
         }
@@ -384,7 +484,7 @@ pub fn make_drone_command(
 
 /// Create an erase drone command using the unified command system
 pub fn erase_drone_command(voice: VoiceId, source: CommandSource) -> Command {
-    Command::new(CommandInner::EraseDrone { voice }, source)
+    Command::new(CommandInner::EraseDrone { voice_id: voice }, source)
 }
 
 /********** Functions for changing renderer properties ***************** */
