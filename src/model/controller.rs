@@ -329,6 +329,8 @@ impl Model {
 
                 self.osc_send.send_drone_on_off(config.voice, 1);
                 voice.set_is_spawning(true);
+
+                self.voices.insert(voice_id, voice);
             }
             CommandInner::EraseDrone { voice_id } => {
                 self.kill_voice(voice_id);

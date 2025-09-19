@@ -102,7 +102,10 @@ impl Voice {
             noise,
         );
 
-        // Create particle emitters
+        // Add the wind circle to the forces FIRST
+        self.add_wind_circle(circle);
+
+        // Create particle emitters (now that bounds can be calculated correctly)
         self.bounds_rect = self.calculate_bounds();
 
         let emitter_left = LinearEmitter::new(
@@ -153,8 +156,6 @@ impl Voice {
         self.set_volume(volume);
         self.set_feedback(feedback);
         self.set_vibration(vibration);
-        // Add the wind circle to the forces
-        self.add_wind_circle(circle);
     }
 
     fn calculate_bounds(&self) -> Rect {

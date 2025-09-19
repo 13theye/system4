@@ -436,7 +436,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update particle system
     model
         .particle_system
-        .update(&model.voices, &mut model.rng, &mut model.gpu_buffers);
+        .update(&mut model.voices, &mut model.rng, &mut model.gpu_buffers);
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
