@@ -5,6 +5,7 @@
 use super::TerminalCommandBuilder;
 use crate::groups::VoiceId;
 use crate::model::controller::{Command, CommandInner, CommandSource};
+use crate::model::command_builder::CommandBuilder;
 use crate::terminals::parsing::{ParameterValue, ParseError};
 use std::collections::HashMap;
 use std::fmt;
@@ -277,119 +278,7 @@ impl DroneConfig {
         circle_id: usize,
         source: CommandSource,
     ) -> Vec<Command> {
-        let mut commands = Vec::new();
-
-        // Voice-level parameters
-        if let Some(brightness) = self.brightness {
-            commands.push(Command::new(
-                CommandInner::Alpha {
-                    voice_id,
-                    value: brightness,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(volume) = self.volume {
-            commands.push(Command::new(
-                CommandInner::Volume {
-                    voice_id,
-                    value: volume,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(feedback) = self.feedback {
-            commands.push(Command::new(
-                CommandInner::Feedback {
-                    voice_id,
-                    value: feedback,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(vibration) = self.vibration {
-            commands.push(Command::new(
-                CommandInner::Vibration {
-                    voice_id,
-                    value: vibration,
-                },
-                source.clone(),
-            ));
-        }
-
-        // Circle-specific parameters
-        if let Some(gravity) = self.gravity {
-            commands.push(Command::new(
-                CommandInner::Gravity {
-                    voice_id,
-                    circle_id,
-                    value: gravity,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(force) = self.force {
-            commands.push(Command::new(
-                CommandInner::Force {
-                    voice_id,
-                    circle_id,
-                    value: force,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(outer_radius) = self.outer_radius {
-            commands.push(Command::new(
-                CommandInner::OuterRadius {
-                    voice_id,
-                    circle_id,
-                    value: outer_radius,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(inner_radius) = self.inner_radius {
-            commands.push(Command::new(
-                CommandInner::InnerRadius {
-                    voice_id,
-                    circle_id,
-                    value: inner_radius,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(noise) = self.noise {
-            commands.push(Command::new(
-                CommandInner::Noise {
-                    voice_id,
-                    circle_id,
-                    value: noise,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(center_x) = self.center_x {
-            commands.push(Command::new(
-                CommandInner::ForceCenterX {
-                    voice_id,
-                    circle_id,
-                    value: center_x,
-                },
-                source.clone(),
-            ));
-        }
-        if let Some(center_y) = self.center_y {
-            commands.push(Command::new(
-                CommandInner::ForceCenterY {
-                    voice_id,
-                    circle_id,
-                    value: center_y,
-                },
-                source.clone(),
-            ));
-        }
-
-        commands
+        CommandBuilder::generate_all_parameter_commands(self, voice_id, circle_id, source)
     }
 
     /// Generate only circle-specific parameter commands (for modifying existing circles)
@@ -399,53 +288,7 @@ impl DroneConfig {
         circle_id: usize,
         source: CommandSource,
     ) -> Vec<Command> {
-        let mut commands = Vec::new();
-
-        // Only circle-specific parameters (skip voice-level params like brightness, volume)
-        if let Some(gravity) = self.gravity {
-            commands.push(Command::new(
-                CommandInner::Gravity { voice_id, circle_id, value: gravity },
-                source.clone(),
-            ));
-        }
-        if let Some(force) = self.force {
-            commands.push(Command::new(
-                CommandInner::Force { voice_id, circle_id, value: force },
-                source.clone(),
-            ));
-        }
-        if let Some(outer_radius) = self.outer_radius {
-            commands.push(Command::new(
-                CommandInner::OuterRadius { voice_id, circle_id, value: outer_radius },
-                source.clone(),
-            ));
-        }
-        if let Some(inner_radius) = self.inner_radius {
-            commands.push(Command::new(
-                CommandInner::InnerRadius { voice_id, circle_id, value: inner_radius },
-                source.clone(),
-            ));
-        }
-        if let Some(noise) = self.noise {
-            commands.push(Command::new(
-                CommandInner::Noise { voice_id, circle_id, value: noise },
-                source.clone(),
-            ));
-        }
-        if let Some(center_x) = self.center_x {
-            commands.push(Command::new(
-                CommandInner::ForceCenterX { voice_id, circle_id, value: center_x },
-                source.clone(),
-            ));
-        }
-        if let Some(center_y) = self.center_y {
-            commands.push(Command::new(
-                CommandInner::ForceCenterY { voice_id, circle_id, value: center_y },
-                source.clone(),
-            ));
-        }
-
-        commands
+        CommandBuilder::generate_circle_parameter_commands(self, voice_id, circle_id, source)
     }
 
     /// Convert this DroneConfig to a CreateDrone VoiceCommand

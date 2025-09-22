@@ -60,7 +60,7 @@ impl DroneParametersDisplay {
         }
 
         // Add Wind Circles separator
-        terminal_view.update_line_at_index(line_index, "--- Wind Circles ---", false);
+        terminal_view.update_line_at_index(line_index, "--- Forces ---", false);
         line_index += 1;
 
         Self {

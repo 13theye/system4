@@ -5,7 +5,10 @@
 use crate::{
     forces::WindCircleParams,
     groups::{Voice, VoiceId},
-    model::Model,
+    model::{
+        command_builder::{ValidationResult, VoiceValidator},
+        Model,
+    },
     terminals::commands::drone::DroneConfig,
 };
 use nannou::wgpu::{Device, Queue};
@@ -427,139 +430,115 @@ impl Model {
             }
 
             CommandInner::Alpha { voice_id, value } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "Alpha") {
                     return;
-                };
-                voice.set_alpha_limit(value);
+                }
+
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_alpha_limit(value);
+                }
             }
             CommandInner::Volume { voice_id, value } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "Volume") {
                     return;
-                };
-                voice.set_volume(value);
+                }
+
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_volume(value);
+                }
             }
             CommandInner::Feedback { voice_id, value } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "Feedback") {
                     return;
-                };
-                voice.set_feedback(value);
+                }
+
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_feedback(value);
+                }
             }
             CommandInner::Vibration { voice_id, value } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "Vibration") {
                     return;
-                };
-                voice.set_vibration(value);
+                }
+
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_vibration(value);
+                }
             }
             CommandInner::OuterRadius {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "OuterRadius") {
                     return;
                 }
 
-                voice.set_circle_outer_radius(circle_id, value);
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_outer_radius(circle_id, value);
+                }
             }
             CommandInner::InnerRadius {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "InnerRadius") {
                     return;
                 }
 
-                voice.set_circle_inner_radius(circle_id, value);
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_inner_radius(circle_id, value);
+                }
             }
             CommandInner::Force {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                let strength = value.min(30.0); // 30 is the max strength of the wind circle
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "Force") {
                     return;
                 }
 
-                voice.set_circle_force(circle_id, strength);
+                let strength = value.min(30.0); // 30 is the max strength of the wind circle
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_force(circle_id, strength);
+                }
             }
             CommandInner::Gravity {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "Gravity") {
                     return;
                 }
 
-                voice.set_circle_gravity(circle_id, value);
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_gravity(circle_id, value);
+                }
             }
             CommandInner::Noise {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "Noise") {
                     return;
                 }
 
-                voice.set_circle_noise(circle_id, value);
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_noise(circle_id, value);
+                }
             }
 
             CommandInner::ForceCenterX {
@@ -567,44 +546,28 @@ impl Model {
                 circle_id,
                 value,
             } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "ForceCenterX") {
                     return;
                 }
 
-                voice.set_circle_center_x(circle_id, value);
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_center_x(circle_id, value);
+                }
             }
             CommandInner::ForceCenterY {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                let Some(voice) = self.voices.get_mut(&voice_id) else {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
-                    return;
-                };
-
-                // Check if circle exists
-                if !voice.wind_circles.contains_key(&circle_id) {
-                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice_circle(voice_id, circle_id);
+                if !self.validate_and_handle_error(validation, "ForceCenterY") {
                     return;
                 }
 
-                voice.set_circle_center_y(circle_id, value);
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_circle_center_y(circle_id, value);
+                }
             }
             CommandInner::ListCircles { voice_id } => {
                 let circle_ids = self.get_wind_circle_ids(voice_id);
@@ -621,11 +584,8 @@ impl Model {
                 self.command_input.set_success_message(status_message);
             }
             CommandInner::NewCircle { voice_id, config } => {
-                // Check if voice exists
-                if !self.voices.contains_key(&voice_id) {
-                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
-                    println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "NewCircle") {
                     return;
                 }
 
@@ -793,4 +753,40 @@ pub fn update_feedback(model: &mut Model, device: &Device, queue: &Queue) {
     model
         .segment_renderer4
         .set_segment_length(device, queue, voice4_feedback);
+}
+
+// Implement VoiceValidator trait for Model to enable centralized validation
+impl VoiceValidator for Model {
+    fn voice_exists(&self, voice_id: VoiceId) -> bool {
+        self.voices.contains_key(&voice_id)
+    }
+
+    fn circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
+        if let Some(voice) = self.voices.get(&voice_id) {
+            voice.wind_circles.contains_key(&circle_id)
+        } else {
+            false
+        }
+    }
+}
+
+// Helper function for consistent error handling in command execution
+impl Model {
+    /// Validate and execute a command with standardized error handling
+    pub fn validate_and_handle_error(
+        &mut self,
+        validation: ValidationResult,
+        _operation: &str,
+    ) -> bool {
+        match validation {
+            ValidationResult::Success => true,
+            ValidationResult::VoiceNotFound(_) | ValidationResult::CircleNotFound(_, _) => {
+                if let Some(error_msg) = validation.to_error_message() {
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                }
+                false
+            }
+        }
+    }
 }

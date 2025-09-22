@@ -3,6 +3,7 @@
 // The main App Model
 
 pub mod controller;
+pub mod command_builder;
 
 use crate::{
     fps::FpsManager,
