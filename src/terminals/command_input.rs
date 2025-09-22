@@ -119,6 +119,12 @@ impl CommandInput {
         self.pending_command.take()
     }
 
+    /// Set a custom success message (for command results)
+    pub fn set_success_message(&mut self, message: String) {
+        self.last_success = Some(message);
+        self.last_error = None; // Clear any previous error
+    }
+
     /// Check if the input is currently empty
     pub fn is_empty(&self) -> bool {
         self.raw_text.trim().is_empty()

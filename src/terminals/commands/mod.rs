@@ -23,6 +23,10 @@ pub enum TerminalCommand {
     ListCircles {
         voice: i32,
     },
+    NewCircle {
+        voice: i32,
+        config: drone::DroneConfig,
+    },
 }
 
 impl fmt::Display for TerminalCommand {
@@ -46,6 +50,10 @@ impl fmt::Display for TerminalCommand {
             }
             TerminalCommand::ListCircles { voice } => {
                 write!(f, "ListCircles for voice {}", voice)
+            }
+            TerminalCommand::NewCircle { voice, config } => {
+                writeln!(f, "NewCircle for voice {}:", voice)?;
+                write!(f, "{}", config)
             }
         }
     }

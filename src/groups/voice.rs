@@ -56,7 +56,7 @@ impl Voice {
         }
     }
 
-    fn issue_wind_circle_idx(&mut self) -> usize {
+    pub fn issue_wind_circle_idx(&mut self) -> usize {
         let idx = self.wind_circle_idx;
         self.wind_circle_idx += 1;
         idx

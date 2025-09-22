@@ -316,8 +316,8 @@ fn model(app: &App) -> Model {
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
-        origin: vec2(-1900.0, -1050.0),  // Below main terminal
-        num_lines: 15,              // Multiple lines for individual parameters
+        origin: vec2(-1900.0, 1050.0),
+        num_lines: 50,              // Multiple lines for individual parameters
         width: 1000.0,
         line_spacing: 5.0,
         bright_color: rgba(0.7, 0.7, 0.7, 1.0),
@@ -326,12 +326,12 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,     // Faster typing for parameters
         font: font.clone(),
         font_size: 22,
-        justification: TextJustification::BottomLeft,
+        justification: TextJustification::TopLeft,
     };
 
     let drone_params_voice4 = TerminalViewParams {
-        origin: vec2(1900.0, -1050.0),  // Below voice 1 parameters
-        num_lines: 15,
+        origin: vec2(1900.0, 1050.0),
+        num_lines: 50,
         width: 1000.0,
         line_spacing: 5.0,
         bright_color: rgba(0.7, 0.7, 0.7, 1.0),
@@ -340,7 +340,7 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,
         font: font.clone(),
         font_size: 22,
-        justification: TextJustification::BottomRight,
+        justification: TextJustification::TopRight,
     };
 
     terminal_manager.add_drone_parameters_display(VoiceId::Voice1, drone_params_voice1);
@@ -1378,9 +1378,21 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         command_queue.push(voice_command);
                                                                     }
                                                                     TerminalCommand::ModifyVoiceCircle { voice, circle, config} => {
-                                                                        let voice_command = config.to_create_command(CommandSource::Terminal);
-                                                                        println!("Queueing ModifyVoiceCircle command for voice: {:?} circle: {:?} with config: {:?}", voice, circle, config);
-                                                                        command_queue.push(voice_command);
+                                                                        let voice_enum = VoiceId::from_i32(voice);
+
+                                                                        // Generate circle-specific parameter commands
+                                                                        let parameter_commands = config.generate_circle_parameter_commands(
+                                                                            voice_enum,
+                                                                            circle as usize,
+                                                                            CommandSource::Terminal
+                                                                        );
+
+                                                                        println!("Queueing {} circle parameter commands for voice: {:?} circle: {:?}",
+                                                                                parameter_commands.len(), voice, circle);
+
+                                                                        for cmd in parameter_commands {
+                                                                            command_queue.push(cmd);
+                                                                        }
                                                                     }
                                                                     TerminalCommand::ListCircles { voice } => {
                                                                         let voice_enum = VoiceId::from_i32(voice);
@@ -1389,6 +1401,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             CommandSource::Terminal
                                                                         );
                                                                         println!("Queueing ListCircles command for voice: {:?}", voice);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::NewCircle { voice, config } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice);
+                                                                        let voice_command = Command::new(
+                                                                            CommandInner::NewCircle { voice_id: voice_enum, config },
+                                                                            CommandSource::Terminal
+                                                                        );
+                                                                        println!("Queueing NewCircle command for voice: {:?}", voice);
                                                                         command_queue.push(voice_command);
                                                                     }
                                                                 }

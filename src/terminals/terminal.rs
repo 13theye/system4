@@ -39,6 +39,13 @@ impl Terminal {
             // List WindCircles for a drone
             "drone(1).listCircles();",
             "drone(4).listCircles();",
+            // Add new WindCircles to existing drones
+            "drone(1).newCircle().gravity(1.0).force(25.0).add();",
+            "drone(4).newCircle().centerX(-500.0).centerY(200.0).add();",
+            "drone(1).newCircle().add();", // All defaults
+            // Modify specific circles
+            "drone(1).circle(1).centerX(-500.0).set();",
+            "drone(1).circle(0).gravity(2.0).force(15.0).set();",
         ];
 
         for command in test_commands {

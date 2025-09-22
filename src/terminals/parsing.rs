@@ -31,6 +31,7 @@ pub enum ParseError {
     EmptyInput,
     MissingBegin,
     MissingSet,
+    MissingAdd,
     UnknownCommand(String),
 }
 
@@ -46,6 +47,7 @@ impl fmt::Display for ParseError {
             ParseError::EmptyInput => write!(f, "Empty input"),
             ParseError::MissingBegin => write!(f, "Missing .begin() call"),
             ParseError::MissingSet => write!(f, "Missing .set() call"),
+            ParseError::MissingAdd => write!(f, "Missing .add() call"),
             ParseError::UnknownCommand(cmd) => write!(f, "Unknown command: {}", cmd),
         }
     }
@@ -108,6 +110,8 @@ impl CommandParser {
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
         let mut found_set = false;
+        let mut found_add = false;
+        let mut is_new_circle = false;
         let mut circle_id: Option<i32> = None;
 
         // Parse method chain
@@ -122,6 +126,11 @@ impl CommandParser {
                     self.expect_token(&Token::RightParen)?;
                     found_set = true;
                     break;
+                } else if method_name == "add" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    found_add = true;
+                    break;
                 } else if method_name == "listCircles" {
                     self.expect_token(&Token::LeftParen)?;
                     self.expect_token(&Token::RightParen)?;
@@ -130,6 +139,10 @@ impl CommandParser {
                         self.expect_token(&Token::Semicolon)?;
                     }
                     return Ok(TerminalCommand::ListCircles { voice: voice_id });
+                } else if method_name == "newCircle" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    is_new_circle = true;
                 } else if method_name == "circle" {
                     // Parse circle ID
                     self.expect_token(&Token::LeftParen)?;
@@ -161,8 +174,12 @@ impl CommandParser {
             }
         }
 
-        if !found_set {
-            return Err(ParseError::MissingSet);
+        if !found_set && !found_add {
+            return Err(if is_new_circle {
+                ParseError::MissingAdd
+            } else {
+                ParseError::MissingSet
+            });
         }
 
         // Expect semicolon at the end
@@ -170,8 +187,13 @@ impl CommandParser {
             self.expect_token(&Token::Semicolon)?;
         }
 
-        // Return appropriate command based on whether circle was specified
-        if let Some(circle) = circle_id {
+        // Return appropriate command based on the type of operation
+        if is_new_circle {
+            Ok(TerminalCommand::NewCircle {
+                voice: voice_id,
+                config: builder.build(),
+            })
+        } else if let Some(circle) = circle_id {
             Ok(TerminalCommand::ModifyVoiceCircle {
                 voice: voice_id,
                 circle,

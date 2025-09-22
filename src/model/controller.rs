@@ -91,6 +91,10 @@ pub enum CommandInner {
     ListCircles {
         voice_id: VoiceId,
     },
+    NewCircle {
+        voice_id: VoiceId,
+        config: crate::terminals::commands::drone::DroneConfig,
+    },
 }
 
 impl Command {
@@ -160,6 +164,9 @@ fn get_command_key(command: &Command) -> String {
         CommandInner::ListCircles {
             voice_id: voice, ..
         } => format!("ListCircles_{:?}", voice),
+        CommandInner::NewCircle {
+            voice_id: voice, ..
+        } => format!("NewCircle_{:?}", voice),
     }
 }
 
@@ -342,7 +349,7 @@ impl Model {
                 let parameter_commands = resolved_config.generate_parameter_commands(
                     voice_id,
                     0, // First circle created by begin_drone
-                    command.source
+                    command.source,
                 );
 
                 for cmd in parameter_commands {
@@ -449,8 +456,19 @@ impl Model {
                 value,
             } => {
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
                     return;
                 };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                }
 
                 voice.set_circle_outer_radius(circle_id, value);
             }
@@ -460,8 +478,19 @@ impl Model {
                 value,
             } => {
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
                     return;
                 };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                }
 
                 voice.set_circle_inner_radius(circle_id, value);
             }
@@ -472,8 +501,19 @@ impl Model {
             } => {
                 let strength = value.min(30.0); // 30 is the max strength of the wind circle
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
                     return;
                 };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                }
 
                 voice.set_circle_force(circle_id, strength);
             }
@@ -483,8 +523,19 @@ impl Model {
                 value,
             } => {
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
                     return;
                 };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                }
 
                 voice.set_circle_gravity(circle_id, value);
             }
@@ -494,8 +545,19 @@ impl Model {
                 value,
             } => {
                 let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
                     return;
                 };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                }
 
                 voice.set_circle_noise(circle_id, value);
             }
@@ -505,18 +567,44 @@ impl Model {
                 circle_id,
                 value,
             } => {
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
-                    voice.set_circle_center_x(circle_id, value);
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
                 }
+
+                voice.set_circle_center_x(circle_id, value);
             }
             CommandInner::ForceCenterY {
                 voice_id,
                 circle_id,
                 value,
             } => {
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
-                    voice.set_circle_center_y(circle_id, value);
+                let Some(voice) = self.voices.get_mut(&voice_id) else {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
+                };
+
+                // Check if circle exists
+                if !voice.wind_circles.contains_key(&circle_id) {
+                    let error_msg = format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id);
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
                 }
+
+                voice.set_circle_center_y(circle_id, value);
             }
             CommandInner::ListCircles { voice_id } => {
                 let circle_ids = self.get_wind_circle_ids(voice_id);
@@ -526,16 +614,124 @@ impl Model {
                     format!("WindCircle keys: {:?}", circle_ids)
                 };
 
-                println!("Voice {} - {}", voice_id.to_i32(), circles_str);
+                let status_message = format!("Voice {} - {}", voice_id.to_i32(), circles_str);
+                println!("{}", status_message);
 
-                // Send to terminal status display
-                if let Ok(mut terminal_manager) = self.terminal_manager.try_borrow_mut() {
-                    terminal_manager.add_line(
-                        "status",
-                        &format!("Voice {} - {}", voice_id.to_i32(), circles_str),
-                        false,
-                    );
+                // Send to Performer Control status line
+                self.command_input.set_success_message(status_message);
+            }
+            CommandInner::NewCircle { voice_id, config } => {
+                // Check if voice exists
+                if !self.voices.contains_key(&voice_id) {
+                    let error_msg = format!("Voice {} does not exist", voice_id.to_i32());
+                    println!("Error: {}", error_msg);
+                    self.command_input.set_success_message(error_msg);
+                    return;
                 }
+
+                // Merge config with defaults
+                let resolved_config = config.merge_with_defaults();
+
+                // Extract circle parameters (voice-level params are ignored for new circles)
+                let gravity = resolved_config.gravity.unwrap();
+                let force = resolved_config.force.unwrap();
+                let outer_radius = resolved_config.outer_radius.unwrap();
+                let inner_radius = resolved_config.inner_radius.unwrap();
+                let center_x = resolved_config.center_x.unwrap();
+                let center_y = resolved_config.center_y.unwrap();
+                let noise = resolved_config.noise.unwrap();
+
+                // Create the new WindCircle
+                let voice = self.voices.get_mut(&voice_id).unwrap();
+                let circle_id = voice.issue_wind_circle_idx();
+
+                let center = nannou::prelude::vec2(center_x, center_y);
+                let circle = crate::forces::WindCircle::new(
+                    circle_id,
+                    voice_id,
+                    center,
+                    outer_radius,
+                    inner_radius,
+                    force,
+                    gravity,
+                    noise,
+                );
+
+                // Add the circle to the voice
+                voice.add_wind_circle(circle);
+
+                // Send parameter update commands to DroneParametersDisplay
+                let parameter_commands = vec![
+                    Command::new(
+                        CommandInner::Gravity {
+                            voice_id,
+                            circle_id,
+                            value: gravity,
+                        },
+                        command.source.clone(),
+                    ),
+                    Command::new(
+                        CommandInner::Force {
+                            voice_id,
+                            circle_id,
+                            value: force,
+                        },
+                        command.source.clone(),
+                    ),
+                    Command::new(
+                        CommandInner::OuterRadius {
+                            voice_id,
+                            circle_id,
+                            value: outer_radius,
+                        },
+                        command.source.clone(),
+                    ),
+                    Command::new(
+                        CommandInner::InnerRadius {
+                            voice_id,
+                            circle_id,
+                            value: inner_radius,
+                        },
+                        command.source.clone(),
+                    ),
+                    Command::new(
+                        CommandInner::Noise {
+                            voice_id,
+                            circle_id,
+                            value: noise,
+                        },
+                        command.source.clone(),
+                    ),
+                    Command::new(
+                        CommandInner::ForceCenterX {
+                            voice_id,
+                            circle_id,
+                            value: center_x,
+                        },
+                        command.source.clone(),
+                    ),
+                    Command::new(
+                        CommandInner::ForceCenterY {
+                            voice_id,
+                            circle_id,
+                            value: center_y,
+                        },
+                        command.source.clone(),
+                    ),
+                ];
+
+                for cmd in parameter_commands {
+                    self.terminal_manager.borrow_mut().process_command(&cmd);
+                }
+
+                // Set success message
+                let status_message = format!(
+                    "Voice {} - Added WindCircle {}",
+                    voice_id.to_i32(),
+                    circle_id
+                );
+                println!("{}", status_message);
+                self.command_input.set_success_message(status_message);
             }
         }
     }

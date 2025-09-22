@@ -392,6 +392,62 @@ impl DroneConfig {
         commands
     }
 
+    /// Generate only circle-specific parameter commands (for modifying existing circles)
+    pub fn generate_circle_parameter_commands(
+        &self,
+        voice_id: VoiceId,
+        circle_id: usize,
+        source: CommandSource,
+    ) -> Vec<Command> {
+        let mut commands = Vec::new();
+
+        // Only circle-specific parameters (skip voice-level params like brightness, volume)
+        if let Some(gravity) = self.gravity {
+            commands.push(Command::new(
+                CommandInner::Gravity { voice_id, circle_id, value: gravity },
+                source.clone(),
+            ));
+        }
+        if let Some(force) = self.force {
+            commands.push(Command::new(
+                CommandInner::Force { voice_id, circle_id, value: force },
+                source.clone(),
+            ));
+        }
+        if let Some(outer_radius) = self.outer_radius {
+            commands.push(Command::new(
+                CommandInner::OuterRadius { voice_id, circle_id, value: outer_radius },
+                source.clone(),
+            ));
+        }
+        if let Some(inner_radius) = self.inner_radius {
+            commands.push(Command::new(
+                CommandInner::InnerRadius { voice_id, circle_id, value: inner_radius },
+                source.clone(),
+            ));
+        }
+        if let Some(noise) = self.noise {
+            commands.push(Command::new(
+                CommandInner::Noise { voice_id, circle_id, value: noise },
+                source.clone(),
+            ));
+        }
+        if let Some(center_x) = self.center_x {
+            commands.push(Command::new(
+                CommandInner::ForceCenterX { voice_id, circle_id, value: center_x },
+                source.clone(),
+            ));
+        }
+        if let Some(center_y) = self.center_y {
+            commands.push(Command::new(
+                CommandInner::ForceCenterY { voice_id, circle_id, value: center_y },
+                source.clone(),
+            ));
+        }
+
+        commands
+    }
+
     /// Convert this DroneConfig to a CreateDrone VoiceCommand
     pub fn to_create_command(&self, source: CommandSource) -> Command {
         Command::new(
