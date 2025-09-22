@@ -309,7 +309,7 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,
         font: font.clone(),
         font_size: 32,
-        justification: TextJustification::BottomLeft,
+        justification: TextJustification::TopLeft,
     };
     
     terminal_manager.add_new_terminal_view("main", VoiceId::Voice1, terminal_params);

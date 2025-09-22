@@ -187,100 +187,6 @@ fn get_command_key(command: &Command) -> String {
 
 /// Extension of Model that add controller functions
 impl Model {
-    /// Get all wind circle IDs for a voice
-    pub fn get_wind_circle_ids(&self, voice: VoiceId) -> Vec<usize> {
-        let Some(voice) = self.voices.get(&voice) else {
-            return Vec::new();
-        };
-        let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();
-        ids.sort();
-        ids
-    }
-
-    /// Get the params of a circle
-    pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
-        let voice = self.voices.get(&voice)?;
-        voice.wind_circles.get(&id).map(|circle| circle.params())
-    }
-
-    /// Get the alpha limit of a Voice ("brightness")
-    pub fn get_alpha_limit(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
-            return 0.0;
-        };
-
-        voice.params.alpha_limit
-    }
-
-    /// Get the center bias of a Voice's WindCircle ("gravity")
-    pub fn get_center_bias(&mut self, voice: VoiceId, id: usize) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
-            return 0.0;
-        };
-
-        voice
-            .wind_circles
-            .get(&id)
-            .map(|circle| circle.params().gravity)
-            .unwrap_or(0.0)
-    }
-
-    /// Get the angle variation of a Voice's WindCircle by id ("noise")
-    pub fn get_noise(&self, voice: VoiceId, id: usize) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
-            return 0.0;
-        };
-
-        voice
-            .wind_circles
-            .get(&id)
-            .map(|circle| circle.params().noise)
-            .unwrap_or(0.0)
-    }
-
-    /// Get the position offset factor of a Voice ("vibration")
-    pub fn get_vibration(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
-            return 0.0;
-        };
-
-        voice.params.vibration
-    }
-
-    pub fn get_volume(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
-            return 0.0;
-        };
-
-        voice.params.volume
-    }
-
-    pub fn get_feedback(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
-            return 0.0;
-        };
-
-        voice.params.feedback
-    }
-
-    /// End a voice -- remove its wind circles and remove it from the hashmap
-    pub fn kill_voice(&mut self, voice_id: VoiceId) {
-        // Remove voice's wind circles from force field
-        let Some(voice) = self.voices.get_mut(&voice_id) else {
-            return;
-        };
-
-        let wind_field = &mut self.particle_system.forces.wind_field;
-
-        for (id, circle) in voice.wind_circles.iter_mut() {
-            circle.remove_from_field(wind_field);
-            println!("Controller: Removed wind circle for {:?}", id);
-        }
-
-        // Remove the voice from the hashmap
-        self.voices.remove(&voice_id);
-    }
-
     /// Add a command to the queue for later processing
     pub fn queue_command(&mut self, command: Command) {
         self.command_queue.push(command);
@@ -324,6 +230,171 @@ impl Model {
         // (display updates happen automatically in execute_command)
         for command in final_commands {
             self.execute_command(command);
+        }
+    }
+
+    /// Apply a command immediately without queueing
+    pub fn execute_command(&mut self, command: Command) {
+        // Send all commands to terminal display for visualization
+        self.terminal_manager.borrow_mut().process_command(&command);
+
+        match command.command {
+            CommandInner::Composite(composite) => match composite {
+                CompositeCommand::CreateDrone { config } => {
+                    // Convert voice ID to Voice enum
+                    let voice_id = VoiceId::from_i32(config.voice);
+
+                    if self.voices.contains_key(&voice_id) {
+                        // Voice already exists, do nothing
+                        println!("Controller: Voice {} already exists", voice_id);
+                        return;
+                    }
+
+                    // Phase 1: Initialize drone structure (WindCircle and emitters)
+                    let mut voice = Voice::new_with_id(voice_id);
+                    let circle_id = voice.initialize_drone(
+                        &config,
+                        self.particle_system.default_particle_color,
+                        self.particle_system.global_max_spawn_rate,
+                    );
+
+                    self.osc_send.send_drone_on_off(config.voice, 1);
+                    voice.set_is_spawning(true);
+
+                    // Insert voice before applying parameters so validation can find it
+                    self.voices.insert(voice_id, voice);
+
+                    // Phase 2: Apply parameters through the command pipeline
+                    let resolved_config = config.merge_with_defaults();
+                    let parameter_commands = CommandBuilder::generate_all_parameter_commands(
+                        &resolved_config,
+                        voice_id,
+                        circle_id,
+                        command.source.clone(),
+                    );
+
+                    // Queue parameter commands to avoid recursive execution
+                    // They will be processed in the next command queue cycle
+                    for param_cmd in parameter_commands {
+                        self.command_queue.push(param_cmd);
+                    }
+                }
+                CompositeCommand::EraseDrone { voice_id } => {
+                    self.kill_voice(voice_id);
+                    self.osc_send.send_drone_on_off(voice_id.to_i32(), 0);
+                }
+                CompositeCommand::ModifyDrone { voice_id, config } => {
+                    let validation = self.validate_voice(voice_id);
+                    if !self.validate_and_handle_error(validation, "ModifyDrone") {
+                        return;
+                    }
+
+                    // Generate atomic commands for voice-level parameters only
+                    if let Some(brightness) = config.brightness {
+                        let cmd = Command::new(
+                            CommandInner::Simple(SimpleCommand::Alpha {
+                                voice_id,
+                                value: brightness,
+                            }),
+                            command.source.clone(),
+                        );
+                        self.command_queue.push(cmd);
+                    }
+                    if let Some(volume) = config.volume {
+                        let cmd = Command::new(
+                            CommandInner::Simple(SimpleCommand::Volume {
+                                voice_id,
+                                value: volume,
+                            }),
+                            command.source.clone(),
+                        );
+                        self.command_queue.push(cmd);
+                    }
+                    if let Some(feedback) = config.feedback {
+                        let cmd = Command::new(
+                            CommandInner::Simple(SimpleCommand::Feedback {
+                                voice_id,
+                                value: feedback,
+                            }),
+                            command.source.clone(),
+                        );
+                        self.command_queue.push(cmd);
+                    }
+                    if let Some(vibration) = config.vibration {
+                        let cmd = Command::new(
+                            CommandInner::Simple(SimpleCommand::Vibration {
+                                voice_id,
+                                value: vibration,
+                            }),
+                            command.source.clone(),
+                        );
+                        self.command_queue.push(cmd);
+                    }
+
+                    // Circle-level parameters require circle_id, which ModifyDrone doesn't specify
+                    // These should be handled by explicit circle commands instead
+                }
+                CompositeCommand::NewCircle { voice_id, config } => {
+                    let validation = self.validate_voice(voice_id);
+                    if !self.validate_and_handle_error(validation, "NewCircle") {
+                        return;
+                    }
+
+                    // Merge config with defaults
+                    let resolved_config = config.merge_with_defaults();
+
+                    // Extract circle parameters (voice-level params are ignored for new circles)
+                    let gravity = resolved_config.gravity.unwrap();
+                    let force = resolved_config.force.unwrap();
+                    let outer_radius = resolved_config.outer_radius.unwrap();
+                    let inner_radius = resolved_config.inner_radius.unwrap();
+                    let center_x = resolved_config.center_x.unwrap();
+                    let center_y = resolved_config.center_y.unwrap();
+                    let noise = resolved_config.noise.unwrap();
+
+                    // Create the new WindCircle
+                    let voice = self.voices.get_mut(&voice_id).unwrap();
+                    let circle_id = voice.issue_wind_circle_idx();
+
+                    let center = nannou::prelude::vec2(center_x, center_y);
+                    let circle = crate::forces::WindCircle::new(
+                        circle_id,
+                        voice_id,
+                        center,
+                        outer_radius,
+                        inner_radius,
+                        force,
+                        gravity,
+                        noise,
+                    );
+
+                    // Add the circle to the voice
+                    voice.add_wind_circle(circle);
+
+                    // Queue parameter update commands for processing after this command completes
+                    let parameter_commands = CommandBuilder::generate_circle_parameter_commands(
+                        &resolved_config,
+                        voice_id,
+                        circle_id,
+                        command.source.clone(),
+                    );
+
+                    // Add commands to queue instead of executing recursively
+                    self.command_queue.extend(parameter_commands);
+
+                    // Set success message
+                    let status_message = format!(
+                        "Voice {} - Added WindCircle {}",
+                        voice_id.to_i32(),
+                        circle_id
+                    );
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
+                }
+            },
+            CommandInner::Simple(atomic) => {
+                self.execute_simple_command(atomic);
+            }
         }
     }
 
@@ -488,170 +559,98 @@ impl Model {
         }
     }
 
-    /// Apply a command immediately without queueing
-    pub fn execute_command(&mut self, command: Command) {
-        // Send all commands to terminal display for visualization
-        self.terminal_manager.borrow_mut().process_command(&command);
+    /// Get all wind circle IDs for a voice
+    pub fn get_wind_circle_ids(&self, voice: VoiceId) -> Vec<usize> {
+        let Some(voice) = self.voices.get(&voice) else {
+            return Vec::new();
+        };
+        let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();
+        ids.sort();
+        ids
+    }
 
-        match command.command {
-            CommandInner::Composite(composite) => match composite {
-                CompositeCommand::CreateDrone { config } => {
-                    // Convert voice ID to Voice enum
-                    let voice_id = VoiceId::from_i32(config.voice);
+    /// Get the params of a circle
+    pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
+        let voice = self.voices.get(&voice)?;
+        voice.wind_circles.get(&id).map(|circle| circle.params())
+    }
 
-                    if self.voices.contains_key(&voice_id) {
-                        // Voice already exists, do nothing
-                        println!("Controller: Voice {} already exists", voice_id);
-                        return;
-                    }
+    /// Get the alpha limit of a Voice ("brightness")
+    pub fn get_alpha_limit(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
 
-                    // Phase 1: Initialize drone structure (WindCircle and emitters)
-                    let mut voice = Voice::new_with_id(voice_id);
-                    let circle_id = voice.initialize_drone(
-                        &config,
-                        self.particle_system.default_particle_color,
-                        self.particle_system.global_max_spawn_rate,
-                        &mut self.id_generator,
-                    );
+        voice.params.alpha_limit
+    }
 
-                    self.osc_send.send_drone_on_off(config.voice, 1);
-                    voice.set_is_spawning(true);
+    /// Get the center bias of a Voice's WindCircle ("gravity")
+    pub fn get_center_bias(&mut self, voice: VoiceId, id: usize) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
 
-                    // Insert voice before applying parameters so validation can find it
-                    self.voices.insert(voice_id, voice);
+        voice
+            .wind_circles
+            .get(&id)
+            .map(|circle| circle.params().gravity)
+            .unwrap_or(0.0)
+    }
 
-                    // Phase 2: Apply parameters through the command pipeline
-                    let resolved_config = config.merge_with_defaults();
-                    let parameter_commands = CommandBuilder::generate_all_parameter_commands(
-                        &resolved_config,
-                        voice_id,
-                        circle_id,
-                        command.source.clone(),
-                    );
+    /// Get the angle variation of a Voice's WindCircle by id ("noise")
+    pub fn get_noise(&self, voice: VoiceId, id: usize) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
 
-                    // Queue parameter commands to avoid recursive execution
-                    // They will be processed in the next command queue cycle
-                    for param_cmd in parameter_commands {
-                        self.command_queue.push(param_cmd);
-                    }
-                }
-                CompositeCommand::EraseDrone { voice_id } => {
-                    self.kill_voice(voice_id);
-                    self.osc_send.send_drone_on_off(voice_id.to_i32(), 0);
-                }
-                CompositeCommand::ModifyDrone { voice_id, config } => {
-                    let validation = self.validate_voice(voice_id);
-                    if !self.validate_and_handle_error(validation, "ModifyDrone") {
-                        return;
-                    }
+        voice
+            .wind_circles
+            .get(&id)
+            .map(|circle| circle.params().noise)
+            .unwrap_or(0.0)
+    }
 
-                    // Generate atomic commands for voice-level parameters only
-                    if let Some(brightness) = config.brightness {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Alpha {
-                                voice_id,
-                                value: brightness,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(volume) = config.volume {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Volume {
-                                voice_id,
-                                value: volume,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(feedback) = config.feedback {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Feedback {
-                                voice_id,
-                                value: feedback,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(vibration) = config.vibration {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Vibration {
-                                voice_id,
-                                value: vibration,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
+    /// Get the position offset factor of a Voice ("vibration")
+    pub fn get_vibration(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
 
-                    // Circle-level parameters require circle_id, which ModifyDrone doesn't specify
-                    // These should be handled by explicit circle commands instead
-                }
-                CompositeCommand::NewCircle { voice_id, config } => {
-                    let validation = self.validate_voice(voice_id);
-                    if !self.validate_and_handle_error(validation, "NewCircle") {
-                        return;
-                    }
+        voice.params.vibration
+    }
 
-                    // Merge config with defaults
-                    let resolved_config = config.merge_with_defaults();
+    pub fn get_volume(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
 
-                    // Extract circle parameters (voice-level params are ignored for new circles)
-                    let gravity = resolved_config.gravity.unwrap();
-                    let force = resolved_config.force.unwrap();
-                    let outer_radius = resolved_config.outer_radius.unwrap();
-                    let inner_radius = resolved_config.inner_radius.unwrap();
-                    let center_x = resolved_config.center_x.unwrap();
-                    let center_y = resolved_config.center_y.unwrap();
-                    let noise = resolved_config.noise.unwrap();
+        voice.params.volume
+    }
 
-                    // Create the new WindCircle
-                    let voice = self.voices.get_mut(&voice_id).unwrap();
-                    let circle_id = voice.issue_wind_circle_idx();
+    pub fn get_feedback(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
 
-                    let center = nannou::prelude::vec2(center_x, center_y);
-                    let circle = crate::forces::WindCircle::new(
-                        circle_id,
-                        voice_id,
-                        center,
-                        outer_radius,
-                        inner_radius,
-                        force,
-                        gravity,
-                        noise,
-                    );
+        voice.params.feedback
+    }
 
-                    // Add the circle to the voice
-                    voice.add_wind_circle(circle);
+    /// End a voice -- remove its wind circles and remove it from the hashmap
+    pub fn kill_voice(&mut self, voice_id: VoiceId) {
+        // Remove voice's wind circles from force field
+        let Some(voice) = self.voices.get_mut(&voice_id) else {
+            return;
+        };
 
-                    // Queue parameter update commands for processing after this command completes
-                    let parameter_commands = CommandBuilder::generate_circle_parameter_commands(
-                        &resolved_config,
-                        voice_id,
-                        circle_id,
-                        command.source.clone(),
-                    );
+        let wind_field = &mut self.particle_system.forces.wind_field;
 
-                    // Add commands to queue instead of executing recursively
-                    self.command_queue.extend(parameter_commands);
-
-                    // Set success message
-                    let status_message = format!(
-                        "Voice {} - Added WindCircle {}",
-                        voice_id.to_i32(),
-                        circle_id
-                    );
-                    println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
-                }
-            },
-            CommandInner::Simple(atomic) => {
-                self.execute_simple_command(atomic);
-            }
+        for (id, circle) in voice.wind_circles.iter_mut() {
+            circle.remove_from_field(wind_field);
+            println!("Controller: Removed wind circle for {:?}", id);
         }
+
+        // Remove the voice from the hashmap
+        self.voices.remove(&voice_id);
     }
 }
 

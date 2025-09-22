@@ -3,9 +3,8 @@
 use crate::{
     forces::WindCircle,
     groups::VoiceId,
-    particle::{EmitDirection, Emitter, LinearEmitter},
+    particle::emitter::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
-    utils::IdGenerator,
 };
 use nannou::prelude::*;
 use std::collections::HashMap;
@@ -14,6 +13,7 @@ use std::collections::HashMap;
 pub struct VoiceParams {
     pub particle_limit: usize,
     pub volume: f32,
+    pub default_spawn_rate: f32,
 
     pub alpha_limit: f32,
     pub color_limit: Rgb,
@@ -26,6 +26,7 @@ impl Default for VoiceParams {
         Self {
             particle_limit: 5000,
             volume: 0.0,
+            default_spawn_rate: 30.0,
             alpha_limit: 0.0,
             color_limit: Rgb::new(0.0, 0.0, 0.0),
             feedback: 0.0,
@@ -69,7 +70,6 @@ impl Voice {
         config: &DroneConfig,
         default_particle_color: Rgb,
         default_spawn_rate: f32,
-        id_generator: &mut IdGenerator,
     ) -> usize {
         // Merge config with defaults to get all resolved values for structural setup
         let resolved_config = config.clone().merge_with_defaults();
@@ -82,6 +82,8 @@ impl Voice {
         let center_x = resolved_config.center_x.unwrap();
         let center_y = resolved_config.center_y.unwrap();
         let noise = resolved_config.noise.unwrap();
+
+        self.params.default_spawn_rate = default_spawn_rate;
 
         // WindCircle creation
         let center = vec2(center_x, center_y);
@@ -102,28 +104,7 @@ impl Voice {
 
         // Create particle emitters (now that bounds can be calculated correctly)
         self.bounds_rect = self.calculate_bounds();
-
-        let emitter_left = LinearEmitter::new(
-            id_generator.generate(),
-            self.id,
-            self.bounds_rect.top_left(),
-            self.bounds_rect.mid_left(),
-            EmitDirection::East,
-            default_spawn_rate,
-        );
-
-        let emitter_right = LinearEmitter::new(
-            id_generator.generate(),
-            self.id,
-            self.bounds_rect.mid_right(),
-            self.bounds_rect.bottom_right(),
-            EmitDirection::West,
-            default_spawn_rate,
-        );
-
-        // Add the emitters
-        self.emitters.push(Box::new(emitter_left));
-        self.emitters.push(Box::new(emitter_right));
+        self.add_linear_emitters();
 
         // Set the default color (this is structural, not a DroneConfig parameter)
         self.set_color_limit(default_particle_color);
@@ -159,6 +140,30 @@ impl Voice {
         Rect::from_x_y_w_h(center_x, center_y, width, height)
     }
 
+    fn add_linear_emitters(&mut self) {
+        let emitter_left = LinearEmitter::new(
+            self.id,
+            self.bounds_rect.top_left(),
+            self.bounds_rect.mid_left(),
+            EmitDirection::East,
+            self.params.default_spawn_rate,
+        );
+
+        let emitter_right = LinearEmitter::new(
+            self.id,
+            self.bounds_rect.mid_right(),
+            self.bounds_rect.bottom_right(),
+            EmitDirection::West,
+            self.params.default_spawn_rate,
+        );
+
+        // Add the emitters
+        self.emitters.push(Box::new(emitter_left));
+        self.emitters.push(Box::new(emitter_right));
+
+        self.set_is_spawning(true);
+    }
+
     pub fn set_alpha_limit(&mut self, value: f32) {
         self.params.alpha_limit = value;
     }
@@ -185,19 +190,26 @@ impl Voice {
         self.params.vibration = value;
     }
 
+    fn recalculate_emitters(&mut self) {
+        self.bounds_rect = self.calculate_bounds();
+        self.emitters.clear();
+        self.add_linear_emitters();
+    }
+
     /********** Wind Circle methods ********************* */
 
     /// Add a WindCircle to this Voice
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
         println!("{}: Adding wind circle {}", self.id, circle.id);
         self.wind_circles.insert(circle.id, circle);
-        self.bounds_rect = self.calculate_bounds();
+        self.recalculate_emitters();
     }
 
     /// Remove a WindCircle from this voice
     pub fn remove_wind_circle(&mut self, id: usize) {
         self.wind_circles.remove(&id);
-        self.bounds_rect = self.calculate_bounds();
+        self.recalculate_emitters();
+
         println!("{}: Removed wind circle {}", self.id, id);
     }
 
@@ -205,6 +217,7 @@ impl Voice {
     pub fn set_circle_outer_radius(&mut self, id: usize, value: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
             circle.params_mut().set_outer_radius(value);
+            self.recalculate_emitters();
         } else {
             println!(
                 "Voice {} set OR: Wind circle not found for id: {}",
@@ -217,6 +230,7 @@ impl Voice {
     pub fn set_circle_inner_radius(&mut self, id: usize, value: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
             circle.params_mut().set_inner_radius(value);
+            self.recalculate_emitters();
         } else {
             println!(
                 "Voice {} set IR: Wind circle not found for id: {}",
@@ -228,6 +242,7 @@ impl Voice {
     pub fn set_circle_center_x(&mut self, id: usize, value: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
             circle.params_mut().set_center_x(value);
+            self.recalculate_emitters();
         } else {
             println!(
                 "Voice {} set CX: Wind circle not found for id: {}",
@@ -239,6 +254,7 @@ impl Voice {
     pub fn set_circle_center_y(&mut self, id: usize, value: f32) {
         if let Some(circle) = self.wind_circles.get_mut(&id) {
             circle.params_mut().set_center_y(value);
+            self.recalculate_emitters();
         } else {
             println!(
                 "Voice {} set CY: Wind circle not found for id: {}",

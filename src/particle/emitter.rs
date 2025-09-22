@@ -23,7 +23,6 @@ pub trait Emitter {
 }
 
 pub struct FullScreenRandomEmitter {
-    pub id: usize,
     pub parent_voice: VoiceId,
     pub max_spawn_rate: f32,
     pub spawn_area: Rect,
@@ -31,9 +30,8 @@ pub struct FullScreenRandomEmitter {
 }
 
 impl FullScreenRandomEmitter {
-    pub fn new(id: usize, parent_voice: VoiceId, spawn_area: Rect, max_spawn_rate: f32) -> Self {
+    pub fn new(parent_voice: VoiceId, spawn_area: Rect, max_spawn_rate: f32) -> Self {
         Self {
-            id,
             parent_voice,
             spawn_area,
             max_spawn_rate,
@@ -74,7 +72,7 @@ impl Emitter for FullScreenRandomEmitter {
                 rng.gen_range(-velocity..velocity),
             ) / velocity;
 
-            particles.push(Particle::new(self.id, spawn_pos, size, color).with_velocity(velocity));
+            particles.push(Particle::new(spawn_pos, size, color).with_velocity(velocity));
         }
 
         particles
@@ -110,7 +108,6 @@ impl Emitter for FullScreenRandomEmitter {
 /// An emitter defined by a center point
 /// Radiates particles outward from that point in any direction
 pub struct PointEmitter {
-    pub id: usize,
     pub parent_voice: VoiceId,
     pub origin: Vec2,
     pub max_spawn_rate: f32,
@@ -118,9 +115,8 @@ pub struct PointEmitter {
 }
 
 impl PointEmitter {
-    pub fn new(id: usize, parent_voice: VoiceId, origin: Vec2, max_spawn_rate: f32) -> Self {
+    pub fn new(parent_voice: VoiceId, origin: Vec2, max_spawn_rate: f32) -> Self {
         Self {
-            id,
             parent_voice,
             origin,
             max_spawn_rate,
@@ -168,8 +164,7 @@ impl Emitter for PointEmitter {
                     offset_angle.sin() * offset_distance,
                 );
 
-            particles
-                .push(Particle::new(self.id, spawn_position, size, color).with_velocity(velocity));
+            particles.push(Particle::new(spawn_position, size, color).with_velocity(velocity));
         }
 
         particles
@@ -204,7 +199,6 @@ impl Emitter for PointEmitter {
 /// An emitter defined by a center point, a start point, and an end point
 /// Emits particles anywhere along the line
 pub struct LinearEmitter {
-    pub id: usize,             // unique id for this emitter
     pub parent_voice: VoiceId, // voice that this emitter belongs to
     pub midpoint: Vec2,        // Center point
     pub start: Vec2,           // Start point
@@ -224,7 +218,6 @@ pub enum EmitDirection {
 #[allow(clippy::too_many_arguments)]
 impl LinearEmitter {
     pub fn new(
-        id: usize,
         parent_voice: VoiceId,
         start: Vec2,
         end: Vec2,
@@ -232,7 +225,6 @@ impl LinearEmitter {
         max_spawn_rate: f32,
     ) -> Self {
         Self {
-            id,
             parent_voice,
             midpoint: (start + end) / 2.0,
             start,
@@ -298,7 +290,7 @@ impl Emitter for LinearEmitter {
                 }
             };
 
-            particles.push(Particle::new(self.id, position, size, color).with_velocity(velocity));
+            particles.push(Particle::new(position, size, color).with_velocity(velocity));
         }
 
         particles

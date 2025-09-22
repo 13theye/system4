@@ -3,12 +3,21 @@
 /// Force field for field-based forces
 use nannou::prelude::*;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use crate::{
     forces::wind::WindField,
     groups::{Voice, VoiceId},
     particle::Particle,
 };
+
+/// Create a unique hash from voice_id and circle_id for noise parameter indexing
+fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (voice_id, circle_id).hash(&mut hasher);
+    hasher.finish()
+}
 
 /// The ForceField tracks the forces that are acting on the particles.
 /// It provides a coordinate space to align forces to screen locations.
@@ -51,14 +60,15 @@ impl ForceFields {
         voices: &mut HashMap<VoiceId, Voice>,
         rng: &mut nannou::rand::rngs::ThreadRng,
     ) {
-        let mut circle_noise_values: HashMap<usize, f32> = HashMap::new();
+        let mut circle_noise_values: HashMap<u64, f32> = HashMap::new();
 
-        // Update each circle and collect per-circle noise values
+        // Update each circle and collect per-circle noise values using hash keys
         for voice in voices.values_mut() {
             // Update the wind circle meta-force
             for circle in voice.wind_circles.values_mut() {
                 circle.update(&mut self.wind_field);
-                circle_noise_values.insert(circle.id, circle.params().noise);
+                let hash_key = hash_voice_circle(voice.id, circle.id);
+                circle_noise_values.insert(hash_key, circle.params().noise);
             }
         }
 

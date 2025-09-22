@@ -386,7 +386,7 @@ impl ParticleSystem {
             return 0.0;
         }
 
-        let ratio = current_count as f32 / limit as f32;
+        let ratio = current_count as f32 / limit;
 
         // If we're over the limit, stop emitting
         if ratio >= 1.0 {

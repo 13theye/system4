@@ -6,9 +6,18 @@ use crate::{forces::CellIdx, groups::VoiceId, particle::Particle};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// Maximum wind angle deviation in radians (90 degrees)
 const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
+
+/// Create a unique hash from voice_id and circle_id for noise parameter indexing
+fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (voice_id, circle_id).hash(&mut hasher);
+    hasher.finish()
+}
 
 /// A wind is a simple vector force that is applied to a particle.
 /// It has a direction and a strength.
@@ -78,7 +87,7 @@ impl Wind {
 /// and a combined wind cache that is the sum of all the winds.
 /// The combined wind is recalculated when the cell or wind is updated.
 pub struct WindCell {
-    winds: HashMap<usize, Wind>,
+    winds: HashMap<u64, Wind>,
     combined_wind: Option<Wind>,
     origin: Vec2,
 
@@ -102,13 +111,13 @@ impl WindCell {
     }
 
     /// Add a Wind to this WindCell.
-    pub fn add_wind(&mut self, source_id: usize, wind: Wind) {
+    pub fn add_wind(&mut self, source_id: u64, wind: Wind) {
         self.winds.insert(source_id, wind);
         self.needs_update = true;
     }
 
     /// Remove a Wind from this WindCell.
-    pub fn remove_wind(&mut self, id: usize) {
+    pub fn remove_wind(&mut self, id: u64) {
         self.winds.remove(&id);
         self.needs_update = true;
     }
@@ -241,20 +250,20 @@ impl WindField {
     pub fn par_force_update_all(
         &mut self,
         rng: &mut nannou::rand::rngs::ThreadRng,
-        circle_noise_values: &HashMap<usize, f32>,
+        circle_noise_values: &HashMap<u64, f32>,
     ) {
         use nannou::rand::Rng;
 
         // Pre-compute random variations for all cells for each circle that has angle variation
-        let mut cell_variations: HashMap<usize, Vec<f32>> = HashMap::new();
-        for (&circle_id, &variation_factor) in circle_noise_values.iter() {
+        let mut cell_variations: HashMap<u64, Vec<f32>> = HashMap::new();
+        for (&hash_key, &variation_factor) in circle_noise_values.iter() {
             if variation_factor > 0.0 {
                 let variations: Vec<f32> = self
                     .cells
                     .iter()
                     .map(|_| rng.gen_range(-1.0..=1.0) * variation_factor)
                     .collect();
-                cell_variations.insert(circle_id, variations);
+                cell_variations.insert(hash_key, variations);
             }
         }
 
@@ -267,8 +276,9 @@ impl WindField {
                 let mut combined_variation = 0.0f32;
                 let mut variation_count = 0;
 
-                for circle_id in cell.winds.keys() {
-                    if let Some(variations) = cell_variations.get(circle_id) {
+                for &hash_key in cell.winds.keys() {
+                    // Use hash key directly to look up noise variations
+                    if let Some(variations) = cell_variations.get(&hash_key) {
                         if let Some(&variation) = variations.get(index) {
                             combined_variation += variation;
                             variation_count += 1;
@@ -516,11 +526,12 @@ impl WindCircle {
 
     /// Remove the circle's wind from the field
     pub fn remove_from_field(&mut self, field: &mut WindField) {
+        let hash_key = hash_voice_circle(self.parent_voice, self.id);
         for cell_idx in self.cell_idxs.iter() {
             let Some(cell) = field.get_mut_cell(cell_idx.x, cell_idx.y) else {
                 continue;
             };
-            cell.remove_wind(self.id);
+            cell.remove_wind(hash_key);
 
             // In debug mode, pre-calculate combined wind so we can draw the field
             // no longer needed because we update all cells on every frame now
@@ -540,6 +551,7 @@ impl WindCircle {
         let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
 
         let mut affected_cells = Vec::new();
+        let hash_key = hash_voice_circle(self.parent_voice, self.id);
 
         // Update cells serially
         for col in min_col..max_col {
@@ -550,7 +562,7 @@ impl WindCircle {
                 let Some(wind) = self.calculate_wind_for_cell(cell, &self.params) else {
                     continue;
                 };
-                cell.add_wind(self.id, wind);
+                cell.add_wind(hash_key, wind);
 
                 // In debug mode, pre-calculate combined wind so we can draw the field
                 // no longer needed because we update all cells on every frame now
