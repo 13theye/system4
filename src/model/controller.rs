@@ -88,6 +88,9 @@ pub enum CommandInner {
         circle_id: usize,
         value: f32,
     },
+    ListCircles {
+        voice_id: VoiceId,
+    },
 }
 
 impl Command {
@@ -154,6 +157,9 @@ fn get_command_key(command: &Command) -> String {
         CommandInner::ForceCenterY {
             voice_id: voice, ..
         } => format!("ForceCenterY_{:?}", voice),
+        CommandInner::ListCircles {
+            voice_id: voice, ..
+        } => format!("ListCircles_{:?}", voice),
     }
 }
 
@@ -294,9 +300,7 @@ impl Model {
 
         // Process commands through drone parameter displays
         for command in &final_commands {
-            self.terminal_manager
-                .borrow_mut()
-                .process_command_for_drone_displays(command);
+            self.terminal_manager.borrow_mut().process_command(command);
         }
 
         // Execute all final commands
@@ -312,7 +316,7 @@ impl Model {
                 // Convert voice ID to Voice enum
                 let voice_id = VoiceId::from_i32(config.voice);
 
-                if self.voices.get(&voice_id).is_some() {
+                if self.voices.contains_key(&voice_id) {
                     // Voice already exists, do nothing
                     println!("Controller: Voice {} already exists", voice_id);
                     return;
@@ -331,6 +335,19 @@ impl Model {
                 voice.set_is_spawning(true);
 
                 self.voices.insert(voice_id, voice);
+
+                // Send parameter update commands to ensure DroneParametersDisplay gets updated
+                // with the actual values that were used (including defaults)
+                let resolved_config = config.merge_with_defaults();
+                let parameter_commands = resolved_config.generate_parameter_commands(
+                    voice_id,
+                    0, // First circle created by begin_drone
+                    command.source
+                );
+
+                for cmd in parameter_commands {
+                    self.terminal_manager.borrow_mut().process_command(&cmd);
+                }
             }
             CommandInner::EraseDrone { voice_id } => {
                 self.kill_voice(voice_id);
@@ -501,6 +518,25 @@ impl Model {
                     voice.set_circle_center_y(circle_id, value);
                 }
             }
+            CommandInner::ListCircles { voice_id } => {
+                let circle_ids = self.get_wind_circle_ids(voice_id);
+                let circles_str = if circle_ids.is_empty() {
+                    "No WindCircles found".to_string()
+                } else {
+                    format!("WindCircle keys: {:?}", circle_ids)
+                };
+
+                println!("Voice {} - {}", voice_id.to_i32(), circles_str);
+
+                // Send to terminal status display
+                if let Ok(mut terminal_manager) = self.terminal_manager.try_borrow_mut() {
+                    terminal_manager.add_line(
+                        "status",
+                        &format!("Voice {} - {}", voice_id.to_i32(), circles_str),
+                        false,
+                    );
+                }
+            }
         }
     }
 }
@@ -525,14 +561,14 @@ pub fn make_drone_command(
         volume: Some(volume),
         gravity: Some(gravity),
         force: Some(force),
-        //trail: Some(trail),        // OSC "trail" maps to feedback
-        outer_radius: Some(800.0), // Default values
-        inner_radius: Some(200.0),
-        noise: Some(0.0),
-        vibration: Some(0.1),
         feedback: Some(feedback),
-        center_x: Some(0.0),
-        center_y: Some(0.0),
+        // Let other values use defaults from get_defaults_for_voice
+        outer_radius: None,
+        inner_radius: None,
+        noise: None,
+        vibration: None,
+        center_x: None,
+        center_y: None,
         additional_parameters: std::collections::HashMap::new(),
     };
 

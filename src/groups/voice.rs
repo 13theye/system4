@@ -69,25 +69,21 @@ impl Voice {
         default_spawn_rate: f32,
         id_generator: &mut IdGenerator,
     ) {
-        // Apply defaults for create operations
-        let (default_center_x, default_center_y) = match config.voice {
-            1 => (-1280.0, 0.0),
-            4 => (1280.0, 0.0),
-            _ => (0.0, 0.0),
-        };
+        // Merge config with defaults to get all resolved values
+        let resolved_config = config.clone().merge_with_defaults();
 
-        // Extract config or use defaults
-        let brightness = config.brightness.unwrap_or(0.7);
-        let volume = config.volume.unwrap_or(0.5);
-        let gravity = config.gravity.unwrap_or(0.0);
-        let force = config.force.unwrap_or(10.0);
-        let feedback = config.feedback.unwrap_or(0.0);
-        let outer_radius = config.outer_radius.unwrap_or(800.0);
-        let inner_radius = config.inner_radius.unwrap_or(200.0);
-        let center_x = config.center_x.unwrap_or(default_center_x);
-        let center_y = config.center_y.unwrap_or(default_center_y);
-        let noise = config.noise.unwrap_or(0.0);
-        let vibration = config.vibration.unwrap_or(0.0);
+        // Extract resolved values (all should be Some after merge_with_defaults)
+        let brightness = resolved_config.brightness.unwrap();
+        let volume = resolved_config.volume.unwrap();
+        let gravity = resolved_config.gravity.unwrap();
+        let force = resolved_config.force.unwrap();
+        let feedback = resolved_config.feedback.unwrap();
+        let outer_radius = resolved_config.outer_radius.unwrap();
+        let inner_radius = resolved_config.inner_radius.unwrap();
+        let center_x = resolved_config.center_x.unwrap();
+        let center_y = resolved_config.center_y.unwrap();
+        let noise = resolved_config.noise.unwrap();
+        let vibration = resolved_config.vibration.unwrap();
 
         // WindCircle creation
         let center = vec2(center_x, center_y);
@@ -215,9 +211,16 @@ impl Voice {
 
     /// Add a WindCircle to this Voice
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
-        println!("{}: Added wind circle {}", self.id, circle.id);
+        println!("{}: Adding wind circle {}", self.id, circle.id);
         self.wind_circles.insert(circle.id, circle);
         self.bounds_rect = self.calculate_bounds();
+    }
+
+    /// Remove a WindCircle from this voice
+    pub fn remove_wind_circle(&mut self, id: usize) {
+        self.wind_circles.remove(&id);
+        self.bounds_rect = self.calculate_bounds();
+        println!("{}: Removed wind circle {}", self.id, id);
     }
 
     /// Set the outer radius of a WindCircle

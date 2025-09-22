@@ -29,7 +29,12 @@ impl TerminalViewManager {
         }
     }
 
-    pub fn add_new_terminal_view(&mut self, name: &str, voice: VoiceId, params: TerminalViewParams) {
+    pub fn add_new_terminal_view(
+        &mut self,
+        name: &str,
+        voice: VoiceId,
+        params: TerminalViewParams,
+    ) {
         let terminal_view = TerminalView::new(voice, params);
         self.terminal_views.insert(name.to_owned(), terminal_view);
     }
@@ -77,7 +82,7 @@ impl TerminalViewManager {
     }
 
     /// Process a command through all drone parameter displays
-    pub fn process_command_for_drone_displays(&mut self, command: &Command) {
+    pub fn process_command(&mut self, command: &Command) {
         for display in self.drone_parameter_displays.values_mut() {
             display.process_command(command);
         }

@@ -122,6 +122,14 @@ impl CommandParser {
                     self.expect_token(&Token::RightParen)?;
                     found_set = true;
                     break;
+                } else if method_name == "listCircles" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    // Expect semicolon at the end
+                    if self.position < self.tokens.len() {
+                        self.expect_token(&Token::Semicolon)?;
+                    }
+                    return Ok(TerminalCommand::ListCircles { voice: voice_id });
                 } else if method_name == "circle" {
                     // Parse circle ID
                     self.expect_token(&Token::LeftParen)?;

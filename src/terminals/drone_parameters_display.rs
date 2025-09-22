@@ -17,12 +17,7 @@ pub struct ParameterUpdate {
 }
 
 // Voice-level parameters (shown first)
-const VOICE_PARAMETERS: &[&str] = &[
-    "brightness",
-    "volume",
-    "feedback",
-    "vibration",
-];
+const VOICE_PARAMETERS: &[&str] = &["brightness", "volume", "feedback", "vibration"];
 
 // Circle-specific parameters (shown for each circle)
 const CIRCLE_PARAMETERS: &[&str] = &[
@@ -110,37 +105,65 @@ impl DroneParametersDisplay {
             }
 
             // Circle-specific parameters
-            CommandInner::OuterRadius { voice_id, circle_id, value } => {
+            CommandInner::OuterRadius {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "outerRadius", *value, now);
                 }
             }
-            CommandInner::InnerRadius { voice_id, circle_id, value } => {
+            CommandInner::InnerRadius {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "innerRadius", *value, now);
                 }
             }
-            CommandInner::Force { voice_id, circle_id, value } => {
+            CommandInner::Force {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "force", *value, now);
                 }
             }
-            CommandInner::Gravity { voice_id, circle_id, value } => {
+            CommandInner::Gravity {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "gravity", *value, now);
                 }
             }
-            CommandInner::Noise { voice_id, circle_id, value } => {
+            CommandInner::Noise {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "noise", *value, now);
                 }
             }
-            CommandInner::ForceCenterX { voice_id, circle_id, value } => {
+            CommandInner::ForceCenterX {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "centerX", *value, now);
                 }
             }
-            CommandInner::ForceCenterY { voice_id, circle_id, value } => {
+            CommandInner::ForceCenterY {
+                voice_id,
+                circle_id,
+                value,
+            } => {
                 if *voice_id == self.voice_id {
                     self.update_circle_parameter(*circle_id, "centerY", *value, now);
                 }
@@ -157,6 +180,10 @@ impl DroneParametersDisplay {
                 if *voice == self.voice_id {
                     self.process_drone_config(config, now);
                 }
+            }
+            CommandInner::ListCircles { .. } => {
+                // ListCircles is a query command that doesn't modify parameters
+                // No action needed for parameter display
             }
             _ => {} // Ignore other command types
         }
@@ -221,7 +248,13 @@ impl DroneParametersDisplay {
     }
 
     /// Update a circle-specific parameter value and timestamp
-    fn update_circle_parameter(&mut self, circle_id: usize, name: &str, value: f32, timestamp: Instant) {
+    fn update_circle_parameter(
+        &mut self,
+        circle_id: usize,
+        name: &str,
+        value: f32,
+        timestamp: Instant,
+    ) {
         // Ensure circle exists in our tracking
         if !self.known_circles.contains(&circle_id) {
             self.add_circle_display(circle_id);
@@ -260,7 +293,13 @@ impl DroneParametersDisplay {
     }
 
     /// Update a circle-specific parameter line in the terminal view
-    fn update_circle_parameter_line(&mut self, circle_id: usize, name: &str, value: f32, timestamp: Instant) {
+    fn update_circle_parameter_line(
+        &mut self,
+        circle_id: usize,
+        name: &str,
+        value: f32,
+        timestamp: Instant,
+    ) {
         let key = (circle_id, name.to_string());
         let Some(&line_index) = self.circle_param_to_line.get(&key) else {
             return; // Parameter not found in mapping
@@ -297,7 +336,8 @@ impl DroneParametersDisplay {
 
         // Add circle header
         let circle_header = format!("Circle {}:", circle_id);
-        self.terminal_view.update_line_at_index(line_index, &circle_header, false);
+        self.terminal_view
+            .update_line_at_index(line_index, &circle_header, false);
         line_index += 1;
 
         // Add parameter lines for this circle
@@ -306,7 +346,8 @@ impl DroneParametersDisplay {
             self.circle_param_to_line.insert(key, line_index);
 
             let placeholder_line = format!("  {}(-.--)", param_name);
-            self.terminal_view.update_line_at_index(line_index, &placeholder_line, true);
+            self.terminal_view
+                .update_line_at_index(line_index, &placeholder_line, true);
             line_index += 1;
         }
 

@@ -218,6 +218,180 @@ pub struct DroneConfig {
 }
 
 impl DroneConfig {
+    /// Get default values for a specific voice
+    pub fn get_defaults_for_voice(voice: i32) -> Self {
+        let (default_center_x, default_center_y) = match voice {
+            1 => (-1280.0, 0.0),
+            4 => (1280.0, 0.0),
+            _ => (0.0, 0.0),
+        };
+
+        let gravity = match voice {
+            1 => 0.5,
+            4 => 1.5,
+            _ => 0.0,
+        };
+
+        Self {
+            voice,
+            brightness: Some(0.7),
+            volume: Some(0.5),
+            gravity: Some(gravity),
+            force: Some(10.0),
+            feedback: Some(0.0),
+            outer_radius: Some(800.0),
+            inner_radius: Some(200.0),
+            noise: Some(0.0),
+            vibration: Some(0.0),
+            center_x: Some(default_center_x),
+            center_y: Some(default_center_y),
+            additional_parameters: HashMap::new(),
+        }
+    }
+
+    /// Merge this config with defaults, keeping specified values and using defaults for None values
+    pub fn merge_with_defaults(self) -> Self {
+        let defaults = Self::get_defaults_for_voice(self.voice);
+
+        Self {
+            voice: self.voice,
+            brightness: self.brightness.or(defaults.brightness),
+            volume: self.volume.or(defaults.volume),
+            gravity: self.gravity.or(defaults.gravity),
+            force: self.force.or(defaults.force),
+            feedback: self.feedback.or(defaults.feedback),
+            outer_radius: self.outer_radius.or(defaults.outer_radius),
+            inner_radius: self.inner_radius.or(defaults.inner_radius),
+            noise: self.noise.or(defaults.noise),
+            vibration: self.vibration.or(defaults.vibration),
+            center_x: self.center_x.or(defaults.center_x),
+            center_y: self.center_y.or(defaults.center_y),
+            additional_parameters: self.additional_parameters,
+        }
+    }
+
+    /// Generate parameter update commands from this config (assumes all values are Some)
+    pub fn generate_parameter_commands(
+        &self,
+        voice_id: VoiceId,
+        circle_id: usize,
+        source: CommandSource,
+    ) -> Vec<Command> {
+        let mut commands = Vec::new();
+
+        // Voice-level parameters
+        if let Some(brightness) = self.brightness {
+            commands.push(Command::new(
+                CommandInner::Alpha {
+                    voice_id,
+                    value: brightness,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(volume) = self.volume {
+            commands.push(Command::new(
+                CommandInner::Volume {
+                    voice_id,
+                    value: volume,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(feedback) = self.feedback {
+            commands.push(Command::new(
+                CommandInner::Feedback {
+                    voice_id,
+                    value: feedback,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(vibration) = self.vibration {
+            commands.push(Command::new(
+                CommandInner::Vibration {
+                    voice_id,
+                    value: vibration,
+                },
+                source.clone(),
+            ));
+        }
+
+        // Circle-specific parameters
+        if let Some(gravity) = self.gravity {
+            commands.push(Command::new(
+                CommandInner::Gravity {
+                    voice_id,
+                    circle_id,
+                    value: gravity,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(force) = self.force {
+            commands.push(Command::new(
+                CommandInner::Force {
+                    voice_id,
+                    circle_id,
+                    value: force,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(outer_radius) = self.outer_radius {
+            commands.push(Command::new(
+                CommandInner::OuterRadius {
+                    voice_id,
+                    circle_id,
+                    value: outer_radius,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(inner_radius) = self.inner_radius {
+            commands.push(Command::new(
+                CommandInner::InnerRadius {
+                    voice_id,
+                    circle_id,
+                    value: inner_radius,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(noise) = self.noise {
+            commands.push(Command::new(
+                CommandInner::Noise {
+                    voice_id,
+                    circle_id,
+                    value: noise,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(center_x) = self.center_x {
+            commands.push(Command::new(
+                CommandInner::ForceCenterX {
+                    voice_id,
+                    circle_id,
+                    value: center_x,
+                },
+                source.clone(),
+            ));
+        }
+        if let Some(center_y) = self.center_y {
+            commands.push(Command::new(
+                CommandInner::ForceCenterY {
+                    voice_id,
+                    circle_id,
+                    value: center_y,
+                },
+                source.clone(),
+            ));
+        }
+
+        commands
+    }
+
     /// Convert this DroneConfig to a CreateDrone VoiceCommand
     pub fn to_create_command(&self, source: CommandSource) -> Command {
         Command::new(

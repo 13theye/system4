@@ -1382,6 +1382,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         println!("Queueing ModifyVoiceCircle command for voice: {:?} circle: {:?} with config: {:?}", voice, circle, config);
                                                                         command_queue.push(voice_command);
                                                                     }
+                                                                    TerminalCommand::ListCircles { voice } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice);
+                                                                        let voice_command = Command::new(
+                                                                            CommandInner::ListCircles { voice_id: voice_enum },
+                                                                            CommandSource::Terminal
+                                                                        );
+                                                                        println!("Queueing ListCircles command for voice: {:?}", voice);
+                                                                        command_queue.push(voice_command);
+                                                                    }
                                                                 }
                                                                 
                                                                 // Clear the input after successful execution

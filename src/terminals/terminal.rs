@@ -36,6 +36,9 @@ impl Terminal {
             // Modify existing drones
             "drone(1).brightness(0.2).centerX(200.0).centerY(-100.0).set();",
             "drone(4).volume(0.8).vibration(0.3).set();",
+            // List WindCircles for a drone
+            "drone(1).listCircles();",
+            "drone(4).listCircles();",
         ];
 
         for command in test_commands {
