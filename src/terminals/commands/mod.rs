@@ -12,20 +12,24 @@ use std::fmt;
 pub enum TerminalCommand {
     CreateDrone(drone::DroneConfig),
     ModifyVoice {
-        voice: i32,
+        voice_id: i32,
         config: drone::DroneConfig,
     },
     ModifyVoiceCircle {
-        voice: i32,
-        circle: i32,
+        voice_id: i32,
+        circle_id: i32,
         config: drone::DroneConfig,
     },
     ListCircles {
-        voice: i32,
+        voice_id: i32,
     },
     NewCircle {
-        voice: i32,
+        voice_id: i32,
         config: drone::DroneConfig,
+    },
+    RemoveCircle {
+        voice_id: i32,
+        circle_id: i32,
     },
 }
 
@@ -36,25 +40,33 @@ impl fmt::Display for TerminalCommand {
                 writeln!(f, "CreateDrone:")?;
                 write!(f, "{}", config)
             }
-            TerminalCommand::ModifyVoice { voice, config } => {
-                writeln!(f, "ModifyDrone voice {}:", voice)?;
+            TerminalCommand::ModifyVoice { voice_id, config } => {
+                writeln!(f, "ModifyDrone voice {}:", voice_id)?;
                 write!(f, "{}", config)
             }
             TerminalCommand::ModifyVoiceCircle {
-                voice,
-                circle,
+                voice_id,
+                circle_id,
                 config,
             } => {
-                writeln!(f, "ModifyDrone voice {} circle {}:", voice, circle)?;
+                writeln!(f, "ModifyDrone voice {} circle {}:", voice_id, circle_id)?;
                 write!(f, "{}", config)
             }
-            TerminalCommand::ListCircles { voice } => {
-                write!(f, "ListCircles for voice {}", voice)
+            TerminalCommand::ListCircles { voice_id } => {
+                write!(f, "ListCircles for voice {}", voice_id)
             }
-            TerminalCommand::NewCircle { voice, config } => {
-                writeln!(f, "NewCircle for voice {}:", voice)?;
+            TerminalCommand::NewCircle { voice_id, config } => {
+                writeln!(f, "NewCircle for voice {}:", voice_id)?;
                 write!(f, "{}", config)
             }
+            TerminalCommand::RemoveCircle {
+                voice_id,
+                circle_id,
+            } => write!(
+                f,
+                "RemoveCircle for voice {} circle {}:",
+                voice_id, circle_id
+            ),
         }
     }
 }

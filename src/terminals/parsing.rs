@@ -138,11 +138,32 @@ impl CommandParser {
                     if self.position < self.tokens.len() {
                         self.expect_token(&Token::Semicolon)?;
                     }
-                    return Ok(TerminalCommand::ListCircles { voice: voice_id });
+                    return Ok(TerminalCommand::ListCircles { voice_id });
                 } else if method_name == "newCircle" {
                     self.expect_token(&Token::LeftParen)?;
                     self.expect_token(&Token::RightParen)?;
                     is_new_circle = true;
+                } else if method_name == "removeCircle" {
+                    self.expect_token(&Token::LeftParen)?;
+                    circle_id = match self.current_token() {
+                        Some(Token::Number(n)) => {
+                            let id = *n as i32;
+                            self.position += 1;
+                            Some(id)
+                        }
+                        Some(token) => {
+                            return Err(ParseError::UnexpectedToken {
+                                expected: "circle ID number".to_string(),
+                                found: format!("{:?}", token),
+                            })
+                        }
+                        None => return Err(ParseError::UnexpectedEnd),
+                    };
+                    self.expect_token(&Token::RightParen)?;
+                    return Ok(TerminalCommand::RemoveCircle {
+                        voice_id,
+                        circle_id: circle_id.unwrap(),
+                    });
                 } else if method_name == "circle" {
                     // Parse circle ID
                     self.expect_token(&Token::LeftParen)?;
@@ -190,18 +211,18 @@ impl CommandParser {
         // Return appropriate command based on the type of operation
         if is_new_circle {
             Ok(TerminalCommand::NewCircle {
-                voice: voice_id,
+                voice_id,
                 config: builder.build(),
             })
         } else if let Some(circle) = circle_id {
             Ok(TerminalCommand::ModifyVoiceCircle {
-                voice: voice_id,
-                circle,
+                voice_id,
+                circle_id: circle,
                 config: builder.build(),
             })
         } else {
             Ok(TerminalCommand::ModifyVoice {
-                voice: voice_id,
+                voice_id,
                 config: builder.build(),
             })
         }
@@ -297,7 +318,7 @@ impl CommandParser {
         }
     }
 
-    fn expect_identifier(&mut self, expected: &str) -> Result<(), ParseError> {
+    fn _expect_identifier(&mut self, expected: &str) -> Result<(), ParseError> {
         if let Some(Token::Identifier(name)) = self.current_token() {
             if name == expected {
                 self.position += 1;

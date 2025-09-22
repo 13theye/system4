@@ -200,7 +200,6 @@ impl Voice {
 
     /// Add a WindCircle to this Voice
     pub fn add_wind_circle(&mut self, circle: WindCircle) {
-        println!("{}: Adding wind circle {}", self.id, circle.id);
         self.wind_circles.insert(circle.id, circle);
         self.recalculate_emitters();
     }
@@ -209,8 +208,6 @@ impl Voice {
     pub fn remove_wind_circle(&mut self, id: usize) {
         self.wind_circles.remove(&id);
         self.recalculate_emitters();
-
-        println!("{}: Removed wind circle {}", self.id, id);
     }
 
     /// Set the outer radius of a WindCircle

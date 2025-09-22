@@ -100,6 +100,10 @@ pub enum CompositeCommand {
         voice_id: VoiceId,
         config: DroneConfig,
     },
+    RemoveCircle {
+        voice_id: VoiceId,
+        circle_id: i32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -130,18 +134,20 @@ fn get_command_key(command: &Command) -> String {
             CompositeCommand::CreateDrone { config } => {
                 format!("CreateDrone_{}", config.voice)
             }
-            CompositeCommand::EraseDrone { voice_id: voice } => {
-                format!("EraseDrone_{:?}", voice)
+            CompositeCommand::EraseDrone { voice_id } => {
+                format!("EraseDrone_{:?}", voice_id)
             }
-            CompositeCommand::ModifyDrone {
-                voice_id: voice, ..
-            } => {
-                format!("ModifyDrone_{:?}", voice)
+            CompositeCommand::ModifyDrone { voice_id, .. } => {
+                format!("ModifyDrone_{:?}", voice_id)
             }
-            CompositeCommand::NewCircle {
-                voice_id: voice, ..
+            CompositeCommand::NewCircle { voice_id, .. } => {
+                format!("NewCircle_{:?}", voice_id)
+            }
+            CompositeCommand::RemoveCircle {
+                voice_id,
+                circle_id,
             } => {
-                format!("NewCircle_{:?}", voice)
+                format!("RemoveCircle_{:?}_{}", voice_id, circle_id)
             }
         },
         CommandInner::Simple(atomic) => match atomic {
@@ -385,6 +391,34 @@ impl Model {
                     // Set success message
                     let status_message = format!(
                         "Voice {} - Added WindCircle {}",
+                        voice_id.to_i32(),
+                        circle_id
+                    );
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
+                }
+                CompositeCommand::RemoveCircle {
+                    voice_id,
+                    circle_id,
+                } => {
+                    let validation = self.validate_voice(voice_id);
+                    if !self.validate_and_handle_error(validation, "RemoveCircle") {
+                        return;
+                    }
+
+                    // Remove the circle from the voioce
+                    let voice = self.voices.get_mut(&voice_id).unwrap();
+                    let Some(circle) = voice.wind_circles.get_mut(&(circle_id as usize)) else {
+                        return;
+                    };
+
+                    let wind_field = &mut self.particle_system.forces.wind_field;
+                    circle.remove_from_field(wind_field);
+                    voice.remove_wind_circle(circle_id as usize);
+
+                    // Set success message
+                    let status_message = format!(
+                        "Voice {} - Removed WindCircle {}",
                         voice_id.to_i32(),
                         circle_id
                     );

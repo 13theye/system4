@@ -623,11 +623,6 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         Key::R => {
             model.osc_loop.send_outer_radius(4, 0.5);
         }
-        Key::M => {
-            model
-                .osc_loop
-                .send_mask_change_bounds(1, 0, 0, 1920, 1080, 10.0);
-        }
         Key::V => {
             model.osc_loop.send_vibration(1, 0.5);
         }
@@ -1014,9 +1009,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         }), CommandSource::Ui),
                                                                     );
                                                                 }
+                                                                ui.add_space(10.0);
                                                             });
 
-                                                            ui.add_space(10.0);
+
                                                         }
                                                     });
                                                 });
@@ -1295,9 +1291,10 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         }), CommandSource::Ui),
                                                                     );
                                                                 }
+                                                                ui.add_space(10.0);
                                                             });
 
-                                                            ui.add_space(10.0);
+
                                                         }
                                                     });
                                                 });
@@ -1371,45 +1368,54 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         println!("Queuing CreateDrone command with config: {:?}", config);
                                                                         command_queue.push(voice_command);
                                                                     }
-                                                                    TerminalCommand::ModifyVoice { voice, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice);
+                                                                    TerminalCommand::ModifyVoice { voice_id, config } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
                                                                         let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
-                                                                        println!("Queuing ModifyVoice command for voice: {:?} with config: {:?}", voice, config);
+                                                                        println!("Queuing ModifyVoice command for voice: {:?} with config: {:?}", voice_id, config);
                                                                         command_queue.push(voice_command);
                                                                     }
-                                                                    TerminalCommand::ModifyVoiceCircle { voice, circle, config} => {
-                                                                        let voice_enum = VoiceId::from_i32(voice);
+                                                                    TerminalCommand::ModifyVoiceCircle { voice_id, circle_id, config} => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
 
                                                                         // Generate circle-specific parameter commands
                                                                         let parameter_commands = config.generate_circle_parameter_commands(
                                                                             voice_enum,
-                                                                            circle as usize,
+                                                                            circle_id as usize,
                                                                             CommandSource::Terminal
                                                                         );
 
                                                                         println!("Queueing {} circle parameter commands for voice: {:?} circle: {:?}",
-                                                                                parameter_commands.len(), voice, circle);
+                                                                                parameter_commands.len(), voice_id, circle_id);
 
                                                                         for cmd in parameter_commands {
                                                                             command_queue.push(cmd);
                                                                         }
                                                                     }
-                                                                    TerminalCommand::ListCircles { voice } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice);
+                                                                    TerminalCommand::ListCircles { voice_id } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
                                                                         let voice_command = Command::new(
                                                                             CommandInner::Simple(SimpleCommand::ListCircles { voice_id: voice_enum }),
                                                                             CommandSource::Terminal
                                                                         );
-                                                                        println!("Queueing ListCircles command for voice: {:?}", voice);
+                                                                        println!("Queueing ListCircles command for voice: {:?}", voice_id);
                                                                         command_queue.push(voice_command);
                                                                     }
-                                                                    TerminalCommand::NewCircle { voice, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice);
+                                                                    TerminalCommand::NewCircle { voice_id, config } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
                                                                         let voice_command = Command::new(
                                                                             CommandInner::Composite(CompositeCommand::NewCircle { voice_id: voice_enum, config }),
                                                                             CommandSource::Terminal
                                                                         );
-                                                                        println!("Queueing NewCircle command for voice: {:?}", voice);
+                                                                        println!("Queueing NewCircle command for voice: {:?}", voice_id);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::RemoveCircle {voice_id, circle_id} => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+                                                                        let voice_command = Command::new(
+                                                                            CommandInner::Composite(CompositeCommand::RemoveCircle { voice_id: voice_enum, circle_id }),
+                                                                            CommandSource::Terminal
+                                                                        );
+                                                                        println!("Queueing RemoveCircle command for voice: {:?} circle: {}", voice_id, circle_id);
                                                                         command_queue.push(voice_command);
                                                                     }
                                                                 }
@@ -1426,6 +1432,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         });
 
                                     ui.add_space(10.0);
+                                    ui.separator();
                                     
                                     // Command status display
                                     ui.horizontal(|ui| {
@@ -1470,7 +1477,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                 
                                 // Right column: Examples and help - column with scrollable content
                                 ui.vertical(|ui| {
-                                    ui.set_width(480.0);
+                                    ui.set_width(550.0);
                                     ui.set_min_height(height);
                                     ui.heading("Examples");
                                     ui.add_space(2.0);
@@ -1500,6 +1507,8 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     ui.label("• Modify: drone(voice).params().set();");
                                     ui.label("• Parameters:brightness(), volume(), gravity(), etc");
                                     ui.label("• Values: strings in \"quotes\", numbers");
+                                    ui.add_space(15.0);
+
                                     }); // end right column scroll area
                                 }); // end right column
                             }); // end terminal horizontal layout

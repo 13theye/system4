@@ -5,8 +5,8 @@
 use crate::{forces::CellIdx, groups::VoiceId, particle::Particle};
 use nannou::prelude::*;
 use rayon::prelude::*;
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 /// Maximum wind angle deviation in radians (90 degrees)
@@ -487,6 +487,7 @@ pub struct WindCircle {
     params: WindCircleParams, // Params of the circle
 }
 
+#[allow(clippy::too_many_arguments)]
 impl WindCircle {
     pub fn new(
         id: usize,
