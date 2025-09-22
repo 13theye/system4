@@ -6,7 +6,7 @@ use crate::{
     forces::WindCircleParams,
     groups::{Voice, VoiceId},
     model::{
-        command_builder::{ValidationResult, VoiceValidator},
+        command_builder::{CommandBuilder, ValidationResult, VoiceValidator},
         Model,
     },
     terminals::commands::drone::DroneConfig,
@@ -308,12 +308,8 @@ impl Model {
             }
         }
 
-        // Process commands through drone parameter displays
-        for command in &final_commands {
-            self.terminal_manager.borrow_mut().process_command(command);
-        }
-
         // Execute all final commands
+        // (display updates happen automatically in execute_command)
         for command in final_commands {
             self.execute_command(command);
         }
@@ -321,6 +317,9 @@ impl Model {
 
     /// Apply a command immediately without queueing
     pub fn execute_command(&mut self, command: Command) {
+        // Send all commands to terminal display for visualization
+        self.terminal_manager.borrow_mut().process_command(&command);
+
         match command.command {
             CommandInner::CreateDrone { config } => {
                 // Convert voice ID to Voice enum
@@ -332,9 +331,9 @@ impl Model {
                     return;
                 }
 
+                // Phase 1: Initialize drone structure (WindCircle and emitters)
                 let mut voice = Voice::new_with_id(voice_id);
-
-                voice.begin_drone(
+                let circle_id = voice.initialize_drone(
                     &config,
                     self.particle_system.default_particle_color,
                     self.particle_system.global_max_spawn_rate,
@@ -344,19 +343,22 @@ impl Model {
                 self.osc_send.send_drone_on_off(config.voice, 1);
                 voice.set_is_spawning(true);
 
+                // Insert voice before applying parameters so validation can find it
                 self.voices.insert(voice_id, voice);
 
-                // Send parameter update commands to ensure DroneParametersDisplay gets updated
-                // with the actual values that were used (including defaults)
+                // Phase 2: Apply parameters through the command pipeline
                 let resolved_config = config.merge_with_defaults();
-                let parameter_commands = resolved_config.generate_parameter_commands(
+                let parameter_commands = CommandBuilder::generate_all_parameter_commands(
+                    &resolved_config,
                     voice_id,
-                    0, // First circle created by begin_drone
-                    command.source,
+                    circle_id,
+                    command.source.clone(),
                 );
 
-                for cmd in parameter_commands {
-                    self.terminal_manager.borrow_mut().process_command(&cmd);
+                // Execute each parameter command through the normal pipeline
+                // (display updates happen automatically in execute_command)
+                for param_cmd in parameter_commands {
+                    self.execute_command(param_cmd);
                 }
             }
             CommandInner::EraseDrone { voice_id } => {
@@ -620,68 +622,17 @@ impl Model {
                 // Add the circle to the voice
                 voice.add_wind_circle(circle);
 
-                // Send parameter update commands to DroneParametersDisplay
-                let parameter_commands = vec![
-                    Command::new(
-                        CommandInner::Gravity {
-                            voice_id,
-                            circle_id,
-                            value: gravity,
-                        },
-                        command.source.clone(),
-                    ),
-                    Command::new(
-                        CommandInner::Force {
-                            voice_id,
-                            circle_id,
-                            value: force,
-                        },
-                        command.source.clone(),
-                    ),
-                    Command::new(
-                        CommandInner::OuterRadius {
-                            voice_id,
-                            circle_id,
-                            value: outer_radius,
-                        },
-                        command.source.clone(),
-                    ),
-                    Command::new(
-                        CommandInner::InnerRadius {
-                            voice_id,
-                            circle_id,
-                            value: inner_radius,
-                        },
-                        command.source.clone(),
-                    ),
-                    Command::new(
-                        CommandInner::Noise {
-                            voice_id,
-                            circle_id,
-                            value: noise,
-                        },
-                        command.source.clone(),
-                    ),
-                    Command::new(
-                        CommandInner::ForceCenterX {
-                            voice_id,
-                            circle_id,
-                            value: center_x,
-                        },
-                        command.source.clone(),
-                    ),
-                    Command::new(
-                        CommandInner::ForceCenterY {
-                            voice_id,
-                            circle_id,
-                            value: center_y,
-                        },
-                        command.source.clone(),
-                    ),
-                ];
+                // Send parameter update commands using centralized CommandBuilder
+                // (display updates happen automatically in execute_command)
+                let parameter_commands = CommandBuilder::generate_circle_parameter_commands(
+                    &resolved_config,
+                    voice_id,
+                    circle_id,
+                    command.source.clone(),
+                );
 
                 for cmd in parameter_commands {
-                    self.terminal_manager.borrow_mut().process_command(&cmd);
+                    self.execute_command(cmd);
                 }
 
                 // Set success message

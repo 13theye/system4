@@ -3,7 +3,7 @@
 use crate::{
     forces::WindCircle,
     groups::VoiceId,
-    particle::{EmitDirection, Emitter, FullScreenRandomEmitter, LinearEmitter},
+    particle::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
     utils::IdGenerator,
 };
@@ -62,33 +62,32 @@ impl Voice {
         idx
     }
 
-    pub fn begin_drone(
+    /// Initialize drone structure (WindCircle and emitters) without setting parameters
+    /// Parameters should be set through the command pipeline after this call
+    pub fn initialize_drone(
         &mut self,
         config: &DroneConfig,
         default_particle_color: Rgb,
         default_spawn_rate: f32,
         id_generator: &mut IdGenerator,
-    ) {
-        // Merge config with defaults to get all resolved values
+    ) -> usize {
+        // Merge config with defaults to get all resolved values for structural setup
         let resolved_config = config.clone().merge_with_defaults();
 
-        // Extract resolved values (all should be Some after merge_with_defaults)
-        let brightness = resolved_config.brightness.unwrap();
-        let volume = resolved_config.volume.unwrap();
+        // Extract resolved values for WindCircle creation
         let gravity = resolved_config.gravity.unwrap();
         let force = resolved_config.force.unwrap();
-        let feedback = resolved_config.feedback.unwrap();
         let outer_radius = resolved_config.outer_radius.unwrap();
         let inner_radius = resolved_config.inner_radius.unwrap();
         let center_x = resolved_config.center_x.unwrap();
         let center_y = resolved_config.center_y.unwrap();
         let noise = resolved_config.noise.unwrap();
-        let vibration = resolved_config.vibration.unwrap();
 
         // WindCircle creation
         let center = vec2(center_x, center_y);
+        let circle_id = self.issue_wind_circle_idx();
         let circle = WindCircle::new(
-            self.issue_wind_circle_idx(),
+            circle_id,
             self.id,
             center,
             outer_radius,
@@ -122,36 +121,15 @@ impl Voice {
             default_spawn_rate,
         );
 
-        /*
-        let emitter_center = PointEmitter::new(
-            id_generator.generate(),
-            voice,
-            mask.origin,
-            self.global_max_spawn_rate,
-            spawn_rate_factor,
-        );
-         */
-
-        let fullscreen_rect = Rect::from_x_y_w_h(0.0, 0.0, 3840.0, 2160.0);
-        let emitter_full = FullScreenRandomEmitter::new(
-            id_generator.generate(),
-            self.id,
-            fullscreen_rect,
-            default_spawn_rate,
-        );
-
         // Add the emitters
-        self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        self.emitters.push(Box::new(emitter_left));
         self.emitters.push(Box::new(emitter_right));
-        //self.emitters.push(Box::new(emitter_center));
-        self.emitters.push(Box::new(emitter_full));
 
-        // Set the particle system params
+        // Set the default color (this is structural, not a DroneConfig parameter)
         self.set_color_limit(default_particle_color);
-        self.set_alpha_limit(brightness);
-        self.set_volume(volume);
-        self.set_feedback(feedback);
-        self.set_vibration(vibration);
+
+        // Return the circle ID for use in parameter commands
+        circle_id
     }
 
     fn calculate_bounds(&self) -> Rect {
