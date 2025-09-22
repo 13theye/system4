@@ -4,8 +4,8 @@
 
 use super::TerminalCommandBuilder;
 use crate::groups::VoiceId;
-use crate::model::controller::{Command, CommandInner, CommandSource};
 use crate::model::command_builder::CommandBuilder;
+use crate::model::controller::{Command, CommandInner, CommandSource, CompositeCommand};
 use crate::terminals::parsing::{ParameterValue, ParseError};
 use std::collections::HashMap;
 use std::fmt;
@@ -294,9 +294,9 @@ impl DroneConfig {
     /// Convert this DroneConfig to a CreateDrone VoiceCommand
     pub fn to_create_command(&self, source: CommandSource) -> Command {
         Command::new(
-            CommandInner::CreateDrone {
+            CommandInner::Composite(CompositeCommand::CreateDrone {
                 config: self.clone(),
-            },
+            }),
             source,
         )
     }
@@ -304,10 +304,10 @@ impl DroneConfig {
     /// Convert this DroneConfig to a ModifyDrone VoiceCommand for the specified voice
     pub fn to_modify_command(&self, voice: VoiceId, source: CommandSource) -> Command {
         Command::new(
-            CommandInner::ModifyDrone {
+            CommandInner::Composite(CompositeCommand::ModifyDrone {
                 voice_id: voice,
                 config: self.clone(),
-            },
+            }),
             source,
         )
     }

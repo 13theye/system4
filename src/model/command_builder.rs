@@ -3,7 +3,7 @@
 // Centralized command building and validation system
 // Reduces code duplication and provides consistent error handling
 
-use super::controller::{Command, CommandInner, CommandSource};
+use super::controller::{Command, CommandInner, CommandSource, SimpleCommand};
 use crate::groups::VoiceId;
 use crate::terminals::commands::drone::DroneConfig;
 use std::collections::HashMap;
@@ -39,19 +39,85 @@ impl CommandBuilder {
         let mut defs = HashMap::new();
 
         // Voice-level parameters
-        defs.insert("brightness", ParameterDef { param_type: ParameterType::Voice, name: "brightness" });
-        defs.insert("volume", ParameterDef { param_type: ParameterType::Voice, name: "volume" });
-        defs.insert("feedback", ParameterDef { param_type: ParameterType::Voice, name: "feedback" });
-        defs.insert("vibration", ParameterDef { param_type: ParameterType::Voice, name: "vibration" });
+        defs.insert(
+            "brightness",
+            ParameterDef {
+                param_type: ParameterType::Voice,
+                name: "brightness",
+            },
+        );
+        defs.insert(
+            "volume",
+            ParameterDef {
+                param_type: ParameterType::Voice,
+                name: "volume",
+            },
+        );
+        defs.insert(
+            "feedback",
+            ParameterDef {
+                param_type: ParameterType::Voice,
+                name: "feedback",
+            },
+        );
+        defs.insert(
+            "vibration",
+            ParameterDef {
+                param_type: ParameterType::Voice,
+                name: "vibration",
+            },
+        );
 
         // Circle-level parameters
-        defs.insert("gravity", ParameterDef { param_type: ParameterType::Circle, name: "gravity" });
-        defs.insert("force", ParameterDef { param_type: ParameterType::Circle, name: "force" });
-        defs.insert("outer_radius", ParameterDef { param_type: ParameterType::Circle, name: "outer_radius" });
-        defs.insert("inner_radius", ParameterDef { param_type: ParameterType::Circle, name: "inner_radius" });
-        defs.insert("noise", ParameterDef { param_type: ParameterType::Circle, name: "noise" });
-        defs.insert("center_x", ParameterDef { param_type: ParameterType::Circle, name: "center_x" });
-        defs.insert("center_y", ParameterDef { param_type: ParameterType::Circle, name: "center_y" });
+        defs.insert(
+            "gravity",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "gravity",
+            },
+        );
+        defs.insert(
+            "force",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "force",
+            },
+        );
+        defs.insert(
+            "outer_radius",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "outer_radius",
+            },
+        );
+        defs.insert(
+            "inner_radius",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "inner_radius",
+            },
+        );
+        defs.insert(
+            "noise",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "noise",
+            },
+        );
+        defs.insert(
+            "center_x",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "center_x",
+            },
+        );
+        defs.insert(
+            "center_y",
+            ParameterDef {
+                param_type: ParameterType::Circle,
+                name: "center_y",
+            },
+        );
 
         defs
     }
@@ -66,10 +132,16 @@ impl CommandBuilder {
         let mut commands = Vec::new();
 
         // Voice-level parameters
-        commands.extend(Self::generate_voice_parameter_commands(config, voice_id, source.clone()));
+        commands.extend(Self::generate_voice_parameter_commands(
+            config,
+            voice_id,
+            source.clone(),
+        ));
 
         // Circle-level parameters
-        commands.extend(Self::generate_circle_parameter_commands(config, voice_id, circle_id, source));
+        commands.extend(Self::generate_circle_parameter_commands(
+            config, voice_id, circle_id, source,
+        ));
 
         commands
     }
@@ -84,28 +156,40 @@ impl CommandBuilder {
 
         if let Some(brightness) = config.brightness {
             commands.push(Command::new(
-                CommandInner::Alpha { voice_id, value: brightness },
+                CommandInner::Simple(SimpleCommand::Alpha {
+                    voice_id,
+                    value: brightness,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(volume) = config.volume {
             commands.push(Command::new(
-                CommandInner::Volume { voice_id, value: volume },
+                CommandInner::Simple(SimpleCommand::Volume {
+                    voice_id,
+                    value: volume,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(feedback) = config.feedback {
             commands.push(Command::new(
-                CommandInner::Feedback { voice_id, value: feedback },
+                CommandInner::Simple(SimpleCommand::Feedback {
+                    voice_id,
+                    value: feedback,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(vibration) = config.vibration {
             commands.push(Command::new(
-                CommandInner::Vibration { voice_id, value: vibration },
+                CommandInner::Simple(SimpleCommand::Vibration {
+                    voice_id,
+                    value: vibration,
+                }),
                 source.clone(),
             ));
         }
@@ -124,49 +208,77 @@ impl CommandBuilder {
 
         if let Some(gravity) = config.gravity {
             commands.push(Command::new(
-                CommandInner::Gravity { voice_id, circle_id, value: gravity },
+                CommandInner::Simple(SimpleCommand::Gravity {
+                    voice_id,
+                    circle_id,
+                    value: gravity,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(force) = config.force {
             commands.push(Command::new(
-                CommandInner::Force { voice_id, circle_id, value: force },
+                CommandInner::Simple(SimpleCommand::Force {
+                    voice_id,
+                    circle_id,
+                    value: force,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(outer_radius) = config.outer_radius {
             commands.push(Command::new(
-                CommandInner::OuterRadius { voice_id, circle_id, value: outer_radius },
+                CommandInner::Simple(SimpleCommand::OuterRadius {
+                    voice_id,
+                    circle_id,
+                    value: outer_radius,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(inner_radius) = config.inner_radius {
             commands.push(Command::new(
-                CommandInner::InnerRadius { voice_id, circle_id, value: inner_radius },
+                CommandInner::Simple(SimpleCommand::InnerRadius {
+                    voice_id,
+                    circle_id,
+                    value: inner_radius,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(noise) = config.noise {
             commands.push(Command::new(
-                CommandInner::Noise { voice_id, circle_id, value: noise },
+                CommandInner::Simple(SimpleCommand::Noise {
+                    voice_id,
+                    circle_id,
+                    value: noise,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(center_x) = config.center_x {
             commands.push(Command::new(
-                CommandInner::ForceCenterX { voice_id, circle_id, value: center_x },
+                CommandInner::Simple(SimpleCommand::CenterX {
+                    voice_id,
+                    circle_id,
+                    value: center_x,
+                }),
                 source.clone(),
             ));
         }
 
         if let Some(center_y) = config.center_y {
             commands.push(Command::new(
-                CommandInner::ForceCenterY { voice_id, circle_id, value: center_y },
+                CommandInner::Simple(SimpleCommand::CenterY {
+                    voice_id,
+                    circle_id,
+                    value: center_y,
+                }),
                 source.clone(),
             ));
         }
@@ -181,13 +293,26 @@ impl CommandBuilder {
 
     /// Format standardized error message for circle not found
     pub fn format_circle_error(voice_id: VoiceId, circle_id: usize) -> String {
-        format!("Voice {} - Circle {} does not exist", voice_id.to_i32(), circle_id)
+        format!(
+            "Voice {} - Circle {} does not exist",
+            voice_id.to_i32(),
+            circle_id
+        )
     }
 
     /// Format standardized success message for operations
-    pub fn format_success_message(operation: &str, voice_id: VoiceId, circle_id: Option<usize>) -> String {
+    pub fn format_success_message(
+        operation: &str,
+        voice_id: VoiceId,
+        circle_id: Option<usize>,
+    ) -> String {
         match circle_id {
-            Some(cid) => format!("{} applied to Voice {} Circle {}", operation, voice_id.to_i32(), cid),
+            Some(cid) => format!(
+                "{} applied to Voice {} Circle {}",
+                operation,
+                voice_id.to_i32(),
+                cid
+            ),
             None => format!("{} applied to Voice {}", operation, voice_id.to_i32()),
         }
     }
@@ -227,9 +352,10 @@ impl ValidationResult {
             ValidationResult::VoiceNotFound(voice_id) => {
                 Some(format!("Voice {} does not exist", voice_id))
             }
-            ValidationResult::CircleNotFound(voice_id, circle_id) => {
-                Some(format!("Voice {} - Circle {} does not exist", voice_id, circle_id))
-            }
+            ValidationResult::CircleNotFound(voice_id, circle_id) => Some(format!(
+                "Voice {} - Circle {} does not exist",
+                voice_id, circle_id
+            )),
         }
     }
 

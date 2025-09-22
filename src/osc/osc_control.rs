@@ -8,7 +8,7 @@ use std::error::Error;
 use crate::{
     config::OscSendConfig,
     groups::VoiceId,
-    model::controller::{Command, CommandInner, CommandSource},
+    model::controller::{Command, CommandInner, CommandSource, SimpleCommand},
 };
 
 pub struct OscSender {
@@ -117,10 +117,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Alpha {
+                                CommandInner::Simple(SimpleCommand::Alpha {
                                     voice_id: voice,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -129,10 +129,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Volume {
+                                CommandInner::Simple(SimpleCommand::Volume {
                                     voice_id: voice,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -144,11 +144,11 @@ impl OscController {
                             let voice = VoiceId::from_i32(*id);
                             let val = val * 30.0;
                             commands.push(Command::new(
-                                CommandInner::Force {
+                                CommandInner::Simple(SimpleCommand::Force {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
                                     value: val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -159,11 +159,11 @@ impl OscController {
                         {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::InnerRadius {
+                                CommandInner::Simple(SimpleCommand::InnerRadius {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -174,11 +174,11 @@ impl OscController {
                         {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::OuterRadius {
+                                CommandInner::Simple(SimpleCommand::OuterRadius {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -189,12 +189,12 @@ impl OscController {
                         {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::ForceCenterX {
+                                CommandInner::Simple(SimpleCommand::CenterX {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
 
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -205,11 +205,11 @@ impl OscController {
                         {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::ForceCenterY {
+                                CommandInner::Simple(SimpleCommand::CenterY {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -220,11 +220,11 @@ impl OscController {
                         {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Gravity {
+                                CommandInner::Simple(SimpleCommand::Gravity {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -233,10 +233,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Feedback {
+                                CommandInner::Simple(SimpleCommand::Feedback {
                                     voice_id: voice,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -247,11 +247,11 @@ impl OscController {
                         {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Noise {
+                                CommandInner::Simple(SimpleCommand::Noise {
                                     voice_id: voice,
                                     circle_id: *circle_id as usize,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
@@ -260,10 +260,10 @@ impl OscController {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
                             let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Vibration {
+                                CommandInner::Simple(SimpleCommand::Vibration {
                                     voice_id: voice,
                                     value: *val,
-                                },
+                                }),
                                 CommandSource::Osc,
                             ));
                         }

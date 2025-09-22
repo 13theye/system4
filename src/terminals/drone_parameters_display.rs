@@ -5,7 +5,7 @@
 use super::terminal_view::{TerminalView, TerminalViewParams};
 use crate::{
     groups::VoiceId,
-    model::controller::{Command, CommandInner},
+    model::controller::{Command, CommandInner, CompositeCommand, SimpleCommand},
 };
 use nannou::prelude::*;
 use std::{collections::HashMap, time::Instant};
@@ -79,113 +79,118 @@ impl DroneParametersDisplay {
         let now = Instant::now();
 
         match &command.command {
-            // Voice-level parameters
-            CommandInner::Alpha { voice_id, value } => {
-                if *voice_id == self.voice_id {
-                    self.update_voice_parameter("brightness", *value, now);
-                }
-            }
-            CommandInner::Volume { voice_id, value } => {
-                if *voice_id == self.voice_id {
-                    self.update_voice_parameter("volume", *value, now);
-                }
-            }
-            CommandInner::Feedback {
-                voice_id: voice,
-                value,
-            } => {
-                if *voice == self.voice_id {
-                    self.update_voice_parameter("feedback", *value, now);
-                }
-            }
-            CommandInner::Vibration { voice_id, value } => {
-                if *voice_id == self.voice_id {
-                    self.update_voice_parameter("vibration", *value, now);
-                }
-            }
+            CommandInner::Simple(simple_command) => {
+                match simple_command {
+                    // Voice-level parameters
+                    SimpleCommand::Alpha { voice_id, value } => {
+                        if *voice_id == self.voice_id {
+                            self.update_voice_parameter("brightness", *value, now);
+                        }
+                    }
+                    SimpleCommand::Volume { voice_id, value } => {
+                        if *voice_id == self.voice_id {
+                            self.update_voice_parameter("volume", *value, now);
+                        }
+                    }
+                    SimpleCommand::Feedback {
+                        voice_id: voice,
+                        value,
+                    } => {
+                        if *voice == self.voice_id {
+                            self.update_voice_parameter("feedback", *value, now);
+                        }
+                    }
+                    SimpleCommand::Vibration { voice_id, value } => {
+                        if *voice_id == self.voice_id {
+                            self.update_voice_parameter("vibration", *value, now);
+                        }
+                    }
 
-            // Circle-specific parameters
-            CommandInner::OuterRadius {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "outerRadius", *value, now);
+                    // Circle-specific parameters
+                    SimpleCommand::OuterRadius {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "outerRadius", *value, now);
+                        }
+                    }
+                    SimpleCommand::InnerRadius {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "innerRadius", *value, now);
+                        }
+                    }
+                    SimpleCommand::Force {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "force", *value, now);
+                        }
+                    }
+                    SimpleCommand::Gravity {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "gravity", *value, now);
+                        }
+                    }
+                    SimpleCommand::Noise {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "noise", *value, now);
+                        }
+                    }
+                    SimpleCommand::CenterX {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "centerX", *value, now);
+                        }
+                    }
+                    SimpleCommand::CenterY {
+                        voice_id,
+                        circle_id,
+                        value,
+                    } => {
+                        if *voice_id == self.voice_id {
+                            self.update_circle_parameter(*circle_id, "centerY", *value, now);
+                        }
+                    }
+                    _ => {}
                 }
             }
-            CommandInner::InnerRadius {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "innerRadius", *value, now);
+            CommandInner::Composite(composite_command) => {
+                match composite_command {
+                    CompositeCommand::CreateDrone { config } => {
+                        if config.voice_enum() == self.voice_id {
+                            self.process_drone_config(config, now);
+                        }
+                    }
+                    CompositeCommand::ModifyDrone {
+                        voice_id: voice,
+                        config,
+                    } => {
+                        if *voice == self.voice_id {
+                            self.process_drone_config(config, now);
+                        }
+                    }
+                    _ => {} // Ignore other command types
                 }
             }
-            CommandInner::Force {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "force", *value, now);
-                }
-            }
-            CommandInner::Gravity {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "gravity", *value, now);
-                }
-            }
-            CommandInner::Noise {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "noise", *value, now);
-                }
-            }
-            CommandInner::ForceCenterX {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "centerX", *value, now);
-                }
-            }
-            CommandInner::ForceCenterY {
-                voice_id,
-                circle_id,
-                value,
-            } => {
-                if *voice_id == self.voice_id {
-                    self.update_circle_parameter(*circle_id, "centerY", *value, now);
-                }
-            }
-            CommandInner::CreateDrone { config } => {
-                if config.voice_enum() == self.voice_id {
-                    self.process_drone_config(config, now);
-                }
-            }
-            CommandInner::ModifyDrone {
-                voice_id: voice,
-                config,
-            } => {
-                if *voice == self.voice_id {
-                    self.process_drone_config(config, now);
-                }
-            }
-            CommandInner::ListCircles { .. } => {
-                // ListCircles is a query command that doesn't modify parameters
-                // No action needed for parameter display
-            }
-            _ => {} // Ignore other command types
         }
     }
 
