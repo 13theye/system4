@@ -2,7 +2,7 @@
 //
 // This module defines the masks that can be used with the ParticleSystem.
 
-use crate::voice::Voice;
+use crate::groups::VoiceId;
 use nannou::prelude::*;
 use std::time::Instant;
 
@@ -11,7 +11,7 @@ const TOP_BOTTOM_MARGIN: f32 = 300.0;
 
 #[derive(Debug, Clone)]
 pub struct Mask {
-    pub voice: Voice,
+    pub voice: VoiceId,
     pub origin: Vec2,
     pub rect: Rect,
     // Animation state
@@ -21,12 +21,12 @@ pub struct Mask {
 }
 
 impl Mask {
-    pub fn make_drone(voice: Voice) -> Self {
+    pub fn make_drone(voice: VoiceId) -> Self {
         let origin = match voice {
             //Voice::Voice1 => vec2(-1280.0, 200.0),
-            Voice::Voice1 => vec2(0.0, 0.0),
+            VoiceId::Voice1 => vec2(0.0, 0.0),
             //Voice::Voice4 => vec2(1280.0, 200.0),
-            Voice::Voice4 => vec2(0.0, 0.0),
+            VoiceId::Voice4 => vec2(0.0, 0.0),
             _ => vec2(0.0, 0.0),
         };
 
@@ -43,7 +43,7 @@ impl Mask {
         }
     }
 
-    pub fn full_screen(voice: Voice) -> Self {
+    pub fn full_screen(voice: VoiceId) -> Self {
         let origin = vec2(0.0, 0.0);
         let size = vec2(3840.0, 2160.0);
         let rect = Rect::from_x_y_w_h(origin.x, origin.y, size.x, size.y);

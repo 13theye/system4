@@ -5,10 +5,10 @@
 use nannou_osc as osc;
 use std::error::Error;
 
-use crate::config::OscSendConfig;
-use crate::voice::{
-    controller::{Command, CommandInner, CommandSource},
-    Voice,
+use crate::{
+    config::OscSendConfig,
+    groups::VoiceId,
+    model::controller::{Command, CommandInner, CommandSource, SimpleCommand},
 };
 
 pub struct OscSender {
@@ -32,16 +32,32 @@ impl OscSender {
     }
 
     // Callback message when drone initialization is done
-    pub fn send_drone_on_off(&self, player_id: i32, val: i32) {
+    pub fn send_drone_on_off(&self, voice_id: i32, val: i32) {
         let addr = "/sys4/droneOnOff".to_string();
-        let args = vec![osc::Type::Int(player_id), osc::Type::Int(val)];
+        let args = vec![osc::Type::Int(voice_id), osc::Type::Int(val)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
+    pub fn send_new_circle(&self, voice_id: i32, circle_id: i32) {
+        let addr = "/sys4/newCircle".to_string();
+        let args = vec![osc::Type::Int(voice_id), osc::Type::Int(circle_id)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
+    pub fn send_end_circle(&self, voice_id: i32, circle_id: i32) {
+        let addr = "/sys4/endCircle".to_string();
+        let args = vec![osc::Type::Int(voice_id), osc::Type::Int(circle_id)];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
     }
 
     pub fn send_inner_radius(&self, player_id: i32, val: f32) {
-        let addr = "/sys4/particles/innerRadius".to_string();
+        let addr = "/sys4/circle/innerRadius".to_string();
         let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
@@ -49,7 +65,7 @@ impl OscSender {
     }
 
     pub fn send_outer_radius(&self, player_id: i32, val: f32) {
-        let addr = "/sys4/particles/outerRadius".to_string();
+        let addr = "/sys4/circle/outerRadius".to_string();
         let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
@@ -57,7 +73,7 @@ impl OscSender {
     }
 
     pub fn send_vibration(&self, player_id: i32, val: f32) {
-        let addr = "/sys4/particles/vibration".to_string();
+        let addr = "/sys4/voice/vibration".to_string();
         let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
@@ -65,31 +81,8 @@ impl OscSender {
     }
 
     pub fn send_noise(&self, player_id: i32, val: f32) {
-        let addr = "/sys4/particles/noise".to_string();
+        let addr = "/sys4/circle/noise".to_string();
         let args = vec![osc::Type::Int(player_id), osc::Type::Float(val)];
-        self.sender
-            .send((addr, args), (self.target_addr.as_str(), self.target_port))
-            .ok();
-    }
-
-    pub fn send_mask_change_bounds(
-        &self,
-        player_id: i32,
-        x: i32,
-        y: i32,
-        w: i32,
-        h: i32,
-        dur: f32,
-    ) {
-        let addr = "/sys2/mask/changeBounds".to_string();
-        let args = vec![
-            osc::Type::Int(player_id),
-            osc::Type::Int(x),
-            osc::Type::Int(y),
-            osc::Type::Int(w),
-            osc::Type::Int(h),
-            osc::Type::Float(dur),
-        ];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
@@ -113,102 +106,157 @@ impl OscController {
             for message in packet.into_msgs() {
                 match message.addr.as_str() {
                     /********************* Particle Commands *************************** */
-                    "/sys4/particles/alpha" => {
+                    "/sys4/voice/alpha" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Alpha { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::Alpha {
+                                    voice_id: voice,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/numParticles" => {
+                    "/sys4/voice/numParticles" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Volume { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::Volume {
+                                    voice_id: voice,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/force" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys4/circle/force" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             let val = val * 30.0;
                             commands.push(Command::new(
-                                CommandInner::Force { voice, value: val },
+                                CommandInner::Simple(SimpleCommand::Force {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+                                    value: val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/innerRadius" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys4/circle/innerRadius" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::InnerRadius { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::InnerRadius {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/outerRadius" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys4/circle/outerRadius" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::OuterRadius { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::OuterRadius {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys2/particles/centerX" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys2/circle/centerX" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::ForceCenterX { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::CenterX {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/centerY" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys4/circle/centerY" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::ForceCenterY { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::CenterY {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/gravity" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys4/circle/gravity" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Gravity { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::Gravity {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/feedback" => {
+                    "/sys4/voice/feedback" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Feedback { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::Feedback {
+                                    voice_id: voice,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/noise" => {
-                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                    "/sys4/circle/noise" => {
+                        if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
+                            &message.args[..]
+                        {
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Noise { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::Noise {
+                                    voice_id: voice,
+                                    circle_id: *circle_id as usize,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }
                     }
-                    "/sys4/particles/vibration" => {
+                    "/sys4/voice/vibration" => {
                         if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
-                            let voice = Voice::from_i32(*id);
+                            let voice = VoiceId::from_i32(*id);
                             commands.push(Command::new(
-                                CommandInner::Vibration { voice, value: *val },
+                                CommandInner::Simple(SimpleCommand::Vibration {
+                                    voice_id: voice,
+                                    value: *val,
+                                }),
                                 CommandSource::Osc,
                             ));
                         }

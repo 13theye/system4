@@ -2,13 +2,17 @@
 //
 // The main App Model
 
+pub mod controller;
+pub mod command_builder;
+
 use crate::{
     fps::FpsManager,
+    groups::{Voice, VoiceId},
+    model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
-    voice::{controller::Command, Voice},
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
@@ -23,6 +27,8 @@ pub type GpuBuffers = (Vec<ParticleGpu>, Vec<SegmentGpu>);
 
 pub struct Model {
     pub particle_system: ParticleSystem,
+
+    pub voices: HashMap<VoiceId, Voice>,
 
     // OSC
     pub osc: OscController,
@@ -47,7 +53,7 @@ pub struct Model {
     pub control_draw: nannou::Draw,
 
     // Rendering engine
-    pub gpu_buffers: HashMap<Voice, GpuBuffers>,
+    pub gpu_buffers: HashMap<VoiceId, GpuBuffers>,
     pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
     pub particle_renderer1: ParticleRenderer,
@@ -102,8 +108,8 @@ impl Drop for Model {
 }
 
 fn erase_drone(model: &mut Model, id: i32) {
-    let voice = Voice::from_i32(id);
-    model.particle_system.kill_voice(&voice);
+    let voice_id = VoiceId::from_i32(id);
+    model.kill_voice(voice_id);
     model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);
 }

@@ -4,7 +4,7 @@ use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
 use super::{command_input::CommandInput, drone_parameters_display::DroneParametersDisplay};
-use crate::voice::{controller::Command, Voice};
+use crate::{groups::VoiceId, model::controller::Command};
 
 #[derive(Clone, Copy, Debug)]
 pub enum TextJustification {
@@ -18,7 +18,7 @@ pub enum TextJustification {
 /// Struct to collect and manager TerminalView updates
 pub struct TerminalViewManager {
     terminal_views: HashMap<String, TerminalView>,
-    drone_parameter_displays: HashMap<Voice, DroneParametersDisplay>,
+    drone_parameter_displays: HashMap<VoiceId, DroneParametersDisplay>,
 }
 
 impl TerminalViewManager {
@@ -29,7 +29,12 @@ impl TerminalViewManager {
         }
     }
 
-    pub fn add_new_terminal_view(&mut self, name: &str, voice: Voice, params: TerminalViewParams) {
+    pub fn add_new_terminal_view(
+        &mut self,
+        name: &str,
+        voice: VoiceId,
+        params: TerminalViewParams,
+    ) {
         let terminal_view = TerminalView::new(voice, params);
         self.terminal_views.insert(name.to_owned(), terminal_view);
     }
@@ -71,13 +76,13 @@ impl TerminalViewManager {
     }
 
     /// Add a new drone parameters display for a voice
-    pub fn add_drone_parameters_display(&mut self, voice: Voice, params: TerminalViewParams) {
+    pub fn add_drone_parameters_display(&mut self, voice: VoiceId, params: TerminalViewParams) {
         let display = DroneParametersDisplay::new(voice, params);
         self.drone_parameter_displays.insert(voice, display);
     }
 
     /// Process a command through all drone parameter displays
-    pub fn process_command_for_drone_displays(&mut self, command: &Command) {
+    pub fn process_command(&mut self, command: &Command) {
         for display in self.drone_parameter_displays.values_mut() {
             display.process_command(command);
         }
@@ -93,7 +98,7 @@ impl TerminalViewManager {
     /// Get a drone parameter display for a specific voice
     pub fn get_drone_parameters_display(
         &mut self,
-        voice: Voice,
+        voice: VoiceId,
     ) -> Option<&mut DroneParametersDisplay> {
         self.drone_parameter_displays.get_mut(&voice)
     }
@@ -101,7 +106,7 @@ impl TerminalViewManager {
     /// Get a drone parameter display for display/drawing (immutable access)
     pub fn get_drone_parameters_display_for_display(
         &self,
-        voice: Voice,
+        voice: VoiceId,
     ) -> Option<&DroneParametersDisplay> {
         self.drone_parameter_displays.get(&voice)
     }
@@ -119,49 +124,41 @@ pub struct TerminalView {
     lines: Vec<Option<Line>>,
     line_positions: Vec<Vec2>,
 
-    voice: Voice,
+    voice: VoiceId,
     params: TerminalViewParams,
     rect: Rect,
 }
 
 impl TerminalView {
-    pub fn new(voice: Voice, params: TerminalViewParams) -> Self {
+    pub fn new(voice: VoiceId, params: TerminalViewParams) -> Self {
         let (line_positions, total_height) = generate_line_positions(&params);
 
         // Calculate rect based on justification - origin defines the specified corner
         let rect = match params.justification {
-            TextJustification::TopLeft => {
-                Rect::from_x_y_w_h(
-                    params.origin.x + params.width / 2.0,
-                    params.origin.y - total_height / 2.0,
-                    params.width,
-                    total_height
-                )
-            }
-            TextJustification::TopRight => {
-                Rect::from_x_y_w_h(
-                    params.origin.x - params.width / 2.0,
-                    params.origin.y - total_height / 2.0,
-                    params.width,
-                    total_height
-                )
-            }
-            TextJustification::BottomLeft => {
-                Rect::from_x_y_w_h(
-                    params.origin.x + params.width / 2.0,
-                    params.origin.y + total_height / 2.0,
-                    params.width,
-                    total_height
-                )
-            }
-            TextJustification::BottomRight => {
-                Rect::from_x_y_w_h(
-                    params.origin.x - params.width / 2.0,
-                    params.origin.y + total_height / 2.0,
-                    params.width,
-                    total_height
-                )
-            }
+            TextJustification::TopLeft => Rect::from_x_y_w_h(
+                params.origin.x + params.width / 2.0,
+                params.origin.y - total_height / 2.0,
+                params.width,
+                total_height,
+            ),
+            TextJustification::TopRight => Rect::from_x_y_w_h(
+                params.origin.x - params.width / 2.0,
+                params.origin.y - total_height / 2.0,
+                params.width,
+                total_height,
+            ),
+            TextJustification::BottomLeft => Rect::from_x_y_w_h(
+                params.origin.x + params.width / 2.0,
+                params.origin.y + total_height / 2.0,
+                params.width,
+                total_height,
+            ),
+            TextJustification::BottomRight => Rect::from_x_y_w_h(
+                params.origin.x - params.width / 2.0,
+                params.origin.y + total_height / 2.0,
+                params.width,
+                total_height,
+            ),
         };
 
         let lines = vec![None; params.num_lines];
@@ -253,13 +250,14 @@ impl TerminalView {
                 }
                 TextJustification::BottomLeft | TextJustification::BottomRight => {
                     // Bottom justification: place lines from bottom up
-                    let displayed_lines: Vec<&str> = lines.iter().skip(start_idx).copied().collect();
+                    let displayed_lines: Vec<&str> =
+                        lines.iter().skip(start_idx).copied().collect();
                     for (i, line_text) in displayed_lines.iter().enumerate() {
                         if !line_text.trim().is_empty() || *line_text == *first_line {
                             let mut new_line =
                                 Line::new_from_str(line_text, self.params.bright_color, false);
                             new_line.char_idx = new_line.chars.len(); // Show all characters immediately
-                            // Place from bottom: last line goes at bottom index
+                                                                      // Place from bottom: last line goes at bottom index
                             let display_idx = self.params.num_lines - displayed_lines.len() + i;
                             self.lines[display_idx] = Some(new_line);
                         }
@@ -353,7 +351,8 @@ impl TerminalView {
             // pos.x is always the left edge of the text area, so center is pos.x + width/2
             let center_x = pos.x + self.params.width / 2.0;
 
-            let text_builder = draw.text(&text)
+            let text_builder = draw
+                .text(&text)
                 .w(self.params.width)
                 .color(line.color)
                 .font_size(self.params.font_size)
@@ -440,7 +439,10 @@ fn generate_line_positions(params: &TerminalViewParams) -> (Vec<Vec2>, f32) {
         TextJustification::TopLeft => (params.origin.x, params.origin.y),
         TextJustification::TopRight => (params.origin.x - params.width, params.origin.y),
         TextJustification::BottomLeft => (params.origin.x, params.origin.y + total_height),
-        TextJustification::BottomRight => (params.origin.x - params.width, params.origin.y + total_height),
+        TextJustification::BottomRight => (
+            params.origin.x - params.width,
+            params.origin.y + total_height,
+        ),
     };
 
     // All justifications flow lines downward, but start from different Y positions

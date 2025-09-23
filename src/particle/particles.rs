@@ -7,13 +7,12 @@ use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 1800.0;
-const FADE_IN_DURATION: f32 = 300.0; // frames to fade in
+const FADE_IN_DURATION: f32 = 180.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
 const FEEDBACK_POSITIONS: usize = 256;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
-    pub parent_emitter: usize, // the emitter that spawned this particle
     position: Point2,
     feedback_positions: [Option<Point2>; FEEDBACK_POSITIONS],
     pub velocity: Vec2,
@@ -32,9 +31,8 @@ pub struct Particle {
 }
 
 impl Particle {
-    pub fn new(parent_id: usize, position: Point2, size: f32, color: Rgba) -> Self {
+    pub fn new(position: Point2, size: f32, color: Rgba) -> Self {
         Self {
-            parent_emitter: parent_id,
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,

@@ -2,7 +2,7 @@
 //
 // Rhythm
 
-use crate::voice::Voice;
+use crate::groups::VoiceId;
 use nannou::{
     prelude::*,
     rand::{rngs::ThreadRng, Rng},
@@ -39,7 +39,7 @@ impl Rhythm {
 }
 
 pub struct RhythmParams {
-    pub voice: Voice,
+    pub voice: VoiceId,
     pub interval: Interval,
     pub capacity: usize,
     pub wings: usize,

@@ -1,60 +1,62 @@
 /// src/particle/emitter.rs
 ///
 /// The thing that spits out particles
-use crate::{particle::Particle, voice::Voice};
+use crate::{groups::VoiceId, particle::Particle};
 use nannou::prelude::*;
 use nannou::rand::{rngs::ThreadRng, Rng};
 
 /// The Emitter trait is implemented by different shapes of emitters.
 pub trait Emitter {
-    fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle>;
-    fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool;
+    fn emit(
+        &self,
+        spawn_rate_factor: f32,
+        speed: f32,
+        size: f32,
+        color: Rgba,
+        rng: &mut ThreadRng,
+    ) -> Vec<Particle>;
+    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool;
     fn is_enabled(&self) -> bool;
     fn set_enabled(&mut self, is_enabled: bool);
-    fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32);
-    fn get_spawn_rate_factor(&self) -> f32;
-    fn parent_voice(&self) -> Voice;
+    fn parent_voice(&self) -> VoiceId;
     fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32);
 }
 
 pub struct FullScreenRandomEmitter {
-    pub id: usize,
-    pub parent_voice: Voice,
+    pub parent_voice: VoiceId,
     pub max_spawn_rate: f32,
     pub spawn_area: Rect,
-    pub spawn_rate_factor: f32,
     pub is_enabled: bool,
 }
 
 impl FullScreenRandomEmitter {
-    pub fn new(
-        id: usize,
-        parent_voice: Voice,
-        spawn_area: Rect,
-        max_spawn_rate: f32,
-        spawn_rate_factor: f32,
-    ) -> Self {
+    pub fn new(parent_voice: VoiceId, spawn_area: Rect, max_spawn_rate: f32) -> Self {
         Self {
-            id,
             parent_voice,
             spawn_area,
             max_spawn_rate,
-            spawn_rate_factor,
             is_enabled: false,
         }
     }
 }
 
 impl Emitter for FullScreenRandomEmitter {
-    fn emit(&self, _velocity: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle> {
+    fn emit(
+        &self,
+        spawn_rate_factor: f32,
+        _velocity: f32,
+        size: f32,
+        color: Rgba,
+        rng: &mut ThreadRng,
+    ) -> Vec<Particle> {
         let mut particles = Vec::new();
 
         // Use probabilistic emission instead of fixed rate for timing variation
-        let adjusted_rate = self.max_spawn_rate * self.spawn_rate_factor;
+        let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
 
         for _ in 0..adjusted_rate as usize {
             // Only emit if random chance based on spawn rate
-            if !self.should_emit_particle(rng) {
+            if !self.should_emit_particle(adjusted_rate, rng) {
                 continue;
             }
 
@@ -70,14 +72,14 @@ impl Emitter for FullScreenRandomEmitter {
                 rng.gen_range(-velocity..velocity),
             ) / velocity;
 
-            particles.push(Particle::new(self.id, spawn_pos, size, color).with_velocity(velocity));
+            particles.push(Particle::new(spawn_pos, size, color).with_velocity(velocity));
         }
 
         particles
     }
 
-    fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool {
-        let emission_probability = (self.max_spawn_rate * self.spawn_rate_factor) / 30.0; // Normalize to reasonable probability
+    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool {
+        let emission_probability = spawn_rate / 30.0; // Normalize to reasonable probability
         rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
@@ -89,15 +91,7 @@ impl Emitter for FullScreenRandomEmitter {
         self.is_enabled = is_spawning;
     }
 
-    fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32) {
-        self.spawn_rate_factor = spawn_rate_factor;
-    }
-
-    fn get_spawn_rate_factor(&self) -> f32 {
-        self.spawn_rate_factor
-    }
-
-    fn parent_voice(&self) -> Voice {
+    fn parent_voice(&self) -> VoiceId {
         self.parent_voice
     }
 
@@ -114,28 +108,18 @@ impl Emitter for FullScreenRandomEmitter {
 /// An emitter defined by a center point
 /// Radiates particles outward from that point in any direction
 pub struct PointEmitter {
-    pub id: usize,
-    pub parent_voice: Voice,
+    pub parent_voice: VoiceId,
     pub origin: Vec2,
     pub max_spawn_rate: f32,
-    pub spawn_rate_factor: f32,
     pub is_enabled: bool,
 }
 
 impl PointEmitter {
-    pub fn new(
-        id: usize,
-        parent_voice: Voice,
-        origin: Vec2,
-        max_spawn_rate: f32,
-        spawn_rate_factor: f32,
-    ) -> Self {
+    pub fn new(parent_voice: VoiceId, origin: Vec2, max_spawn_rate: f32) -> Self {
         Self {
-            id,
             parent_voice,
             origin,
             max_spawn_rate,
-            spawn_rate_factor,
             is_enabled: false,
         }
     }
@@ -143,15 +127,22 @@ impl PointEmitter {
 
 impl Emitter for PointEmitter {
     /// Generate a Vec of particles based on the emitter's parameters
-    fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle> {
+    fn emit(
+        &self,
+        spawn_rate_factor: f32,
+        speed: f32,
+        size: f32,
+        color: Rgba,
+        rng: &mut ThreadRng,
+    ) -> Vec<Particle> {
         let mut particles = Vec::new();
 
         // Use probabilistic emission instead of fixed rate for timing variation
-        let adjusted_rate = self.max_spawn_rate * self.spawn_rate_factor;
+        let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
 
         for _ in 0..adjusted_rate as usize {
             // Only emit if random chance based on spawn rate
-            if !self.should_emit_particle(rng) {
+            if !self.should_emit_particle(adjusted_rate, rng) {
                 continue;
             }
 
@@ -173,15 +164,14 @@ impl Emitter for PointEmitter {
                     offset_angle.sin() * offset_distance,
                 );
 
-            particles
-                .push(Particle::new(self.id, spawn_position, size, color).with_velocity(velocity));
+            particles.push(Particle::new(spawn_position, size, color).with_velocity(velocity));
         }
 
         particles
     }
 
-    fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool {
-        let emission_probability = (self.max_spawn_rate * self.spawn_rate_factor) / 30.0; // Normalize to reasonable probability
+    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool {
+        let emission_probability = spawn_rate / 30.0; // Normalize to reasonable probability
         rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
@@ -193,15 +183,7 @@ impl Emitter for PointEmitter {
         self.is_enabled = is_spawning;
     }
 
-    fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32) {
-        self.spawn_rate_factor = spawn_rate_factor;
-    }
-
-    fn get_spawn_rate_factor(&self) -> f32 {
-        self.spawn_rate_factor
-    }
-
-    fn parent_voice(&self) -> Voice {
+    fn parent_voice(&self) -> VoiceId {
         self.parent_voice
     }
 
@@ -217,14 +199,12 @@ impl Emitter for PointEmitter {
 /// An emitter defined by a center point, a start point, and an end point
 /// Emits particles anywhere along the line
 pub struct LinearEmitter {
-    pub id: usize,           // unique id for this emitter
-    pub parent_voice: Voice, // voice that this emitter belongs to
-    pub midpoint: Vec2,      // Center point
-    pub start: Vec2,         // Start point
-    pub end: Vec2,           // End point
+    pub parent_voice: VoiceId, // voice that this emitter belongs to
+    pub midpoint: Vec2,        // Center point
+    pub start: Vec2,           // Start point
+    pub end: Vec2,             // End point
     pub direction: EmitDirection,
     pub max_spawn_rate: f32,
-    pub spawn_rate_factor: f32,
     pub is_enabled: bool,
 }
 
@@ -238,23 +218,19 @@ pub enum EmitDirection {
 #[allow(clippy::too_many_arguments)]
 impl LinearEmitter {
     pub fn new(
-        id: usize,
-        parent_voice: Voice,
+        parent_voice: VoiceId,
         start: Vec2,
         end: Vec2,
         direction: EmitDirection,
         max_spawn_rate: f32,
-        spawn_rate_factor: f32,
     ) -> Self {
         Self {
-            id,
             parent_voice,
             midpoint: (start + end) / 2.0,
             start,
             end,
             direction,
             max_spawn_rate,
-            spawn_rate_factor,
             is_enabled: false,
         }
     }
@@ -262,12 +238,18 @@ impl LinearEmitter {
 
 impl Emitter for LinearEmitter {
     // Generate a Vec of particles based on the emitter's parameters
-    fn emit(&self, speed: f32, size: f32, color: Rgba, rng: &mut ThreadRng) -> Vec<Particle> {
+    fn emit(
+        &self,
+        spawn_rate_factor: f32,
+        speed: f32,
+        size: f32,
+        color: Rgba,
+        rng: &mut ThreadRng,
+    ) -> Vec<Particle> {
         let mut particles = Vec::new();
 
         // Use probabilistic emission instead of fixed rate for timing variation
-        let base_rate = self.max_spawn_rate * self.spawn_rate_factor;
-        let max_particles = base_rate as usize; // Allow some variation above base rate
+        let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
 
         let base_velocity = match self.direction {
             EmitDirection::North => vec2(0.0, speed),
@@ -278,9 +260,9 @@ impl Emitter for LinearEmitter {
         let length = self.end.distance(self.start) - 4.0;
         let gen_range = -length / 2.0..length / 2.0;
 
-        for _ in 0..max_particles {
+        for _ in 0..adjusted_rate as usize {
             // Only emit if random chance based on spawn rate
-            if !self.should_emit_particle(rng) {
+            if !self.should_emit_particle(adjusted_rate, rng) {
                 continue;
             }
 
@@ -308,14 +290,14 @@ impl Emitter for LinearEmitter {
                 }
             };
 
-            particles.push(Particle::new(self.id, position, size, color).with_velocity(velocity));
+            particles.push(Particle::new(position, size, color).with_velocity(velocity));
         }
 
         particles
     }
 
-    fn should_emit_particle(&self, rng: &mut ThreadRng) -> bool {
-        let emission_probability = (self.max_spawn_rate * self.spawn_rate_factor) / 30.0; // Normalize to reasonable probability
+    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool {
+        let emission_probability = spawn_rate / 30.0; // Normalize to reasonable probability
         rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
@@ -327,15 +309,7 @@ impl Emitter for LinearEmitter {
         self.is_enabled = is_spawning;
     }
 
-    fn set_spawn_rate_factor(&mut self, spawn_rate_factor: f32) {
-        self.spawn_rate_factor = spawn_rate_factor;
-    }
-
-    fn get_spawn_rate_factor(&self) -> f32 {
-        self.spawn_rate_factor
-    }
-
-    fn parent_voice(&self) -> Voice {
+    fn parent_voice(&self) -> VoiceId {
         self.parent_voice
     }
 
