@@ -279,7 +279,29 @@ impl ParticleSystem {
         1.0 - ratio
     }
 
+    /// Sets the n oldest particles to fade out, where n is the number of particles above the limit
     fn cull_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
+        for (voice_id, particles) in self.particles.iter_mut() {
+            let limit = voices
+                .get(voice_id)
+                .map(|v| v.params.volume * v.params.particle_limit as f32)
+                .unwrap_or(self.default_particle_limit as f32);
+
+            let mut active_particles = 0;
+            for particle in particles.iter_mut().rev() {
+                if particle.remaining_life_span > particle.fade_out_duration() {
+                    active_particles += 1;
+                    if active_particles > limit as usize {
+                        // assumes that the oldest particles are at the beginning
+                        particle.set_to_fade_out();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Older version of cull_excess_particles
+    fn _cull_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
         for (voice_id, particles) in self.particles.iter_mut() {
             let limit = voices
                 .get(voice_id)
@@ -297,11 +319,8 @@ impl ParticleSystem {
             if num_active_particles > limit {
                 let excess_active = num_active_particles - limit;
 
-                for particle in active_particles
-                    .into_iter()
-                    //.rev() // kill oldest particles first
-                    .take(excess_active as usize)
-                {
+                // kill oldest particles first - take() takes the first n elements
+                for particle in active_particles.into_iter().take(excess_active as usize) {
                     particle.set_to_fade_out();
                 }
             }

@@ -143,7 +143,7 @@ impl Voice {
     fn add_linear_emitters(&mut self) {
         let emitter_left = LinearEmitter::new(
             self.id,
-            self.bounds_rect.top_left(),
+            self.bounds_rect.top_left() - vec2(0.0, 5.0),
             self.bounds_rect.mid_left(),
             EmitDirection::East,
             self.params.default_spawn_rate,
@@ -152,7 +152,7 @@ impl Voice {
         let emitter_right = LinearEmitter::new(
             self.id,
             self.bounds_rect.mid_right(),
-            self.bounds_rect.bottom_right(),
+            self.bounds_rect.bottom_right() + vec2(0.0, 5.0),
             EmitDirection::West,
             self.params.default_spawn_rate,
         );
