@@ -15,7 +15,6 @@ pub trait Emitter {
         color: Rgba,
         rng: &mut ThreadRng,
     ) -> Vec<Particle>;
-    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool;
     fn is_enabled(&self) -> bool;
     fn set_enabled(&mut self, is_enabled: bool);
     fn parent_voice(&self) -> VoiceId;
@@ -49,17 +48,10 @@ impl Emitter for FullScreenRandomEmitter {
         color: Rgba,
         rng: &mut ThreadRng,
     ) -> Vec<Particle> {
+        let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
         let mut particles = Vec::new();
 
-        // Use probabilistic emission instead of fixed rate for timing variation
-        let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
-
         for _ in 0..adjusted_rate as usize {
-            // Only emit if random chance based on spawn rate
-            if !self.should_emit_particle(adjusted_rate, rng) {
-                continue;
-            }
-
             let spawn_pos = vec2(
                 rng.gen_range(self.spawn_area.left()..self.spawn_area.right()),
                 rng.gen_range(self.spawn_area.bottom()..self.spawn_area.top()),
@@ -76,11 +68,6 @@ impl Emitter for FullScreenRandomEmitter {
         }
 
         particles
-    }
-
-    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool {
-        let emission_probability = spawn_rate / 30.0; // Normalize to reasonable probability
-        rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
     fn is_enabled(&self) -> bool {
@@ -135,17 +122,10 @@ impl Emitter for PointEmitter {
         color: Rgba,
         rng: &mut ThreadRng,
     ) -> Vec<Particle> {
-        let mut particles = Vec::new();
-
-        // Use probabilistic emission instead of fixed rate for timing variation
         let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
+        let mut particles = Vec::with_capacity(adjusted_rate as usize);
 
         for _ in 0..adjusted_rate as usize {
-            // Only emit if random chance based on spawn rate
-            if !self.should_emit_particle(adjusted_rate, rng) {
-                continue;
-            }
-
             // Generate random angle for velocity direction
             let angle = rng.gen_range(0.0..std::f32::consts::TAU);
 
@@ -168,11 +148,6 @@ impl Emitter for PointEmitter {
         }
 
         particles
-    }
-
-    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool {
-        let emission_probability = spawn_rate / 30.0; // Normalize to reasonable probability
-        rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
     fn is_enabled(&self) -> bool {
@@ -246,9 +221,6 @@ impl Emitter for LinearEmitter {
         color: Rgba,
         rng: &mut ThreadRng,
     ) -> Vec<Particle> {
-        let mut particles = Vec::new();
-
-        // Use probabilistic emission instead of fixed rate for timing variation
         let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
 
         let base_velocity = match self.direction {
@@ -260,12 +232,9 @@ impl Emitter for LinearEmitter {
         let length = self.end.distance(self.start) - 4.0;
         let gen_range = -length / 2.0..length / 2.0;
 
-        for _ in 0..adjusted_rate as usize {
-            // Only emit if random chance based on spawn rate
-            if !self.should_emit_particle(adjusted_rate, rng) {
-                continue;
-            }
+        let mut particles = Vec::with_capacity(adjusted_rate as usize);
 
+        for _ in 0..adjusted_rate as usize {
             // Add speed variation to make particles less uniform
             let speed_variation = rng.gen_range(0.95..1.05);
             let velocity = base_velocity * speed_variation;
@@ -294,11 +263,6 @@ impl Emitter for LinearEmitter {
         }
 
         particles
-    }
-
-    fn should_emit_particle(&self, spawn_rate: f32, rng: &mut ThreadRng) -> bool {
-        let emission_probability = spawn_rate / 30.0; // Normalize to reasonable probability
-        rng.gen::<f32>() < emission_probability.min(1.0)
     }
 
     fn is_enabled(&self) -> bool {

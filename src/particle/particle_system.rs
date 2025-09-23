@@ -18,7 +18,7 @@ use crate::{
 
 pub const EMPTY_GPU_BUFFER: GpuBuffers = (Vec::new(), Vec::new());
 const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position offset in pixels
-const MAX_SPAWN_RATE: f32 = 50.0;
+const MAX_SPAWN_RATE: f32 = 80.0;
 
 pub struct ParticleSystem {
     // Particles
@@ -79,122 +79,6 @@ impl ParticleSystem {
             mass_variation_amount: 0.05, // 5% variation by default
         }
     }
-
-    /********************* Make drone ********************************** */
-    // Create a drone with a mask and emitters. Return the mask's rect
-    /*
-    pub fn begin_voice(
-        &mut self,
-        id_generator: &mut IdGenerator,
-        voice: VoiceId,
-        config: &DroneConfig,
-    ) -> Rect {
-        // Apply defaults for create operations
-        let (default_center_x, default_center_y) = match config.voice {
-            1 => (-1280.0, 0.0),
-            4 => (1280.0, 0.0),
-            _ => (0.0, 0.0),
-        };
-
-        // Extract config or use defaults
-        let brightness = config.brightness.unwrap_or(0.7);
-        let volume = config.volume.unwrap_or(0.5);
-        let gravity = config.gravity.unwrap_or(0.0);
-        let force = config.force.unwrap_or(10.0);
-        let feedback = config.feedback.unwrap_or(0.0);
-        let outer_radius = config.outer_radius.unwrap_or(800.0);
-        let inner_radius = config.inner_radius.unwrap_or(200.0);
-        let center_x = config.center_x.unwrap_or(default_center_x);
-        let center_y = config.center_y.unwrap_or(default_center_y);
-        let noise = config.noise.unwrap_or(0.0);
-        let vibration = config.vibration.unwrap_or(0.0);
-
-        // WindCircle creation
-        let center = vec2(center_x, center_y);
-        let circle = WindCircle::new(
-            id_generator.generate(),
-            voice,
-            center,
-            outer_radius,
-            inner_radius,
-            force,
-            gravity,
-            noise,
-        );
-
-        if self.masks.contains_key(&voice) {
-            self.masks.remove(&voice);
-        }
-
-        let mask = Mask::make_drone(voice);
-
-        // Create particle emitters
-
-        let spawn_rate_factor = 1.0;
-
-        let emitter_left = LinearEmitter::new(
-            id_generator.generate(),
-            voice,
-            self.bounds_rect.top_left(),
-            self.bounds_rect.mid_left(),
-            EmitDirection::East,
-            self.global_max_spawn_rate,
-            spawn_rate_factor,
-        );
-
-        let emitter_right = LinearEmitter::new(
-            id_generator.generate(),
-            voice,
-            self.bounds_rect.mid_right(),
-            self.bounds_rect.bottom_right(),
-            EmitDirection::West,
-            self.global_max_spawn_rate,
-            spawn_rate_factor,
-        );
-
-        /*
-        let emitter_center = PointEmitter::new(
-            id_generator.generate(),
-            voice,
-            mask.origin,
-            self.global_max_spawn_rate,
-            spawn_rate_factor,
-        );
-         */
-
-        let fullscreen_rect = Rect::from_x_y_w_h(0.0, 0.0, 3840.0, 2160.0);
-        let emitter_full = FullScreenRandomEmitter::new(
-            id_generator.generate(),
-            voice,
-            fullscreen_rect,
-            self.global_max_spawn_rate,
-            spawn_rate_factor,
-        );
-
-        // Add the emitters
-        self.emitters.push(Box::new(emitter_left)); //emitter_left);
-        self.emitters.push(Box::new(emitter_right));
-        //self.emitters.push(Box::new(emitter_center));
-        self.emitters.push(Box::new(emitter_full));
-
-        // Set the particle system params
-        self.color_limits.insert(voice, self.default_particle_color);
-        self.set_alpha_limit(&voice, brightness);
-        self.set_volume(&voice, volume);
-        self.set_feedback(&voice, feedback);
-        self.set_vibration_factor(&voice, vibration);
-
-        // Add the wind circle to the forces
-        self.forces.add_wind_circle(circle);
-
-        // Add the mask
-        let mask_rect = mask.rect;
-        self.masks.insert(voice, mask);
-
-        // Return the mask's rect
-        mask_rect
-    }
-     */
 
     /********************* Update methods ********************************** */
 
@@ -317,60 +201,46 @@ impl ParticleSystem {
         voices: &HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
     ) {
-        let mut emitters = Vec::new();
         for voice in voices.values() {
-            emitters.extend(&voice.emitters);
-        }
+            let mut emitters: Vec<_> = voice.emitters.iter().collect();
+            emitters.shuffle(rng);
 
-        let mut indices: Vec<usize> = (0..emitters.len()).collect();
-        indices.shuffle(rng);
+            for emitter in emitters.iter() {
+                if emitter.is_enabled() {
+                    let parent_voice = emitter.parent_voice();
+                    let particle_vec = self.particles.entry(parent_voice).or_default();
+                    let current_count = particle_vec.len();
 
-        // Collect emission data to avoid borrowing conflicts
-        let mut emission_data: Vec<(usize, VoiceId, f32, Rgb)> = Vec::new();
+                    // Calculate emission scaling based on how close we are to the limit
+                    let voice_limit = voices
+                        .get(&parent_voice)
+                        .map(|v| v.params.volume * v.params.particle_limit as f32)
+                        .unwrap_or(self.default_particle_limit as f32);
+                    let emission_scaling =
+                        Self::linear_emission_scaling(voice_limit, current_count);
 
-        for &i in &indices {
-            let emitter = emitters[i];
-            if emitter.is_enabled() {
-                let parent_voice = emitter.parent_voice();
-                let particle_vec = self.particles.entry(parent_voice).or_default();
-                let current_count = particle_vec.len();
+                    // Skip emission entirely if scaling is near zero
+                    if emission_scaling < 0.001 {
+                        continue;
+                    }
 
-                // Calculate emission scaling based on how close we are to the limit
-                let voice_limit = voices
-                    .get(&parent_voice)
-                    .map(|v| v.params.volume * v.params.particle_limit as f32)
-                    .unwrap_or(self.default_particle_limit as f32);
-                let emission_scaling = self.calculate_emission_scaling(voice_limit, current_count);
+                    let color_limit = voices
+                        .get(&parent_voice)
+                        .map(|v| v.params.color_limit)
+                        .unwrap_or(self.default_particle_color);
 
-                // Skip emission entirely if scaling is near zero
-                if emission_scaling < 0.001 {
-                    continue;
+                    let new_particles = emitter.emit(
+                        emission_scaling,
+                        10.0,
+                        self.default_particle_size,
+                        rgba_from(color_limit, 0.0),
+                        rng,
+                    );
+
+                    // Add particles to the voice's particle vector
+                    particle_vec.extend(new_particles);
                 }
-
-                let color_limit = voices
-                    .get(&parent_voice)
-                    .map(|v| v.params.color_limit)
-                    .unwrap_or(self.default_particle_color);
-
-                emission_data.push((i, parent_voice, emission_scaling, color_limit));
             }
-        }
-
-        // Now emit particles using the collected data
-        for (i, parent_voice, emission_scaling, color_limit) in emission_data {
-            let emitter = emitters[i];
-
-            let new_particles = emitter.emit(
-                emission_scaling,
-                10.0,
-                self.default_particle_size,
-                rgba_from(color_limit, 0.0),
-                rng,
-            );
-
-            // Add particles to the voice's particle vector
-            let particle_vec = self.particles.entry(parent_voice).or_default();
-            particle_vec.extend(new_particles);
         }
     }
 
@@ -381,7 +251,8 @@ impl ParticleSystem {
     /// - 1.0 when far from the limit (aggressive emission)
     /// - 0.0 when at or over the limit (no emission)
     /// - Smooth curve in between to avoid jerky transitions
-    fn calculate_emission_scaling(&self, limit: f32, current_count: usize) -> f32 {
+    #[allow(dead_code)]
+    fn calculate_emission_scaling(limit: f32, current_count: usize) -> f32 {
         if limit < 0.001 {
             return 0.0;
         }
@@ -398,7 +269,14 @@ impl ParticleSystem {
         // At 80% of limit, we're at 4% emission rate
         // At 90% of limit, we're at 1% emission rate
         let remaining_capacity = 1.0 - ratio;
-        remaining_capacity.powi(2)
+        remaining_capacity.powf(1.2)
+    }
+
+    /// Linearly scale emission rate based on how close we are to the particle limit
+    #[allow(dead_code)]
+    fn linear_emission_scaling(limit: f32, current_count: usize) -> f32 {
+        let ratio = current_count as f32 / limit;
+        1.0 - ratio
     }
 
     fn cull_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
