@@ -53,11 +53,11 @@ impl Wind {
         // Activate the particle
         particle.activate();
 
-        // Calculate the x and y components of particle's current velocity
+        // Get the x and y components of particle's current velocity
         let particle_vx = particle.velocity.x;
         let particle_vy = particle.velocity.y;
 
-        // Calculate the x and y components of wind's target velocity
+        // Get the x and y components of wind's target velocity
         let wind_vx = self.direction.x * self.strength;
         let wind_vy = self.direction.y * self.strength;
 
@@ -345,11 +345,11 @@ impl WindField {
     /// Take a center-origin position and convert it to a grid position index (0,0 is top left)
     fn position_to_idx(&self, pos: Vec2) -> Option<(usize, usize)> {
         let transformed = self.world_to_grid_coords(pos);
-        let i = transformed.x.floor() as isize;
-        let j = transformed.y.floor() as isize;
+        let i = transformed.x.floor().max(0.0) as usize;
+        let j = transformed.y.floor().max(0.0) as usize;
 
-        if i >= 0 && j >= 0 && (i as usize) < self.grid_cols && (j as usize) < self.grid_rows {
-            Some((i as usize, j as usize))
+        if i < self.grid_cols && j < self.grid_rows {
+            Some((i, j))
         } else {
             None // Out of bounds
         }

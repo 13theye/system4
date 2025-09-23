@@ -23,7 +23,7 @@ use system4::{
     fps::FpsManager,
     model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand, CompositeCommand}},
     osc::{OscController, OscSender},
-    particle::{ParticleSystem, EMPTY_GPU_BUFFER},
+    particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER, EMPTY_GPU_SEGMENT_BUFFER},
     terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
     groups::VoiceId,
@@ -147,7 +147,8 @@ fn model(app: &App) -> Model {
     let device = audience_window.device();
 
     // Create Nnpipe
-    let gpu_buffers = HashMap::new();
+    let gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
+    let gpu_segment_buffers = HashMap::new();
 
     let mut rendering = Nnpipe::new(
         device,
@@ -196,7 +197,7 @@ fn model(app: &App) -> Model {
 
     // Create particle renderer
     let particle_renderer1: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
-    let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
+    //let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
 
     // Create segment renderer
     let segment_params = SegmentParams::new(1.0, 2.0);
@@ -365,11 +366,12 @@ fn model(app: &App) -> Model {
         audience_draw,
         performer_draw,
         control_draw,
-        gpu_buffers,
+        gpu_particle_buffer,
+        gpu_segment_buffers,
         rendering: RefCell::new(rendering),
         heatmap_renderer,
         particle_renderer1,
-        particle_renderer4,
+        //particle_renderer4,
 
         segment_renderer1,
         segment_renderer4,
@@ -436,7 +438,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update particle system
     model
         .particle_system
-        .update(&mut model.voices, &mut model.rng, &mut model.gpu_buffers);
+        .update(&mut model.voices, &mut model.rng, &mut model.gpu_particle_buffer, &mut model.gpu_segment_buffers);
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
@@ -462,42 +464,42 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         rendering.encode_draw_commands(device, &mut encoder);
 
         // Retrieve buffer or use empty buffer
-        let empty_gpu_buffer = &EMPTY_GPU_BUFFER;
-        let gpu_buffer1 = model
-            .gpu_buffers
-            .get(&VoiceId::Voice1)
-            .unwrap_or(empty_gpu_buffer);
-        let gpu_buffer4 = model
-            .gpu_buffers
-            .get(&VoiceId::Voice4)
-            .unwrap_or(empty_gpu_buffer);
+        let _empty_gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
+        let empty_gpu_segment_buffer = EMPTY_GPU_SEGMENT_BUFFER;
+        let gpu_particle_buffer = &model
+            .gpu_particle_buffer;
+        let gpu_segment_buffer_1 = model.gpu_segment_buffers.get(&VoiceId::Voice1).unwrap_or(&empty_gpu_segment_buffer);
+        let gpu_segment_buffer_4 = model.gpu_segment_buffers.get(&VoiceId::Voice4).unwrap_or(&empty_gpu_segment_buffer);
+
 
         // Encode particles
         model.particle_renderer1.encode_into(
             &mut encoder,
             queue,
-            &gpu_buffer1.0,
+            gpu_particle_buffer,
             rendering.get_named_texture("particles").unwrap(),
         );
 
+        /*
         model.particle_renderer4.encode_into(
             &mut encoder,
             queue,
             &gpu_buffer4.0,
             rendering.get_named_texture("particles").unwrap(),
         );
+         */
 
         model.segment_renderer1.encode_into(
             &mut encoder,
             queue,
-            &gpu_buffer1.1,
+            gpu_segment_buffer_1,
             rendering.get_named_texture("particles").unwrap(),
         );
 
         model.segment_renderer4.encode_into(
             &mut encoder,
             queue,
-            &gpu_buffer4.1,
+            gpu_segment_buffer_4,
             rendering.get_named_texture("particles").unwrap(),
         );
 
@@ -506,17 +508,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             device,
             &mut encoder,
             queue,
-            &gpu_buffer1.0,
-            model.render_rect,
-            model.frame_count,
-            rendering.get_named_texture("heatmap").unwrap(),
-        );
-
-        model.heatmap_renderer.encode_into(
-            device,
-            &mut encoder,
-            queue,
-            &gpu_buffer4.0,
+            gpu_particle_buffer,
             model.render_rect,
             model.frame_count,
             rendering.get_named_texture("heatmap").unwrap(),

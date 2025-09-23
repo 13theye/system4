@@ -743,7 +743,7 @@ pub fn update_feedback(model: &mut Model, device: &Device, queue: &Queue) {
         .segment_renderer1
         .set_segment_length(device, queue, voice1_feedback);
 
-    // Update segment length based on Voice1 feedback slider
+    // Update segment length based on Voice4 feedback slider
     model
         .segment_renderer4
         .set_segment_length(device, queue, voice4_feedback);

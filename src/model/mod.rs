@@ -2,8 +2,8 @@
 //
 // The main App Model
 
-pub mod controller;
 pub mod command_builder;
+pub mod controller;
 
 use crate::{
     fps::FpsManager,
@@ -23,7 +23,8 @@ use nnpipe::*;
 
 use std::{cell::RefCell, collections::HashMap};
 
-pub type GpuBuffers = (Vec<ParticleGpu>, Vec<SegmentGpu>);
+pub type GpuParticleBuffer = Vec<ParticleGpu>;
+pub type GpuSegmentBuffer = Vec<SegmentGpu>;
 
 pub struct Model {
     pub particle_system: ParticleSystem,
@@ -53,15 +54,14 @@ pub struct Model {
     pub control_draw: nannou::Draw,
 
     // Rendering engine
-    pub gpu_buffers: HashMap<VoiceId, GpuBuffers>,
+    pub gpu_particle_buffer: GpuParticleBuffer,
+    pub gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
     pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
     pub particle_renderer1: ParticleRenderer,
-    pub particle_renderer4: ParticleRenderer,
-
+    //pub particle_renderer4: ParticleRenderer,
     pub segment_renderer1: SegmentRenderer,
     pub segment_renderer4: SegmentRenderer,
-
     pub dpi_scale: f32,
     pub font: Font,
 

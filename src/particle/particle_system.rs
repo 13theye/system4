@@ -12,11 +12,12 @@ use rayon::prelude::*;
 use crate::{
     forces::ForceFields,
     groups::{Voice, VoiceId},
-    model::GpuBuffers,
+    model::{GpuParticleBuffer, GpuSegmentBuffer},
     particle::Particle,
 };
 
-pub const EMPTY_GPU_BUFFER: GpuBuffers = (Vec::new(), Vec::new());
+pub const EMPTY_GPU_PARTICLE_BUFFER: GpuParticleBuffer = Vec::new();
+pub const EMPTY_GPU_SEGMENT_BUFFER: GpuSegmentBuffer = Vec::new();
 const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position offset in pixels
 const MAX_SPAWN_RATE: f32 = 80.0;
 
@@ -87,7 +88,8 @@ impl ParticleSystem {
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
-        gpu_buffers: &mut HashMap<VoiceId, GpuBuffers>,
+        gpu_particle_buffer: &mut GpuParticleBuffer,
+        gpu_segment_buffers: &mut HashMap<VoiceId, GpuSegmentBuffer>,
     ) {
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
@@ -95,10 +97,10 @@ impl ParticleSystem {
         self.forces.update(voices, rng);
 
         // Reuse existing buffer to avoid allocations
-        for (_, (p_gpu, s_gpu)) in gpu_buffers.iter_mut() {
-            p_gpu.clear();
+        for (_, s_gpu) in gpu_segment_buffers.iter_mut() {
             s_gpu.clear();
         }
+        gpu_particle_buffer.clear();
 
         // Pre-compute position offset factors for all voices to avoid borrow conflicts
         let vibration_values: HashMap<VoiceId, f32> = voices
@@ -118,9 +120,9 @@ impl ParticleSystem {
             let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
 
             // Ensure buffer exists for this voice
-            let (pgpu_buf, sgpu_buf) = gpu_buffers
+            let sgpu_buf = gpu_segment_buffers
                 .entry(*voice_id)
-                .or_insert_with(|| EMPTY_GPU_BUFFER);
+                .or_insert_with(|| EMPTY_GPU_SEGMENT_BUFFER);
 
             // Pre-compute mass variation factors for all particles in this voice
             let mass_variations: Vec<f32> =
@@ -188,7 +190,7 @@ impl ParticleSystem {
                     .unzip();
 
             // Append to buffers
-            pgpu_buf.extend(gpu_particle_group);
+            gpu_particle_buffer.extend(gpu_particle_group);
             sgpu_buf.extend(gpu_segment_group);
 
             // Cull dead particles
