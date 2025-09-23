@@ -21,26 +21,18 @@ use std::{
 
 use system4::{
     config::*,
-    forces::WindCircle,
     fps::FpsManager,
     model::Model,
-    osc::{OscCommand, OscController, OscSender},
+    osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_BUFFER},
-    terminals::{TerminalParams, TerminalSystem},
+    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
-    voice::{controller::VoiceParameterChange, Voice},
+    voice::{controller::{Command, CommandInner, CommandSource}, Voice},
 };
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
 //const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.27, 0.27, 0.26);
-// full brightness color for terminal
-const TERMINAL_START_RGBA: (f32, f32, f32, f32) = (0.0, 0.85, 0.0, 1.0);
-// dimmed brightness color for terminal
-const TERMINAL_END_RGBA: (f32, f32, f32, f32) = (0.0, 0.3, 0.0, 1.0);
-const TERMINAL_NUM_LINES: usize = 8;
-const TERMINAL_LINE_MARGIN: f32 = 8.0;
-const TERMINAL_CHARS_PER_SECOND: f32 = 0.6; // final is 0.6
 
 fn model(app: &App) -> Model {
     // Load config
@@ -112,7 +104,6 @@ fn model(app: &App) -> Model {
         .title("System_4 Performer Control v0.1.0")
         .size(config.control_window.width, config.control_window.height)
         .msaa_samples(1)
-        .key_pressed(key_pressed)
         .raw_event(raw_window_event)
         .view(control_view)
         .build()
@@ -133,12 +124,14 @@ fn model(app: &App) -> Model {
     };
 
     // Set macOS window flags
+    /*
     #[cfg(target_os = "macos")]
     set_macos_window_behavior(&audience_window);
     #[cfg(target_os = "macos")]
     set_macos_window_behavior(&performer_window);
     #[cfg(target_os = "macos")]
     set_macos_window_behavior(&control_window);
+     */
 
     println!(
         "Audience window scale: {:?}",
@@ -180,6 +173,7 @@ fn model(app: &App) -> Model {
     let performer_draw = nannou::Draw::new();
     let control_draw = nannou::Draw::new();
 
+
     // Set up effects pipeline
 
     let lo_config = TextureConfig {
@@ -200,6 +194,7 @@ fn model(app: &App) -> Model {
         format: wgpu::TextureFormat::Rgba16Float,
     };
 
+
     // Create particle renderer
     let particle_renderer1: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
     let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
@@ -210,15 +205,18 @@ fn model(app: &App) -> Model {
     let segment_renderer4 = SegmentRenderer::new(device, hi_config, 25000, segment_params);
 
     // Create pipeline textures
+    rendering.create_named_texture(device, "terminal", hi_config);
     rendering.create_named_texture(device, "particles", hi_config);
     rendering.create_named_texture(device, "heatmap", hi_config);
-    rendering.create_named_texture(device, "particle_processed", hi_config);
+    //rendering.create_named_texture(device, "particle_processed", hi_config);
     rendering.create_named_texture(device, "heatmap_processed", hi_config);
     rendering.create_named_texture(device, "processed_composited", hi_config);
+    rendering.create_named_texture(device, "post-processed", hi_config);
 
     let particle_effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
         .input_texture("particles")
+        .feedback(hi_config, 1.0, 60.0)
         .output_texture("particle_processed")
         .build(device);
     if let Ok(effect) = particle_effects {
@@ -228,7 +226,7 @@ fn model(app: &App) -> Model {
     let heatmap_effects = PipelineBuilder::new()
         .name("Heatmap Effects Pipeline")
         .input_texture("heatmap")
-        .feedback(hi_config, 1.0, 1.0)
+        .feedback(hi_config, 1.0, 10.0)
         .output_texture("heatmap_processed")
         .build(device);
 
@@ -240,7 +238,7 @@ fn model(app: &App) -> Model {
         .name("Composite Step Pipeline")
         .input_textures(&["particles", "heatmap_processed"])
         .output_texture("processed_composited")
-        .simple_additive_composite(hi_config, 0.0)
+        .simple_additive_composite(hi_config, 0.5)
         .build(device);
 
     if let Ok(effect) = composite_step {
@@ -249,16 +247,28 @@ fn model(app: &App) -> Model {
 
     let effects = PipelineBuilder::new()
         .name("Particle Effects Pipeline")
-        .input_texture("processed_composited")
+        .input_texture("particles")
+        .output_texture("post-processed")
         .brightness_extract(med_config, 0.7)
         .downsample(lo_config)
         .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
         .bloom_composite_with_curve(hi_config, 2.0, 3.0)
-        //.inversion(hi_config)
+        //.inversion(hi_config, 1.0)
         .build(device);
 
     if let Ok(effect) = effects {
         rendering.add_multi_pipeline("effects", effect);
+    }
+
+    let final_composite = PipelineBuilder::new()
+        .name("Final overlay composite")
+        .input_textures(&["terminal", "post-processed"])
+        .simple_additive_composite(hi_config, 1.0)
+        .build(device);
+
+    if let Ok(effect) = final_composite {
+        rendering.add_multi_pipeline("final composite", effect);
+
     }
 
     // Set up egui
@@ -285,12 +295,60 @@ fn model(app: &App) -> Model {
         performer_rect.top() - 10.0,
     ));
 
-    // Create terminal system
-    let terminal_system = TerminalSystem::new();
+    // Create terminal view manager
+    let mut terminal_manager = TerminalViewManager::new();
+    
+    // Set up terminal parameters for command display
+    let terminal_params = TerminalViewParams {
+        origin: vec2(-500.0, 1000.0),
+        num_lines: 7,
+        width: 1000.0,
+        line_spacing: 5.0,
+        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
+        regular_color: rgba(0.2, 0.2, 0.2, 0.8),
+        color_fade_secs: 1.0,
+        chars_per_second: 6.0,
+        font: font.clone(),
+        font_size: 32,
+        justification: TextJustification::BottomLeft,
+    };
+    
+    terminal_manager.add_new_terminal_view("main", Voice::Voice1, terminal_params);
+
+    // Set up drone parameter displays for each voice
+    let drone_params_voice1 = TerminalViewParams {
+        origin: vec2(-1900.0, -1050.0),  // Below main terminal
+        num_lines: 15,              // Multiple lines for individual parameters
+        width: 1000.0,
+        line_spacing: 5.0,
+        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
+        regular_color: rgba(0.3, 0.3, 0.3, 0.8),
+        color_fade_secs: 1.5,
+        chars_per_second: 6.0,     // Faster typing for parameters
+        font: font.clone(),
+        font_size: 22,
+        justification: TextJustification::BottomLeft,
+    };
+
+    let drone_params_voice4 = TerminalViewParams {
+        origin: vec2(1900.0, -1050.0),  // Below voice 1 parameters
+        num_lines: 15,
+        width: 1000.0,
+        line_spacing: 5.0,
+        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
+        regular_color: rgba(0.3, 0.3, 0.3, 0.8),
+        color_fade_secs: 1.5,
+        chars_per_second: 6.0,
+        font: font.clone(),
+        font_size: 22,
+        justification: TextJustification::BottomRight,
+    };
+
+    terminal_manager.add_drone_parameters_display(Voice::Voice1, drone_params_voice1);
+    terminal_manager.add_drone_parameters_display(Voice::Voice4, drone_params_voice4);
 
     Model {
         particle_system,
-        terminal_system,
         osc,
         osc_send,
         osc_loop,
@@ -323,6 +381,10 @@ fn model(app: &App) -> Model {
         update_ticks: 0,
         show_bounds: false,
         show_forces: false,
+        command_input: CommandInput::new(),
+        terminal_manager: RefCell::new(terminal_manager),
+        command_queue: Vec::new(),
+        active_tab: 0,
     }
 }
 
@@ -362,9 +424,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     update_control_ui(app, model);
 
     // Process OSC commands
-    model.osc.process_messages();
-    let commands = model.osc.take_commands();
-    process_osc(model, commands);
+    let mut commands = model.osc.process_messages();
+    model.command_queue.append(&mut commands);
+
+    // Process unified command queue with priority resolution
+    model.process_command_queue();
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -373,20 +437,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model
         .particle_system
         .update(&mut model.rng, model.show_forces, &mut model.gpu_buffers);
-
-    // Update terminals
-    let finish_signals = model
-        .terminal_system
-        .update(&model.rendering.borrow_mut().draw);
-
-    // When a terminal start sequence is finished, send the OSC command to turn on the drone
-    for (voice, finish_signal) in finish_signals {
-        if finish_signal {
-            let id = voice.to_i32();
-            model.osc_send.send_drone_on_off(id, 1);
-            model.particle_system.set_is_spawning(&voice, true);
-        }
-    }
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
@@ -452,11 +502,21 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         );
 
         // Encode heatmap
-        model.heatmap_renderer.encode_heatmap_into(
+        model.heatmap_renderer.encode_into(
             device,
             &mut encoder,
             queue,
             &gpu_buffer1.0,
+            model.render_rect,
+            model.frame_count,
+            rendering.get_named_texture("heatmap").unwrap(),
+        );
+
+        model.heatmap_renderer.encode_into(
+            device,
+            &mut encoder,
+            queue,
+            &gpu_buffer4.0,
             model.render_rect,
             model.frame_count,
             rendering.get_named_texture("heatmap").unwrap(),
@@ -475,6 +535,21 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
+        // Update and draw terminal view as overlay on top of post-processed texture
+        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_terminal_view("main") {
+            terminal_view.update(&rendering.draw);
+        }
+
+        // Update and draw drone parameter displays
+        model.terminal_manager.borrow_mut().update_drone_parameter_displays(&rendering.draw);
+
+        // Encode Nannou Draw
+        rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
+
+        if let Err(e) = rendering.execute_named_pipeline("final composite", device, &mut encoder) {
+            eprintln!("Error executing final composite pipeline: {}", e);
+        }
+
         rendering.submit_command_encoder(device, queue, encoder);
 
         // Update reshaper if needed (could be cached in Model)
@@ -482,12 +557,16 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     }
     // End Rendering context
 
+
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
-        // Then draw over the texture
-        let _ = model.audience_draw.to_frame(app, &frame);
+
     }
+
+    // Draw over the texture
+    let _ = model.audience_draw.to_frame(app, &frame);
+
 }
 
 fn performer_view(app: &App, model: &Model, frame: Frame) {
@@ -516,6 +595,7 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
             .draw_forces(&model.performer_draw, scale_x, scale_y);
     }
 
+
     // Then draw over the texture
     let _ = model.performer_draw.to_frame(app, &frame);
 }
@@ -537,21 +617,11 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
             // Toggle debug and FPS display
             model.show_bounds = !model.show_bounds;
         }
-        Key::Key1 => {
-            model.osc_loop.send_make_drone(1, 100, 20, 0, 0, 0);
-        }
-        Key::Key4 => {
-            model.osc_loop.send_make_drone(4, 100, 20, 0, 0, 0);
-        }
         Key::C => {
             model.osc_loop.send_inner_radius(4, 0.5);
         }
         Key::R => {
             model.osc_loop.send_outer_radius(4, 0.5);
-        }
-        Key::X => {
-            model.osc_loop.send_erase_drone(1);
-            model.osc_loop.send_erase_drone(4);
         }
         Key::M => {
             model
@@ -568,6 +638,29 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
 
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     model.egui.handle_raw_event(event);
+
+    // Handle keyboard input for command terminal
+    if let nannou::winit::event::WindowEvent::KeyboardInput { input, .. } = event {
+        if input.state == nannou::winit::event::ElementState::Pressed {
+            if let Some(key) = input.virtual_keycode {
+                use nannou::winit::event::VirtualKeyCode;
+
+                match key {
+                    VirtualKeyCode::Escape => {
+                        model.command_input.clear();
+                    }
+                    _ => {
+                        // Handle character input
+                        // Note: This is simplified - in a real app you'd want proper text input handling
+                        // Note: Enter key handling now moved to egui TextEdit response system
+                    }
+                }
+            }
+        }
+    }
+
+    // Note: Text input is now handled directly by egui TextEdit widget
+    // through the TextBuffer trait implementation
 }
 
 // ************************ Control UI display  *************************************
@@ -587,14 +680,14 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice1_volume = model.get_volume(Voice::Voice1);
     let voice1_feedback = model.get_feedback(Voice::Voice1);
     let voice1_angle_variation = model.get_angle_variation(Voice::Voice1);
-    let voice1_position_offset = model.get_position_offset_factor(Voice::Voice1);
+    let voice1_vibration_offset = model.get_vibration_offset_factor(Voice::Voice1);
 
     let voice4_circle_params = model.get_wind_circle_params(Voice::Voice4).cloned();
     let voice4_alpha = model.get_alpha_limit(Voice::Voice4);
     let voice4_volume = model.get_volume(Voice::Voice4);
     let voice4_feedback = model.get_feedback(Voice::Voice4);
     let voice4_angle_variation = model.get_angle_variation(Voice::Voice4);
-    let voice4_position_offset = model.get_position_offset_factor(Voice::Voice4);
+    let voice4_vibration_offset = model.get_vibration_offset_factor(Voice::Voice4);
 
     let ctx = model.egui.begin_frame();
 
@@ -603,7 +696,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     ctx.set_style(adjust_style_from(style));
 
     let mut show_forces_changed = false;
-    let mut parameter_changes = Vec::<VoiceParameterChange>::new();
+    let mut command_queue = Vec::<Command>::new();
 
     egui::Window::new("Control Panel")
         .fixed_pos(egui::pos2(0.0, 0.0))
@@ -621,7 +714,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
         })
         .show(&ctx, |ui| {
             ui.horizontal(|ui| {
-                // Vertical 1: Instructions and status info
+                // Vertical 1: Instructions and status info (always visible)
                 ui.vertical(|ui| {
                     ui.set_min_size(egui::vec2(150.0, height));
                     // Status info
@@ -640,398 +733,666 @@ fn update_control_ui(app: &App, model: &mut Model) {
                     // Instructions section
                     ui.label("...");
                     ui.label("P: Debug view");
+
+                    // Push tab selector to bottom with expanding space
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                        // Tab bar at bottom
+                        ui.add_space(20.0);
+                        ui.horizontal(|ui| {
+                            if ui
+                                .selectable_label(model.active_tab == 0, "Terminal")
+                                .clicked()
+                            {
+                                model.active_tab = 0;
+                            }
+                            if ui
+                                .selectable_label(model.active_tab == 1, "Voices")
+                                .clicked()
+                            {
+                                model.active_tab = 1;
+                            }
+                        });
+                    });
                 });
 
-                // Voice 1 (col 2)
-                ui.vertical(|ui| {
-                    // Wind Circle Settings - use horizontal layout for two vertical sections
-                    let current_params = voice1_circle_params;
+                ui.separator();
 
-                    ui.set_min_width(350.0);
-                    ui.heading("Voice 1: Drone");
-                    ui.add_space(2.0);
+                // Tab content (top-aligned)
+                ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                    match model.active_tab {
+                        1 => {
+                            // Voices tab content with scrollable columns
+                            ui.horizontal(|ui| {
+                                // Voice 1 (col 2) - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Voice 1: Drone");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("voice1_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
+                                        // Voice 1 settings - vertical layout
+                                        let current_params = voice1_circle_params;
 
-                    if let Some(params) = current_params {
-                        ui.add_space(10.0);
+                                    if let Some(params) = current_params {
+                                        ui.add_space(10.0);
 
-                        // Outer Radius slider
-                        let mut radius = params.outer_radius;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut radius, 0.0..=1100.0)
-                                    .text("OR")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::OuterRadius {
-                                voice: Voice::Voice1,
-                                value: radius,
-                            });
+                                        // Outer Radius slider
+                                        let mut radius = params.outer_radius;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut radius, 0.0..=1100.0)
+                                                    .text("OR")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::OuterRadius {
+                                                    voice: Voice::Voice1,
+                                                    value: radius,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Inner Radius slider
+                                        let mut inner_radius = params.inner_radius;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
+                                                    .text("IR")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::InnerRadius {
+                                                    voice: Voice::Voice1,
+                                                    value: inner_radius,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Alpha slider
+                                        let mut alpha = voice1_alpha;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut alpha, 0.0..=1.0)
+                                                    .text("Brightness")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(Command::new(CommandInner::Alpha {
+                                                voice: Voice::Voice1,
+                                                value: alpha,
+                                            }, CommandSource::Ui));
+                                        }
+
+                                        // Volume slider
+                                        let mut volume = voice1_volume;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut volume, 0.0..=1.0)
+                                                    .text("Volume")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(Command::new(CommandInner::Volume {
+                                                voice: Voice::Voice1,
+                                                value: volume,
+                                            }, CommandSource::Ui));
+                                        }
+
+                                        // Strength slider
+                                        let mut strength = params.strength;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut strength, 0.0..=30.0)
+                                                    .text("Force")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Force {
+                                                    voice: Voice::Voice1,
+                                                    value: strength,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Center bias slider
+                                        let mut center_bias = params.center_bias;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut center_bias, 0.0..=2.0)
+                                                    .text("Gravity")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Gravity {
+                                                    voice: Voice::Voice1,
+                                                    value: center_bias,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Angle variation slider
+                                        let mut angle_variation = voice1_angle_variation;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut angle_variation, 0.0..=1.0)
+                                                    .text("Noise")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Noise {
+                                                    voice: Voice::Voice1,
+                                                    value: angle_variation,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Vibration offset slider
+                                        let mut vibration_offset = voice1_vibration_offset;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
+                                                    .text("Vibration")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Vibration {
+                                                    voice: Voice::Voice1,
+                                                    value: vibration_offset,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Feedback slider
+                                        let mut feedback = voice1_feedback;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut feedback, 0.0..=1.0)
+                                                    .text("Feedback")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Feedback {
+                                                    voice: Voice::Voice1,
+                                                    value: feedback,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Center X slider
+                                        let mut center_x = params.center.x;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut center_x, -2000.0..=2000.0)
+                                                    .text("Ctr X"),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterX {
+                                                    voice: Voice::Voice1,
+                                                    value: center_x,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Center Y slider
+                                        let mut center_y = params.center.y;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut center_y, -1100.0..=1100.0)
+                                                    .text("Ctr Y"),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterY {
+                                                    voice: Voice::Voice1,
+                                                    value: center_y,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+                                    } else {
+                                        ui.label("No wind circles found");
+                                        ui.label("1: Create wind circle");
+                                    }
+                                    }); // end Voice 1 scroll area
+                                }); // end Voice 1 column
+
+                                // Voice 2 (col 3) - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Voice 2: Rhythm");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("voice2_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |_ui| {
+                                    }); // end Voice 2 scroll area
+                                }); // end Voice 2 column
+
+                                // Voice 3 - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Voice 3: Rhythm");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("voice3_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
+                                        
+                                        // Voice 3 rhythm controls placeholder
+                                        ui.label("Rhythm controls");
+                                        ui.label("coming soon...");
+                                    }); // end Voice 3 scroll area
+                                }); // end Voice 3 column
+
+                                // Voice 4: Column 5 - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Voice 4: Drone");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("voice4_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
+
+                                    let current_params = voice4_circle_params;
+
+                                    if let Some(params) = current_params {
+                                        ui.add_space(10.0);
+
+                                        // Outer Radius slider
+                                        let mut radius = params.outer_radius;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut radius, 0.0..=1100.0)
+                                                    .text("OR")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::OuterRadius {
+                                                    voice: Voice::Voice4,
+                                                    value: radius,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Inner Radius slider
+                                        let mut inner_radius = params.inner_radius;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
+                                                    .text("IR")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::InnerRadius {
+                                                    voice: Voice::Voice4,
+                                                    value: inner_radius,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Alpha slider
+                                        let mut alpha = voice4_alpha;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut alpha, 0.0..=1.0)
+                                                    .text("Brightness")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(Command::new(CommandInner::Alpha {
+                                                voice: Voice::Voice4,
+                                                value: alpha,
+                                            }, CommandSource::Ui));
+                                        }
+
+                                        // Volume slider
+                                        let mut volume = voice4_volume;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut volume, 0.0..=1.0)
+                                                    .text("Volume")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(Command::new(CommandInner::Volume {
+                                                voice: Voice::Voice4,
+                                                value: volume,
+                                            }, CommandSource::Ui));
+                                        }
+
+                                        // Strength slider
+                                        let mut strength = params.strength;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut strength, 0.0..=30.0)
+                                                    .text("Force")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Force {
+                                                    voice: Voice::Voice4,
+                                                    value: strength,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Center bias slider
+                                        let mut center_bias = params.center_bias;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut center_bias, 0.0..=2.0)
+                                                    .text("Gravity")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Gravity {
+                                                    voice: Voice::Voice4,
+                                                    value: center_bias,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Angle variation slider
+                                        let mut angle_variation = voice4_angle_variation;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut angle_variation, 0.0..=1.0)
+                                                    .text("Noise")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Noise {
+                                                    voice: Voice::Voice4,
+                                                    value: angle_variation,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Position offset slider
+                                        let mut vibration_offset = voice4_vibration_offset;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
+                                                    .text("Vibration")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Vibration {
+                                                    voice: Voice::Voice4,
+                                                    value: vibration_offset,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Feedback slider
+                                        let mut feedback = voice4_feedback;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut feedback, 0.0..=1.0)
+                                                    .text("Feedback")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Feedback {
+                                                    voice: Voice::Voice4,
+                                                    value: feedback,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Center X slider
+                                        let mut center_x = params.center.x;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut center_x, -2000.0..=2000.0)
+                                                    .text("Ctr X"),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterX {
+                                                    voice: Voice::Voice4,
+                                                    value: center_x,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Center Y slider
+                                        let mut center_y = params.center.y;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut center_y, -1100.0..=1100.0)
+                                                    .text("Ctr Y"),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::ForceCenterY {
+                                                    voice: Voice::Voice4,
+                                                    value: center_y,
+                                                }, CommandSource::Ui),
+                                            );
+                                        }
+                                    } else {
+                                        ui.label("No wind circles found");
+                                        ui.label("4: Create wind circle");
+                                    }
+                                    }); // end Voice 4 scroll area
+                                }); // end Voice 4 column
+                            }); // end voices horizontal layout
                         }
+                        0 => {
+                            // NTerminal tab content - two column layout with scrollbars
+                            ui.horizontal(|ui| {
+                                // Left column: Command input and status - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(480.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Terminal Interface");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("terminal_input_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
 
-                        // Inner Radius slider
-                        let mut inner_radius = params.inner_radius;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
-                                    .text("IR")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::InnerRadius {
-                                voice: Voice::Voice1,
-                                value: inner_radius,
-                            });
-                        }
+                                    // Multi-line text input using TextBuffer implementation
+                                    ui.label("Input:");
+                                    ui.add_space(5.0);
+                                    
+                                    // Editable text area using CommandInput as TextBuffer
+                                    egui::Frame::none()
+                                        .fill(egui::Color32::BLACK)
+                                        .stroke(egui::Stroke::new(1.0, egui::Color32::WHITE))
+                                        .inner_margin(egui::style::Margin::symmetric(8.0, 8.0))
+                                        .show(ui, |ui| {
+                                            ui.set_min_size(egui::vec2(280.0, 150.0));
+                                            ui.set_max_height(150.0);
+                    
+                                            egui::ScrollArea::vertical()
+                                                .max_width(380.0)
+                                                .max_height(150.0)
+                                                .show(ui, |ui| {
+                                                    // Use TextEdit with proper Enter key handling
+                                                    let response = ui.add(
+                                                        egui::TextEdit::multiline(&mut model.command_input)
+                                                            .font(egui::TextStyle::Body)
+                                                            .frame(false)
+                                                            .min_size(egui::vec2(280.0, 150.0))
+                                                            .interactive(true)
+                                                            .desired_width(f32::INFINITY)
+                                                            .lock_focus(true)
+                                                            .hint_text("Type command here...")
+                                                    );
 
-                        // Alpha slider
-                        let mut alpha = voice1_alpha;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut alpha, 0.0..=1.0)
-                                    .text("Brightness")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Alpha {
-                                voice: Voice::Voice1,
-                                value: alpha,
-                            });
-                        }
+                                                    // Update terminal display with live command text
+                                                    if response.changed() {
+                                                        model.terminal_manager.borrow_mut().update_from_command_input("main", &model.command_input);
+                                                    }
+                                                    
+                                                    // Handle Enter key press through egui input system
+                                                    // Check for Enter key pressed while the text field has focus
+                                                    if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                                        && model.command_input.is_ready_for_execution() {
+                                                            if let Some(command) = model.command_input.try_execute() {
+                                                                println!("Executing command: {:?}", command);
+                                                                
+                                                                // Execute the command using unified VoiceCommand system
+                                                                match command {
+                                                                    TerminalCommand::CreateDrone(config) => {
+                                                                        let voice_command = config.to_create_command(CommandSource::Terminal);
+                                                                        println!("Queuing CreateDrone command with config: {:?}", config);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::ModifyDrone { voice, config } => {
+                                                                        let voice_enum = Voice::from_i32(voice);
+                                                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
+                                                                        println!("Queuing ModifyDrone command for voice: {:?} with config: {:?}", voice, config);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                }
+                                                                
+                                                                // Clear the input after successful execution
+                                                                model.command_input.clear();
+                                                                
+                                                                // Clear the terminal display
+                                                                model.terminal_manager.borrow_mut().clear_terminal("main");
+                                                            }
+                                                        }
+                                                    
+                                                });
+                                        });
 
-                        // Volume slider
-                        let mut volume = voice1_volume;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut volume, 0.0..=1.0)
-                                    .text("Volume")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Volume {
-                                voice: Voice::Voice1,
-                                value: volume,
-                            });
-                        }
+                                    ui.add_space(10.0);
+                                    
+                                    // Command status display
+                                    ui.horizontal(|ui| {
+                                        ui.label("Status:");
+                                        
+                                        // Priority: Show execution results first
+                                        if let Some(success) = model.command_input.last_success() {
+                                            ui.colored_label(egui::Color32::GREEN, format!("✅ {}", success));
+                                        } else if let Some(error) = model.command_input.last_error() {
+                                            ui.colored_label(egui::Color32::RED, format!("❌ Error: {}", error));
+                                        } else if model.command_input.is_ready_for_execution() {
+                                            ui.colored_label(egui::Color32::LIGHT_GREEN, "Ready to execute (press Enter)");
+                                        } else if model.command_input.is_empty() {
+                                            ui.colored_label(egui::Color32::GRAY, "Ready for input");
+                                        } else {
+                                            ui.colored_label(egui::Color32::YELLOW, "Add semicolon (;) to execute");
+                                        }
+                                    });
+                                    
+                                    // Show formatted display preview
+                                    ui.add_space(5.0);
+                                    ui.label("Preview:");
+                                    ui.add_space(2.0);
+                                    
+                                    egui::Frame::none()
+                                        .fill(egui::Color32::DARK_GRAY)
+                                        .stroke(egui::Stroke::new(1.0, egui::Color32::GRAY))
+                                        .inner_margin(egui::style::Margin::symmetric(6.0, 6.0))
+                                        .show(ui, |ui| {
+                                            let display_text = model.command_input.display();
+                                            if display_text.is_empty() {
+                                                ui.colored_label(egui::Color32::GRAY, "Command preview will appear here...");
+                                            } else {
+                                                ui.label(display_text);
+                                            }
+                                        });
 
-                        // Strength slider
-                        let mut strength = params.strength;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut strength, 0.0..=30.0)
-                                    .text("Force")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Strength {
-                                voice: Voice::Voice1,
-                                value: strength,
-                            });
-                        }
+                                    }); // end left column scroll area
+                                }); // end left column
+                                
+                                ui.separator();
+                                
+                                // Right column: Examples and help - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(480.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Examples");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("terminal_help_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
 
-                        // Center bias slider
-                        let mut center_bias = params.center_bias;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut center_bias, 0.0..=2.0)
-                                    .text("Gravity")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::CenterBias {
-                                voice: Voice::Voice1,
-                                value: center_bias,
-                            });
+                                    for example in
+                                        system4::terminals::command_input::CommandInput::get_examples()
+                                    {
+                                        ui.label(format!("• {}", example));
+                                        ui.add_space(2.0);
+                                    }
+                                    
+                                    ui.add_space(20.0);
+                                    ui.heading("Controls");
+                                    ui.add_space(5.0);
+                                    ui.label("• Type commands and press Enter to add lines");
+                                    ui.label("• Commands ending with ';' will execute");
+                                    ui.label("• Backspace to edit, Escape to clear");
+                                    
+                                    ui.add_space(15.0);
+                                    ui.heading("Syntax Guide");
+                                    ui.add_space(5.0);
+                                    ui.label("• Create: makeDrone(voice).params().begin();");
+                                    ui.label("• Modify: drone(voice).params().set();");
+                                    ui.label("• Parameters:brightness(), volume(), gravity(), etc");
+                                    ui.label("• Values: strings in \"quotes\", numbers");
+                                    }); // end right column scroll area
+                                }); // end right column
+                            }); // end terminal horizontal layout
                         }
-
-                        // Angle variation slider
-                        let mut angle_variation = voice1_angle_variation;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut angle_variation, 0.0..=1.0)
-                                    .text("Noise")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::AngleVariation {
-                                voice: Voice::Voice1,
-                                value: angle_variation,
-                            });
-                        }
-
-                        // Position offset slider
-                        let mut position_offset = voice1_position_offset;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut position_offset, 0.0..=1.0)
-                                    .text("Vibration")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::PositionOffset {
-                                voice: Voice::Voice1,
-                                value: position_offset,
-                            });
-                        }
-
-                        // Feedback slider
-                        let mut feedback = voice1_feedback;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut feedback, 0.0..=1.0)
-                                    .text("Feedback")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Feedback {
-                                voice: Voice::Voice1,
-                                value: feedback,
-                            });
-                        }
-
-                        // Center X slider
-                        let mut center_x = params.center.x;
-                        if ui
-                            .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("Ctr X"))
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::ForceCenterX {
-                                voice: Voice::Voice1,
-                                value: center_x,
-                            });
-                        }
-
-                        // Center Y slider
-                        let mut center_y = params.center.y;
-                        if ui
-                            .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Ctr Y"))
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::ForceCenterY {
-                                voice: Voice::Voice1,
-                                value: center_y,
-                            });
-                        }
-                    } else {
-                        ui.label("No wind circles found");
-                        ui.label("1: Create wind circle");
+                        _ => {}
                     }
-                }); // end Voice 1
-
-                // Voice 2 (col 3)
-                ui.vertical(|ui| {
-                    ui.set_min_width(300.0);
-                    ui.heading("Voice 2: Rhythm");
-                    ui.add_space(5.0);
-                }); // end Voice 2
-
-                // Voice 3
-                ui.vertical(|ui| {
-                    ui.set_min_width(300.0);
-                    ui.heading("Voice 3: Rhythm");
-                    ui.add_space(5.0);
-                }); // end Voice 3
-
-                // Voice 4: Column 5
-                ui.vertical(|ui| {
-                    ui.set_min_width(300.0);
-                    ui.heading("Voice 4: Drone");
-                    ui.add_space(2.0);
-
-                    let current_params = voice4_circle_params;
-
-                    if let Some(params) = current_params {
-                        ui.add_space(10.0);
-
-                        // Outer Radius slider
-                        let mut radius = params.outer_radius;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut radius, 0.0..=1100.0)
-                                    .text("OR")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::OuterRadius {
-                                voice: Voice::Voice4,
-                                value: radius,
-                            });
-                        }
-
-                        // Inner Radius slider
-                        let mut inner_radius = params.inner_radius;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut inner_radius, 0.0..=1100.0)
-                                    .text("IR")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::InnerRadius {
-                                voice: Voice::Voice4,
-                                value: inner_radius,
-                            });
-                        }
-
-                        // Alpha slider
-                        let mut alpha = voice4_alpha;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut alpha, 0.0..=1.0)
-                                    .text("Brightness")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Alpha {
-                                voice: Voice::Voice4,
-                                value: alpha,
-                            });
-                        }
-
-                        // Volume slider
-                        let mut volume = voice4_volume;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut volume, 0.0..=1.0)
-                                    .text("Volume")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Volume {
-                                voice: Voice::Voice4,
-                                value: volume,
-                            });
-                        }
-
-                        // Strength slider
-                        let mut strength = params.strength;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut strength, 0.0..=30.0)
-                                    .text("Force")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Strength {
-                                voice: Voice::Voice4,
-                                value: strength,
-                            });
-                        }
-
-                        // Center bias slider
-                        let mut center_bias = params.center_bias;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut center_bias, 0.0..=2.0)
-                                    .text("Gravity")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::CenterBias {
-                                voice: Voice::Voice4,
-                                value: center_bias,
-                            });
-                        }
-
-                        // Angle variation slider
-                        let mut angle_variation = voice4_angle_variation;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut angle_variation, 0.0..=1.0)
-                                    .text("Noise")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::AngleVariation {
-                                voice: Voice::Voice4,
-                                value: angle_variation,
-                            });
-                        }
-
-                        // Position offset slider
-                        let mut position_offset = voice4_position_offset;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut position_offset, 0.0..=1.0)
-                                    .text("Vibration")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::PositionOffset {
-                                voice: Voice::Voice4,
-                                value: position_offset,
-                            });
-                        }
-
-                        // Feedback slider
-                        let mut feedback = voice4_feedback;
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut feedback, 0.0..=1.0)
-                                    .text("Feedback")
-                                    .custom_formatter(|n, _| format!("{:.3}", n)),
-                            )
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::Feedback {
-                                voice: Voice::Voice4,
-                                value: feedback,
-                            });
-                        }
-
-                        // Center X slider
-                        let mut center_x = params.center.x;
-                        if ui
-                            .add(egui::Slider::new(&mut center_x, -2000.0..=2000.0).text("Ctr X"))
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::ForceCenterX {
-                                voice: Voice::Voice4,
-                                value: center_x,
-                            });
-                        }
-
-                        // Center Y slider
-                        let mut center_y = params.center.y;
-                        if ui
-                            .add(egui::Slider::new(&mut center_y, -1100.0..=1100.0).text("Ctr Y"))
-                            .changed()
-                        {
-                            parameter_changes.push(VoiceParameterChange::ForceCenterY {
-                                voice: Voice::Voice4,
-                                value: center_y,
-                            });
-                        }
-                    } else {
-                        ui.label("No wind circles found");
-                        ui.label("4: Create wind circle");
-                    }
-                }); // end Voice 4
-            });
+                }); // end top-aligned layout
+            }); // end main horizontal layout
         });
 
     drop(ctx);
 
-    // Apply all parameter changes outside the UI closure - no borrowing conflicts!
-    for change in parameter_changes {
-        model.apply_voice_parameter_change(change);
+    // Queue all UI voice commands for priority processing
+    for command in command_queue {
+        model.queue_command(command);
     }
 }
 
@@ -1103,179 +1464,9 @@ fn draw_bounds(app: &App, model: &Model) {
 
 // ************************ OSC   *************************************
 
-fn process_osc(model: &mut Model, commands: Vec<OscCommand>) {
-    let mut parameter_changes = Vec::<VoiceParameterChange>::new();
 
-    for command in commands {
-        match command {
-            OscCommand::MakeDrone {
-                id,
-                alpha,
-                num_particles,
-                force,
-                gravity,
-                trail,
-            } => {
-                make_drone(model, id, alpha, num_particles, force, gravity, trail);
-            }
-            OscCommand::EraseDrone { id } => {
-                erase_drone(model, id);
-            }
-            OscCommand::ParticlesGravity { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::CenterBias { voice, value: val });
-            }
-            OscCommand::ParticlesTrail { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Feedback { voice, value: val });
-            }
-            OscCommand::ParticlesNumParticles { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Volume { voice, value: val });
-            }
-            OscCommand::ParticlesAlpha { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Alpha { voice, value: val });
-            }
-            OscCommand::ParticlesForce { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::Strength { voice, value: val });
-            }
-            OscCommand::ParticlesInnerRadius { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::InnerRadius { voice, value: val });
-            }
-            OscCommand::ParticlesOuterRadius { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::OuterRadius { voice, value: val });
-            }
-            OscCommand::ParticlesNoise { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::AngleVariation { voice, value: val });
-            }
-            OscCommand::ParticlesVibration { id, val } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::PositionOffset { voice, value: val });
-            }
-            OscCommand::MaskChangeBounds {
-                id,
-                x,
-                y,
-                w,
-                h,
-                duration,
-            } => {
-                let voice = Voice::from_i32(id);
-                parameter_changes.push(VoiceParameterChange::MaskChangeBounds {
-                    voice,
-                    rect: Rect::from_x_y_w_h(x as f32, y as f32, w as f32, h as f32),
-                    duration,
-                })
-            }
-            _ => {}
-        }
-    }
 
-    // Apply all OSC parameter changes using the same unified system as UI
-    for change in parameter_changes {
-        model.apply_voice_parameter_change(change);
-    }
-}
-
-/// Start the Voice and begin "make drone" automated display
-#[allow(clippy::too_many_arguments)]
-fn make_drone(
-    model: &mut Model,
-    id: i32,
-    alpha: i32,
-    num_particles: i32,
-    force: i32,
-    gravity: i32,
-    trail: i32,
-) {
-    let voice = Voice::from_i32(id);
-    let center = match voice {
-        Voice::Voice1 => pt2(-1280.0, 200.0),
-        Voice::Voice4 => pt2(1280.0, 200.0),
-        _ => pt2(0.0, 0.0),
-    };
-    let (outer_radius, inner_radius) = (620.0, 200.0);
-    let center_bias = (gravity as f32) / 100.0;
-    let strength = ((force as f32) / 100.0) + 10.0;
-
-    let circle = WindCircle::new(
-        model.id_generator.generate(),
-        voice,
-        center,
-        outer_radius,
-        inner_radius,
-        strength,
-        center_bias,
-    );
-
-    // Create the drone / circle
-    let mask_rect = model.particle_system.make_drone_with(
-        &mut model.id_generator,
-        voice,
-        circle,
-        alpha,
-        num_particles,
-        trail,
-    );
-
-    let num_lines = TERMINAL_NUM_LINES;
-    let line_margin = TERMINAL_LINE_MARGIN;
-    let font_size = 40;
-    let terminal_height = (font_size as f32 + line_margin * 2.0) * num_lines as f32;
-
-    // Position terminal: mask bottom - half terminal height - 20pt padding
-    let terminal_origin = vec2(
-        mask_rect.x() as f32, // Center horizontally with mask
-        mask_rect.bottom() - terminal_height / 2.0 - 30.0, // Position below mask with padding
-    );
-    println!("terminal_origin: {:?}", terminal_origin);
-
-    // Create the terminal
-    let terminal_params = TerminalParams {
-        origin: terminal_origin,
-        num_lines,
-        line_width: mask_rect.w(),
-        line_margin,
-        start_color: rgba(
-            TERMINAL_START_RGBA.0,
-            TERMINAL_START_RGBA.1,
-            TERMINAL_START_RGBA.2,
-            TERMINAL_START_RGBA.3,
-        ),
-        end_color: rgba(
-            TERMINAL_END_RGBA.0,
-            TERMINAL_END_RGBA.1,
-            TERMINAL_END_RGBA.2,
-            TERMINAL_END_RGBA.3,
-        ),
-        color_fade_secs: 2.0,
-        chars_per_second: TERMINAL_CHARS_PER_SECOND,
-        font: model.font.clone(),
-        font_size,
-    };
-    let Some(terminal) =
-        model
-            .terminal_system
-            .add_new_terminal(voice, terminal_params, model.dpi_scale)
-    else {
-        println!("Failed to add terminal for player {}", voice);
-        return;
-    };
-
-    // Normalizing and naming mess
-    let brightness = (alpha as f32) / 100.0;
-    let volume = (num_particles as f32) / 100.0;
-    let trail = (trail as f32) / 100.0;
-
-    terminal.begin_start_sequence(brightness, volume, strength, center_bias, trail);
-}
-
-fn erase_drone(model: &mut Model, id: i32) {
+fn _erase_drone(model: &mut Model, id: i32) {
     let voice = Voice::from_i32(id);
     model.particle_system.kill_voice(&voice);
     model.particle_system.forces.recalculate_once();
@@ -1284,6 +1475,7 @@ fn erase_drone(model: &mut Model, id: i32) {
 
 /// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn set_macos_window_behavior(window: &Window) {
     use nannou::winit::platform::macos::WindowExtMacOS;
     // removed the NSUInteger type below because it's just an alias for usize.

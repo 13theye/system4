@@ -40,7 +40,7 @@ height = 617
 
 [control_window]
 # The size of the control window UI.
-width = 1440
+width = 1512
 height = 270
 
 [particles]

@@ -9,10 +9,12 @@ use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 use rayon::prelude::*;
 
+use crate::particle::emitter::FullScreenRandomEmitter;
 use crate::{
     forces::{ForceFields, WindCircle},
     model::GpuBuffers,
     particle::{EmitDirection, Emitter, LinearEmitter, Particle, PointEmitter},
+    terminals::commands::drone::DroneConfig,
     utils::IdGenerator,
     view::Mask,
     voice::Voice,
@@ -45,7 +47,7 @@ pub struct ParticleSystem {
     default_particle_size: f32,
     default_particle_color: Rgb,
 
-    // OSC params
+    // modifiable params
     pub alpha_limits: HashMap<Voice, f32>, // scale the alpha of the particles
     pub color_limits: HashMap<Voice, Rgb>,
     pub particle_num_factors: HashMap<Voice, f32>, // normalized proportion of particle_limit
@@ -59,7 +61,7 @@ pub struct ParticleSystem {
     pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
 
     // Position offset parameters
-    pub position_offset_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
+    pub vibration_factors: HashMap<Voice, f32>, // factor 0.0-1.0 for position vibration
 }
 
 impl ParticleSystem {
@@ -107,35 +109,63 @@ impl ParticleSystem {
             mass_variation_amount: 0.05, // 5% variation by default
 
             // Initialize position offset parameters
-            position_offset_factors: HashMap::new(),
+            vibration_factors: HashMap::new(),
         }
     }
 
     /********************* Make drone ********************************** */
 
     // Create a drone with a mask and emitters. Return the mask's rect
-    pub fn make_drone_with(
+    pub fn begin_voice(
         &mut self,
         id_generator: &mut IdGenerator,
         voice: Voice,
-        circle: WindCircle,
-        alpha: i32,
-        num_particles: i32,
-        trail: i32,
+        config: &DroneConfig,
     ) -> Rect {
+        // Apply defaults for create operations
+        let (default_center_x, default_center_y) = match config.voice {
+            1 => (-1280.0, 0.0),
+            4 => (1280.0, 0.0),
+            _ => (0.0, 0.0),
+        };
+
+        // Extract config or use defaults
+        let brightness = config.brightness.unwrap_or(0.7);
+        let volume = config.volume.unwrap_or(0.5);
+        let gravity = config.gravity.unwrap_or(0.0);
+        let force = config.force.unwrap_or(10.0);
+        let feedback = config.feedback.unwrap_or(0.0);
+        let outer_radius = config.outer_radius.unwrap_or(800.0);
+        let inner_radius = config.inner_radius.unwrap_or(200.0);
+        let center_x = config.center_x.unwrap_or(default_center_x);
+        let center_y = config.center_y.unwrap_or(default_center_y);
+        let noise = config.noise.unwrap_or(0.0);
+        let vibration = config.vibration.unwrap_or(0.0);
+
+        // WindCircle creation
+        let center = vec2(center_x, center_y);
+        let circle = WindCircle::new(
+            id_generator.generate(),
+            voice,
+            center,
+            outer_radius,
+            inner_radius,
+            force,
+            gravity,
+            noise,
+        );
+
         if self.masks.contains_key(&voice) {
             self.masks.remove(&voice);
         }
 
         let mask = Mask::make_drone(voice);
 
-        let emitter_left_origin = vec2(mask.rect.left() - 20.0, mask.origin.y);
-        let emitter_right_origin = vec2(mask.rect.right() + 20.0, mask.origin.y);
+        // Create particle emitters
 
-        let max_particle_percentage = (num_particles as f32) / 100.0;
         let spawn_rate_factor = 1.0;
 
-        // Create particle emitters
+        /*
         let emitter_left = LinearEmitter::new(
             id_generator.generate(),
             voice,
@@ -163,21 +193,29 @@ impl ParticleSystem {
             self.global_max_spawn_rate,
             spawn_rate_factor,
         );
+         */
+
+        let fullscreen_rect = Rect::from_x_y_w_h(0.0, 0.0, 3840.0, 2160.0);
+        let emitter_full = FullScreenRandomEmitter::new(
+            id_generator.generate(),
+            voice,
+            fullscreen_rect,
+            self.global_max_spawn_rate,
+            spawn_rate_factor,
+        );
 
         // Add the emitters
-        self.emitters.push(Box::new(emitter_left)); //emitter_left);
-        self.emitters.push(Box::new(emitter_right));
-        self.emitters.push(Box::new(emitter_center));
+        //self.emitters.push(Box::new(emitter_left)); //emitter_left);
+        //self.emitters.push(Box::new(emitter_right));
+        //self.emitters.push(Box::new(emitter_center));
+        self.emitters.push(Box::new(emitter_full));
 
         // Set the particle system params
-        let alpha_limit = (alpha as f32) / 100.0;
-        self.alpha_limits.insert(voice, alpha_limit);
         self.color_limits.insert(voice, self.default_particle_color);
-
-        self.particle_num_factors
-            .insert(voice, max_particle_percentage);
-        //self.num_particles = 1.0;
-        self.trail = (trail as f32) / 100.0;
+        self.set_alpha_limit(&voice, brightness);
+        self.set_volume(&voice, volume);
+        self.set_feedback(&voice, feedback);
+        self.set_vibration_factor(&voice, vibration);
 
         // Add the wind circle to the forces
         self.forces.add_wind_circle(circle);
@@ -217,7 +255,7 @@ impl ParticleSystem {
         let position_offset_factors: HashMap<Voice, f32> = self
             .particles
             .keys()
-            .map(|voice| (*voice, self.get_position_offset_factor(*voice)))
+            .map(|voice| (*voice, self.get_vibration_factor(*voice)))
             .collect();
 
         for (voice, particles) in self.particles.iter_mut() {
@@ -253,11 +291,11 @@ impl ParticleSystem {
 
             // Pre-compute position offset random signs for all particles in this voice
             let position_offset_factor = position_offset_factors.get(voice).copied().unwrap_or(0.0);
-            let position_offset_signs: Vec<f32> = if position_offset_factor > 0.0 {
+            let position_offsets: Vec<f32> = if position_offset_factor > 0.0 {
                 use nannou::rand::Rng;
                 particles
                     .iter()
-                    .map(|_| if rng.gen::<bool>() { 1.0 } else { -1.0 })
+                    .map(|_| rng.gen_range(-position_offset_factor..position_offset_factor))
                     .collect()
             } else {
                 vec![0.0; particles.len()]
@@ -280,10 +318,7 @@ impl ParticleSystem {
                         {
                             let normal =
                                 vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
-                            normal
-                                * MAX_POSITION_OFFSET
-                                * position_offset_factor
-                                * position_offset_signs[index]
+                            normal * MAX_POSITION_OFFSET * position_offsets[index]
                         } else {
                             vec2(0.0, 0.0)
                         };
@@ -295,7 +330,7 @@ impl ParticleSystem {
                             particle.kill();
                         }
 
-                        if particle.is_alive() && particle.is_within_rect(mask.rect) {
+                        if particle.is_alive() && particle.is_activated() {
                             Some((
                                 particle.to_gpu_with_offset(offset),
                                 particle.to_segment_gpu(),
@@ -456,20 +491,17 @@ impl ParticleSystem {
         self.mass_variation_amount
     }
 
-    /********************* Position Offset methods ********************************** */
+    /********************* Vibration (Position Offset) methods ********************************** */
 
     /// Set the position offset factor for a given voice
-    pub fn set_position_offset_factor(&mut self, voice: &Voice, factor: f32) {
-        let clamped_factor = factor.clamp(0.0, 1.0);
-        self.position_offset_factors.insert(*voice, clamped_factor);
+    pub fn set_vibration_factor(&mut self, voice: &Voice, vibration: f32) {
+        let clamped_vibration = vibration.clamp(0.0, 1.0);
+        self.vibration_factors.insert(*voice, clamped_vibration);
     }
 
     /// Get the position offset factor for a given voice (defaults to 0.0 if not set)
-    pub fn get_position_offset_factor(&self, voice: Voice) -> f32 {
-        self.position_offset_factors
-            .get(&voice)
-            .copied()
-            .unwrap_or(0.0)
+    pub fn get_vibration_factor(&self, voice: Voice) -> f32 {
+        self.vibration_factors.get(&voice).copied().unwrap_or(0.0)
     }
 
     /********************* Accessor/Helper methods ********************************** */

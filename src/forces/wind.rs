@@ -40,6 +40,9 @@ impl Wind {
 
     /// Apply the Wind to a Particle with mass variation factor
     pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
+        // Activate the particle if not already
+        particle.activate();
+
         // Calculate the x and y components of particle's current velocity
         let particle_vx = particle.velocity.x;
         let particle_vy = particle.velocity.y;
@@ -77,6 +80,9 @@ pub struct WindCell {
     winds: HashMap<usize, Wind>,
     combined_wind: Option<Wind>,
     origin: Vec2,
+
+    #[allow(dead_code)]
+    // rect is used for debugging
     rect: Rect,
     needs_update: bool,
 }
@@ -261,8 +267,8 @@ impl WindField {
                 let mut combined_variation = 0.0f32;
                 let mut variation_count = 0;
 
-                for (&circle_id, _) in &cell.winds {
-                    if let Some(variations) = cell_variations.get(&circle_id) {
+                for circle_id in cell.winds.keys() {
+                    if let Some(variations) = cell_variations.get(circle_id) {
                         if let Some(&variation) = variations.get(index) {
                             combined_variation += variation;
                             variation_count += 1;
@@ -466,6 +472,7 @@ impl WindCircle {
         width: f32,
         strength: f32,
         center_bias: f32,
+        noise: f32,
     ) -> Self {
         let config = WindCircleParams {
             center,
@@ -473,7 +480,7 @@ impl WindCircle {
             inner_radius: width,
             strength,
             center_bias,
-            angle_variation: 0.0, // Default to no vibration
+            noise,
             dirty: true,
         };
         Self {
@@ -691,7 +698,7 @@ pub struct WindCircleParams {
     /// 0.0 = purely tangential, 1.0 = purely radial inward, 2.0 = tangential in the opposite direction
     pub center_bias: f32,
     /// 0.0-1.0 factor for random angle variation, where 1.0 = full ±90° deviation
-    pub angle_variation: f32,
+    pub noise: f32,
     /// True if settings changed and cells need recalculation
     pub dirty: bool,
 }
@@ -738,10 +745,10 @@ impl WindCircleParams {
     }
 
     /// Set the angle variation of the WindCircle
-    pub fn set_angle_variation(&mut self, angle_variation: f32) {
-        let clamped_variation = angle_variation.clamp(0.0, 1.0);
-        if self.angle_variation != clamped_variation {
-            self.angle_variation = clamped_variation;
+    pub fn set_noise(&mut self, noise: f32) {
+        let clamped_noise = noise.clamp(0.0, 1.0);
+        if self.noise != clamped_noise {
+            self.noise = clamped_noise;
             self.dirty = true;
         }
     }

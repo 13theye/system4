@@ -6,9 +6,9 @@ use crate::{
     fps::FpsManager,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
-    terminals::TerminalSystem,
+    terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
-    voice::Voice,
+    voice::{controller::Command, Voice},
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
@@ -23,8 +23,6 @@ pub type GpuBuffers = (Vec<ParticleGpu>, Vec<SegmentGpu>);
 
 pub struct Model {
     pub particle_system: ParticleSystem,
-
-    pub terminal_system: TerminalSystem,
 
     // OSC
     pub osc: OscController,
@@ -80,6 +78,18 @@ pub struct Model {
     // Debug stuff
     pub show_bounds: bool,
     pub show_forces: bool,
+
+    // Command input for NTerminal
+    pub command_input: CommandInput,
+
+    // Terminal view manager for on-screen display
+    pub terminal_manager: RefCell<TerminalViewManager>,
+
+    // Unified command queue with priority resolution
+    pub command_queue: Vec<Command>,
+
+    // UI state
+    pub active_tab: usize, // 0 = Voices, 1 = NTerminal
 }
 
 impl Drop for Model {
