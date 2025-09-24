@@ -9,7 +9,7 @@ const PARTICLE_MASS: f32 = 11.0;
 const PARTICLE_LIFE_SPAN: f32 = 900.0;
 const FADE_IN_DURATION: f32 = 180.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
-const FEEDBACK_POSITIONS: usize = 256;
+const FEEDBACK_POSITIONS: usize = 128;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
@@ -159,9 +159,9 @@ impl Particle {
         */
     }
 
-    /// True if the particle is out of bounds, with a buffer of 1000 pixels
+    /// True if the particle is out of bounds, with a buffer
     pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {
-        let buffer = 1000.0;
+        let buffer = 1500.0;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer
             || self.position.y < bounds_rect.bottom() - buffer
@@ -234,28 +234,19 @@ impl Particle {
     }
 
     /********************* Convert to GPU *********************/
-    pub fn to_gpu(&self) -> ParticleGpu {
+    pub fn to_gpu(&self, offset: Vec2) -> ParticleGpu {
         ParticleGpu::new(
-            [self.position.x, self.position.y],
+            [self.position.x + offset.x, self.position.y + offset.y],
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,
         )
     }
 
-    pub fn to_gpu_with_offset(&self, offset: Vec2) -> ParticleGpu {
-        let offset_position = self.position + offset;
-        ParticleGpu::new(
-            [offset_position.x, offset_position.y],
-            [self.rgba.red, self.rgba.green, self.rgba.blue],
-            self.rgba.alpha,
-        )
-    }
-
-    pub fn to_segment_gpu(&self, segment_length: f32, line_width: f32) -> SegmentGpu {
+    pub fn to_segment_gpu(&self, offset: Vec2, segment_length: f32, line_width: f32) -> SegmentGpu {
         let mut points = [[0.0f32; 2]; FEEDBACK_POSITIONS];
 
         // First point is current position
-        points[0] = [self.position.x, self.position.y];
+        points[0] = [self.position.x + offset.x, self.position.y + offset.y];
 
         // Fill remaining points from feedback positions
         let mut last_valid_pos = [self.position.x, self.position.y];
@@ -269,12 +260,17 @@ impl Particle {
             }
         }
 
+        // Calculate actual history length from particle age, ensuring it's at least 1
+        // and doesn't exceed the maximum feedback positions
+        let actual_history_length = (self.age as u32).clamp(1, FEEDBACK_POSITIONS as u32);
+
         SegmentGpu::new(
             points,
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,
             segment_length,
             line_width,
+            actual_history_length,
         )
     }
 }

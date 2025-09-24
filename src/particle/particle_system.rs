@@ -192,8 +192,8 @@ impl ParticleSystem {
 
                         if particle.is_alive() && particle.is_activated() {
                             Some((
-                                particle.to_gpu_with_offset(offset),
-                                particle.to_segment_gpu(segment_length, segment_line_width),
+                                particle.to_gpu(offset),
+                                particle.to_segment_gpu(offset, segment_length, segment_line_width),
                             ))
                         } else {
                             None
