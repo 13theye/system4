@@ -732,21 +732,21 @@ pub fn erase_drone_command(voice: VoiceId, source: CommandSource) -> Command {
 
 /********** Functions for changing renderer properties ***************** */
 
-/// Update the "Feedback" feature because it's owned by the model's renderer
-pub fn update_feedback(model: &mut Model, device: &Device, queue: &Queue) {
+/// Update the "Feedback" feature by setting segment length in voice parameters
+pub fn update_feedback(model: &mut Model, _device: &Device, _queue: &Queue) {
     // Read feedback value for segment length before updating particle system
     let voice1_feedback = model.get_feedback(VoiceId::Voice1);
     let voice4_feedback = model.get_feedback(VoiceId::Voice4);
 
     // Update segment length based on Voice1 feedback slider
-    model
-        .segment_renderer1
-        .set_segment_length(device, queue, voice1_feedback);
+    if let Some(voice1) = model.voices.get_mut(&VoiceId::Voice1) {
+        voice1.set_segment_length(voice1_feedback);
+    }
 
     // Update segment length based on Voice4 feedback slider
-    model
-        .segment_renderer4
-        .set_segment_length(device, queue, voice4_feedback);
+    if let Some(voice4) = model.voices.get_mut(&VoiceId::Voice4) {
+        voice4.set_segment_length(voice4_feedback);
+    }
 }
 
 // Implement VoiceValidator trait for Model to enable centralized validation

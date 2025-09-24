@@ -251,7 +251,7 @@ impl Particle {
         )
     }
 
-    pub fn to_segment_gpu(&self) -> SegmentGpu {
+    pub fn to_segment_gpu(&self, segment_length: f32, line_width: f32) -> SegmentGpu {
         let mut points = [[0.0f32; 2]; FEEDBACK_POSITIONS];
 
         // First point is current position
@@ -273,6 +273,8 @@ impl Particle {
             points,
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,
+            segment_length,
+            line_width,
         )
     }
 }

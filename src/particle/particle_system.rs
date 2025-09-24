@@ -109,15 +109,27 @@ impl ParticleSystem {
             .collect();
 
         for (voice_id, particles) in self.particles.iter_mut() {
-            let color_limit = voices.get(voice_id).map(|v| v.params.color_limit);
-            let alpha_limit = voices.get(voice_id).map(|v| v.params.alpha_limit);
+            let voice = voices.get(voice_id);
+            let color_limit = voice.map(|v| v.params.color_limit);
+            let alpha_limit = voice.map(|v| v.params.alpha_limit);
+            let segment_length = voice.map(|v| v.params.segment_length);
+            let segment_line_width = voice.map(|v| v.params.segment_line_width);
 
             // Skip if no limits for this voice
-            if color_limit.is_none() || alpha_limit.is_none() {
+            if color_limit.is_none()
+                || alpha_limit.is_none()
+                || segment_length.is_none()
+                || segment_line_width.is_none()
+            {
                 continue;
             }
 
-            let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
+            let (color_limit, alpha_limit, segment_length, segment_line_width) = (
+                color_limit.unwrap(),
+                alpha_limit.unwrap(),
+                segment_length.unwrap(),
+                segment_line_width.unwrap(),
+            );
 
             // Ensure buffer exists for this voice
             let sgpu_buf = gpu_segment_buffers
@@ -181,7 +193,7 @@ impl ParticleSystem {
                         if particle.is_alive() && particle.is_activated() {
                             Some((
                                 particle.to_gpu_with_offset(offset),
-                                particle.to_segment_gpu(),
+                                particle.to_segment_gpu(segment_length, segment_line_width),
                             ))
                         } else {
                             None

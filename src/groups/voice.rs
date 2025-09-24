@@ -19,6 +19,8 @@ pub struct VoiceParams {
     pub color_limit: Rgb,
     pub feedback: f32,
     pub vibration: f32,
+    pub segment_length: f32,
+    pub segment_line_width: f32,
 }
 
 impl Default for VoiceParams {
@@ -31,6 +33,8 @@ impl Default for VoiceParams {
             color_limit: Rgb::new(0.0, 0.0, 0.0),
             feedback: 0.0,
             vibration: 0.0,
+            segment_length: 1.0,
+            segment_line_width: 2.0,
         }
     }
 }
@@ -188,6 +192,14 @@ impl Voice {
 
     pub fn set_vibration(&mut self, value: f32) {
         self.params.vibration = value;
+    }
+
+    pub fn set_segment_length(&mut self, value: f32) {
+        self.params.segment_length = value;
+    }
+
+    pub fn set_segment_line_width(&mut self, value: f32) {
+        self.params.segment_line_width = value;
     }
 
     fn recalculate_emitters(&mut self) {

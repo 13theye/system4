@@ -60,8 +60,7 @@ pub struct Model {
     pub heatmap_renderer: HeatmapRenderer,
     pub particle_renderer1: ParticleRenderer,
     //pub particle_renderer4: ParticleRenderer,
-    pub segment_renderer1: SegmentRenderer,
-    pub segment_renderer4: SegmentRenderer,
+    pub segment_renderer: SegmentRenderer,
     pub dpi_scale: f32,
     pub font: Font,
 

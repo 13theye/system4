@@ -7,7 +7,7 @@
 
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
-use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentParams, SegmentRenderer};
+use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
 use thread_priority::*;
 
@@ -23,7 +23,7 @@ use system4::{
     fps::FpsManager,
     model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand, CompositeCommand}},
     osc::{OscController, OscSender},
-    particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER, EMPTY_GPU_SEGMENT_BUFFER},
+    particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
     terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
     groups::VoiceId,
@@ -200,9 +200,7 @@ fn model(app: &App) -> Model {
     //let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
 
     // Create segment renderer
-    let segment_params = SegmentParams::new(1.0, 2.0);
-    let segment_renderer1 = SegmentRenderer::new(device, hi_config, 25000, segment_params);
-    let segment_renderer4 = SegmentRenderer::new(device, hi_config, 25000, segment_params);
+    let segment_renderer = SegmentRenderer::new(device, hi_config, 25000);
 
     // Create pipeline textures
     rendering.create_named_texture(device, "terminal", hi_config);
@@ -373,8 +371,7 @@ fn model(app: &App) -> Model {
         particle_renderer1,
         //particle_renderer4,
 
-        segment_renderer1,
-        segment_renderer4,
+        segment_renderer,
 
         egui,
         rng,
@@ -465,11 +462,13 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // Retrieve buffer or use empty buffer
         let _empty_gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
-        let empty_gpu_segment_buffer = EMPTY_GPU_SEGMENT_BUFFER;
-        let gpu_particle_buffer = &model
-            .gpu_particle_buffer;
-        let gpu_segment_buffer_1 = model.gpu_segment_buffers.get(&VoiceId::Voice1).unwrap_or(&empty_gpu_segment_buffer);
-        let gpu_segment_buffer_4 = model.gpu_segment_buffers.get(&VoiceId::Voice4).unwrap_or(&empty_gpu_segment_buffer);
+        let gpu_particle_buffer = &model.gpu_particle_buffer;
+
+        // Combine all segment buffers into a single vector
+        let mut combined_segment_buffer: Vec<SegmentGpu> = Vec::new();
+        for voice_buffer in model.gpu_segment_buffers.values() {
+            combined_segment_buffer.extend(voice_buffer.iter().cloned());
+        }
 
 
         // Encode particles
@@ -489,17 +488,10 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         );
          */
 
-        model.segment_renderer1.encode_into(
+        model.segment_renderer.encode_into(
             &mut encoder,
             queue,
-            gpu_segment_buffer_1,
-            rendering.get_named_texture("particles").unwrap(),
-        );
-
-        model.segment_renderer4.encode_into(
-            &mut encoder,
-            queue,
-            gpu_segment_buffer_4,
+            &combined_segment_buffer,
             rendering.get_named_texture("particles").unwrap(),
         );
 
