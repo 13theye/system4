@@ -61,7 +61,7 @@ impl DroneParametersDisplay {
 
         // Add Wind Circles separator
         terminal_view.update_line_at_index(line_index, "--- Forces ---", false);
-        line_index += 1;
+        //line_index += 1;
 
         Self {
             terminal_view,
@@ -266,16 +266,13 @@ impl DroneParametersDisplay {
         }
 
         // Update the parameter
-        self.circle_parameters
-            .entry(circle_id)
-            .or_insert_with(HashMap::new)
-            .insert(
-                name.to_string(),
-                ParameterUpdate {
-                    value,
-                    last_updated: timestamp,
-                },
-            );
+        self.circle_parameters.entry(circle_id).or_default().insert(
+            name.to_string(),
+            ParameterUpdate {
+                value,
+                last_updated: timestamp,
+            },
+        );
 
         self.update_circle_parameter_line(circle_id, name, value, timestamp);
     }

@@ -6,7 +6,9 @@ use crate::groups::VoiceId;
 use nannou::prelude::*;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const SIDE_MARGIN: f32 = 100.0;
+#[allow(dead_code)]
 const TOP_BOTTOM_MARGIN: f32 = 300.0;
 
 #[derive(Debug, Clone)]

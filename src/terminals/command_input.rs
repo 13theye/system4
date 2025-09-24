@@ -106,7 +106,7 @@ impl CommandInput {
 
     /// Get the last success message if any
     pub fn last_success(&self) -> Option<&str> {
-        self.last_success.as_ref().map(|s| s.as_str())
+        self.last_success.as_deref()
     }
 
     /// Check if there's a pending command ready for execution

@@ -2,8 +2,8 @@
 ///
 /// Force field for field-based forces
 use nannou::prelude::*;
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use crate::{
@@ -29,10 +29,16 @@ pub struct ForceFields {
     //pub wind_circles: Vec<WindCircle>,
 
     // Origin in the World Coordinate Space
+    // Kept for future use
+    #[allow(dead_code)]
     origin: Vec2,
+    #[allow(dead_code)]
     bounds_size: Vec2,
+    #[allow(dead_code)]
     grid_cols: usize,
+    #[allow(dead_code)]
     grid_rows: usize,
+    #[allow(dead_code)]
     cell_size: Vec2,
 }
 

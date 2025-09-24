@@ -594,6 +594,7 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
 
 // ******************************* Input Capture *****************************
 
+#[allow(dead_code)]
 fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     // For now, all human boards are controlled by the same keyboard
     match key {

@@ -121,11 +121,19 @@ impl TerminalViewManager {
 
 /// View of a Terminal
 pub struct TerminalView {
+    // Text of each line
     lines: Vec<Option<Line>>,
+    // Position of each line
     line_positions: Vec<Vec2>,
-
-    voice: VoiceId,
+    // Terminal style parameters
     params: TerminalViewParams,
+
+    // Voice that this Terminal is associated with
+    #[allow(dead_code)]
+    voice: VoiceId,
+
+    // Rect of this Terminal
+    #[allow(dead_code)]
     rect: Rect,
 }
 
