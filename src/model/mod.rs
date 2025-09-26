@@ -11,6 +11,7 @@ use crate::{
     model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
+    services::sequencer::SequencerService,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
 };
@@ -20,6 +21,7 @@ use nnpipe::renderers::{
     HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
 };
 use nnpipe::*;
+use prat::clockservice::ClockService;
 
 use std::{cell::RefCell, collections::HashMap};
 
@@ -30,6 +32,10 @@ pub struct Model {
     pub particle_system: ParticleSystem,
 
     pub voices: HashMap<VoiceId, Voice>,
+
+    // Clock and Sequencers
+    pub clock: ClockService,
+    pub sequencer_service: SequencerService,
 
     // OSC
     pub osc: OscController,

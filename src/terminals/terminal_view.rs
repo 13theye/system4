@@ -29,12 +29,7 @@ impl TerminalViewManager {
         }
     }
 
-    pub fn add_new_terminal_view(
-        &mut self,
-        name: &str,
-        voice: VoiceId,
-        params: TerminalViewParams,
-    ) {
+    pub fn new_terminal_view(&mut self, name: &str, voice: VoiceId, params: TerminalViewParams) {
         let terminal_view = TerminalView::new(voice, params);
         self.terminal_views.insert(name.to_owned(), terminal_view);
     }
@@ -57,7 +52,7 @@ impl TerminalViewManager {
     }
 
     /// Clear a specific terminal view
-    pub fn clear_terminal(&mut self, name: &str) {
+    pub fn clear_terminal_view(&mut self, name: &str) {
         let Some(terminal_view) = self.terminal_views.get_mut(name) else {
             return;
         };
@@ -66,12 +61,12 @@ impl TerminalViewManager {
     }
 
     /// Get a terminal view for direct access
-    pub fn get_terminal_view(&mut self, name: &str) -> Option<&mut TerminalView> {
+    pub fn get_mut_terminal_view(&mut self, name: &str) -> Option<&mut TerminalView> {
         self.terminal_views.get_mut(name)
     }
 
     /// Get a terminal view for display/drawing (immutable access)
-    pub fn get_terminal_view_for_display(&self, name: &str) -> Option<&TerminalView> {
+    pub fn get_terminal_view(&self, name: &str) -> Option<&TerminalView> {
         self.terminal_views.get(name)
     }
 
@@ -96,7 +91,7 @@ impl TerminalViewManager {
     }
 
     /// Get a drone parameter display for a specific voice
-    pub fn get_drone_parameters_display(
+    pub fn get_mut_drone_parameters_display(
         &mut self,
         voice: VoiceId,
     ) -> Option<&mut DroneParametersDisplay> {
@@ -104,10 +99,7 @@ impl TerminalViewManager {
     }
 
     /// Get a drone parameter display for display/drawing (immutable access)
-    pub fn get_drone_parameters_display_for_display(
-        &self,
-        voice: VoiceId,
-    ) -> Option<&DroneParametersDisplay> {
+    pub fn get_drone_parameters_display(&self, voice: VoiceId) -> Option<&DroneParametersDisplay> {
         self.drone_parameter_displays.get(&voice)
     }
 

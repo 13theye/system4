@@ -9,6 +9,7 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
+use prat::clockservice::ClockService;
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -24,6 +25,7 @@ use system4::{
     model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand, CompositeCommand}},
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
+    services::sequencer::SequencerService,
     terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
     utils::IdGenerator,
     groups::VoiceId,
@@ -46,6 +48,27 @@ fn model(app: &App) -> Model {
     );
 
     let render_rect = Rect::from_x_y_w_h(0.0, 0.0, render_size.x, render_size.y);
+
+    // Init clock
+    let mut clock = ClockService::with()
+        .tempo(config.speed.bpm as f64)
+        .quantum(4.0)
+        .ppqn(24)
+        .enable_ticks()
+        .thread_priority(47)
+        .build();
+    // Start the clock thread or quit game if it fails
+    clock
+        .start_thread()
+        .expect("\nSystem4: fatal error: Failed to start clock thread");
+
+    clock
+        .start_clock()
+        .expect("System4: fatal error: Failed to start clock");
+
+    let sequencer_service = SequencerService::with_clock_and_osc_config(&clock, &config.osc_send)
+        .build()
+        .expect("System4: fatal error: Failed to build sequencer service");
 
     let osc = OscController::new(config.osc_receive.receive_port).unwrap();
     let osc_send = OscSender::new(&config.osc_send).unwrap();
@@ -311,7 +334,7 @@ fn model(app: &App) -> Model {
         justification: TextJustification::TopLeft,
     };
     
-    terminal_manager.add_new_terminal_view("main", VoiceId::Voice1, terminal_params);
+    terminal_manager.new_terminal_view("main", VoiceId::Voice1, terminal_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
@@ -348,6 +371,8 @@ fn model(app: &App) -> Model {
     Model {
         particle_system,
         voices: HashMap::new(),
+        clock,
+        sequencer_service,
         osc,
         osc_send,
         osc_loop,
@@ -520,7 +545,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         }
 
         // Update and draw terminal view as overlay on top of post-processed texture
-        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_terminal_view("main") {
+        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {
             terminal_view.update(&rendering.draw);
         }
 
@@ -1409,7 +1434,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 model.command_input.clear();
                                                                 
                                                                 // Clear the terminal display
-                                                                model.terminal_manager.borrow_mut().clear_terminal("main");
+                                                                model.terminal_manager.borrow_mut().clear_terminal_view("main");
                                                             }
                                                         }
                                                     

@@ -31,6 +31,20 @@ impl OscSender {
         })
     }
 
+    /// Sends a beat message
+    pub fn send_rhythm(&self, voice_id: i32, capacity: i32, wings: i32, beat: i32) {
+        let addr = "/sys4/rhythm".to_string();
+        let args = vec![
+            osc::Type::Int(voice_id),
+            osc::Type::Int(wings),
+            osc::Type::Int(capacity),
+            osc::Type::Int(beat),
+        ];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
     // Callback message when drone initialization is done
     pub fn send_drone_on_off(&self, voice_id: i32, val: i32) {
         let addr = "/sys4/droneOnOff".to_string();
@@ -55,6 +69,15 @@ impl OscSender {
             .send((addr, args), (self.target_addr.as_str(), self.target_port))
             .ok();
     }
+
+    pub fn get_config(&self) -> OscSendConfig {
+        OscSendConfig {
+            target_addr: self.target_addr.clone(),
+            target_port: self.target_port,
+        }
+    }
+
+    /***************** Send functions for testing *********************************** */
 
     pub fn send_inner_radius(&self, player_id: i32, val: f32) {
         let addr = "/sys4/circle/innerRadius".to_string();
