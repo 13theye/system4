@@ -3,6 +3,7 @@
 // Command definitions and builder traits for NTerminal
 
 pub mod drone;
+pub mod rhythm;
 
 use super::parsing::{ParameterValue, ParseError};
 use std::fmt;
@@ -11,6 +12,9 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum TerminalCommand {
     CreateDrone(drone::DroneConfig),
+    CreateSequencer {
+        config: rhythm::RhythmConfig,
+    },
     ModifyVoice {
         voice_id: i32,
         config: drone::DroneConfig,
@@ -38,6 +42,10 @@ impl fmt::Display for TerminalCommand {
         match self {
             TerminalCommand::CreateDrone(config) => {
                 writeln!(f, "CreateDrone:")?;
+                write!(f, "{}", config)
+            }
+            TerminalCommand::CreateSequencer { config } => {
+                writeln!(f, "CreateSequencer for voice {}:", config.voice)?;
                 write!(f, "{}", config)
             }
             TerminalCommand::ModifyVoice { voice_id, config } => {

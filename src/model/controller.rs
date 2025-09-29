@@ -4,12 +4,12 @@
 
 use crate::{
     forces::WindCircleParams,
-    groups::{Voice, VoiceId},
+    groups::{Rhythm, Voice, VoiceId},
     model::{
         command_builder::{CommandBuilder, ValidationResult, VoiceValidator},
         Model,
     },
-    terminals::commands::drone::DroneConfig,
+    terminals::commands::{drone::DroneConfig, rhythm::RhythmConfig},
 };
 use nannou::wgpu::{Device, Queue};
 
@@ -89,6 +89,9 @@ pub enum CompositeCommand {
     CreateDrone {
         config: DroneConfig,
     },
+    CreateSequencer {
+        config: RhythmConfig,
+    },
     EraseDrone {
         voice_id: VoiceId,
     },
@@ -133,6 +136,9 @@ fn get_command_key(command: &Command) -> String {
         CommandInner::Composite(composite) => match composite {
             CompositeCommand::CreateDrone { config } => {
                 format!("CreateDrone_{}", config.voice)
+            }
+            CompositeCommand::CreateSequencer { config } => {
+                format!("CreateSequencer_{:?}", config.voice_id())
             }
             CompositeCommand::EraseDrone { voice_id } => {
                 format!("EraseDrone_{:?}", voice_id)
@@ -286,6 +292,39 @@ impl Model {
                     for param_cmd in parameter_commands {
                         self.command_queue.push(param_cmd);
                     }
+                }
+                CompositeCommand::CreateSequencer { config } => {
+                    // Convert RhythmConfig to RhythmParams
+                    let voice_id = config.voice_id();
+                    let config = config.merge_with_defaults();
+                    let params = config.to_rhythm_params();
+
+                    // Create and configure Rhythm object
+                    let mut rhythm = Rhythm::new_with_params(voice_id, params);
+
+                    let params = rhythm.get_params();
+                    let status_message = format!(
+                        "Voice {} - Created sequencer with capacity {}, {} wings, subdivision {:?}",
+                        voice_id.to_i32(),
+                        params.capacity,
+                        params.num_wings,
+                        params.subdivision
+                    );
+
+                    // Roll wings
+                    rhythm.set_wings(&mut self.rng);
+
+                    // Start sequencer via Rhythm gateway method
+                    rhythm.start_sequencer(&mut self.sequencer_service);
+
+                    // Store the Rhythm object in the model (like voices)
+                    self.rhythms.insert(voice_id, rhythm);
+
+                    // Start all sequencers to sync on the next beat
+                    self.sequencer_service.start_all();
+
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
                 }
                 CompositeCommand::EraseDrone { voice_id } => {
                     self.kill_voice(voice_id);

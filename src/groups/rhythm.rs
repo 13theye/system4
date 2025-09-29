@@ -1,11 +1,12 @@
 // src/groups/rhythm.rs
 
-use nannou::rand::{rngs::ThreadRng, Rng};
+use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 use prat::BeatSubdivision;
 
 use crate::{
     groups::{VoiceId, VoiceParams},
     particle::emitter::Emitter,
+    services::sequencer::SequencerService,
 };
 
 #[derive(Debug, Clone)]
@@ -44,8 +45,21 @@ impl Rhythm {
         }
     }
 
+    pub fn new_with_params(id: VoiceId, params: RhythmParams) -> Self {
+        Self {
+            id,
+            params,
+            voice_params: VoiceParams::default(),
+            emitters: Vec::new(),
+        }
+    }
+
     pub fn get_params(&self) -> &RhythmParams {
         &self.params
+    }
+
+    pub fn set_params(&mut self, params: RhythmParams) {
+        self.params = params;
     }
 
     pub fn set_capacity(&mut self, capacity: usize) {
@@ -69,10 +83,44 @@ impl Rhythm {
     }
 
     fn roll_wings(rng: &mut ThreadRng, capacity: usize, num_wings: usize) -> Vec<usize> {
-        let mut wings = Vec::new();
-        for _ in 0..num_wings {
-            wings.push(rng.gen_range(0..capacity));
-        }
-        wings
+        let mut nums: Vec<usize> = (0..capacity).collect();
+        nums.shuffle(rng);
+        nums.truncate(num_wings);
+        nums
+    }
+    /********Gateway methods for SequencerService communication *********/
+
+    /// Start the sequencer for this rhythm via SequencerService
+    pub fn start_sequencer(&self, sequencer_service: &mut SequencerService) {
+        let params = self.params.clone();
+        sequencer_service.add_sequencer(self.id, params);
+    }
+
+    /// Stop the sequencer for this rhythm via SequencerService
+    pub fn stop_sequencer(&self, sequencer_service: &mut SequencerService) {
+        sequencer_service.remove_sequencer(self.id);
+    }
+
+    /// Pause the sequencer for this rhythm via SequencerService
+    pub fn pause_sequencer(&self, sequencer_service: &mut SequencerService) {
+        sequencer_service.pause_sequencer(self.id);
+    }
+
+    /// Resume the sequencer for this rhythm via SequencerService
+    pub fn resume_sequencer(&self, sequencer_service: &mut SequencerService) {
+        sequencer_service.resume_sequencer(self.id);
+    }
+
+    /// Update sequencer parameters without re-rolling wings
+    pub fn update_sequencer(&self, sequencer_service: &mut SequencerService) {
+        let params = self.params.clone();
+        sequencer_service.update_sequencer_params(self.id, params);
+    }
+
+    /// Re-roll wings and update the running sequencer with new wings
+    pub fn reroll_wings(&mut self, rng: &mut ThreadRng, sequencer_service: &mut SequencerService) {
+        self.set_wings(rng);
+        // Update the running sequencer with new wings
+        self.update_sequencer(sequencer_service);
     }
 }

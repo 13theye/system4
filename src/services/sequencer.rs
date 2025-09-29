@@ -277,6 +277,39 @@ impl SequencerService {
         }
     }
 
+    /// Update parameters for a specific sequencer.
+    pub fn update_sequencer_params(&mut self, id: VoiceId, params: RhythmParams) {
+        let result = self.command_tx.send(SequencerCommand::UpdateParams { id, params });
+        if self.debug {
+            println!(
+                "SequencerService: Sent UpdateParams command for {:?} with result: {:?}",
+                id, result
+            );
+        }
+    }
+
+    /// Pause a specific sequencer.
+    pub fn pause_sequencer(&mut self, id: VoiceId) {
+        let result = self.command_tx.send(SequencerCommand::Pause { id });
+        if self.debug {
+            println!(
+                "SequencerService: Sent Pause command for {:?} with result: {:?}",
+                id, result
+            );
+        }
+    }
+
+    /// Resume a specific sequencer.
+    pub fn resume_sequencer(&mut self, id: VoiceId) {
+        let result = self.command_tx.send(SequencerCommand::Resume { id });
+        if self.debug {
+            println!(
+                "SequencerService: Sent Resume command for {:?} with result: {:?}",
+                id, result
+            );
+        }
+    }
+
     /********************* Sequencer Communication Wiring **************************/
 
     /// Get the data channel to receive from a sequencer.

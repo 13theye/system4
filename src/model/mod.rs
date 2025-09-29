@@ -7,7 +7,7 @@ pub mod controller;
 
 use crate::{
     fps::FpsManager,
-    groups::{Voice, VoiceId},
+    groups::{Rhythm, Voice, VoiceId},
     model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
@@ -32,6 +32,7 @@ pub struct Model {
     pub particle_system: ParticleSystem,
 
     pub voices: HashMap<VoiceId, Voice>,
+    pub rhythms: HashMap<VoiceId, Rhythm>,
 
     // Clock and Sequencers
     pub clock: ClockService,

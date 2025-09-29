@@ -371,6 +371,7 @@ fn model(app: &App) -> Model {
     Model {
         particle_system,
         voices: HashMap::new(),
+        rhythms: HashMap::new(),
         clock,
         sequencer_service,
         osc,
@@ -1376,6 +1377,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                     TerminalCommand::CreateDrone(config) => {
                                                                         let voice_command = config.to_create_command(CommandSource::Terminal);
                                                                         println!("Queuing CreateDrone command with config: {:?}", config);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::CreateSequencer { config } => {
+                                                                        let voice_id = config.voice;
+                                                                        let voice_command = Command::new(
+                                                                            CommandInner::Composite(CompositeCommand::CreateSequencer { config }),
+                                                                            CommandSource::Terminal
+                                                                        );
+                                                                        println!("Queuing CreateSequencer command for voice: {:?}", voice_id);
                                                                         command_queue.push(voice_command);
                                                                     }
                                                                     TerminalCommand::ModifyVoice { voice_id, config } => {

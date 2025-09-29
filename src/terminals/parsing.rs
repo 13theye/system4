@@ -1,7 +1,7 @@
 // src/terminals/parsing.rs
 
 use super::{
-    commands::{drone::DroneBuilder, TerminalCommand, TerminalCommandBuilder},
+    commands::{drone::DroneBuilder, rhythm::RhythmBuilder, TerminalCommand, TerminalCommandBuilder},
     tokens::Token,
 };
 use std::fmt;
@@ -78,6 +78,7 @@ impl CommandParser {
         match command_type.as_str() {
             "drone" => self.parse_drone_command(),
             "makeDrone" => self.parse_make_drone_command(),
+            "rhythm" => self.parse_rhythm_command(),
             _ => Err(ParseError::UnknownCommand(command_type)),
         }
     }
@@ -296,6 +297,79 @@ impl CommandParser {
         }
 
         Ok(TerminalCommand::CreateDrone(builder.build()))
+    }
+
+    fn parse_rhythm_command(&mut self) -> Result<TerminalCommand, ParseError> {
+        // Parse: rhythm(voice_id).method().method().begin();
+        // We've already parsed "rhythm", now expect (voice_id)
+        self.expect_token(&Token::LeftParen)?;
+
+        // Get the voice ID
+        let voice_id = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let id = *n as i32;
+                self.position += 1;
+                id
+            }
+            Some(token) => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "voice ID number".to_string(),
+                    found: format!("{:?}", token),
+                })
+            }
+            None => return Err(ParseError::UnexpectedEnd),
+        };
+
+        self.expect_token(&Token::RightParen)?;
+
+        let mut builder = RhythmBuilder::new();
+
+        // Set the voice ID
+        builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
+
+        let mut found_begin = false;
+
+        // Parse method chain
+        while self.position < self.tokens.len() {
+            if let Some(Token::Dot) = self.current_token() {
+                self.expect_token(&Token::Dot)?;
+
+                let method_name = self.expect_identifier_any()?;
+
+                if method_name == "begin" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    found_begin = true;
+                    break;
+                } else {
+                    // Parse method call with parameter
+                    self.expect_token(&Token::LeftParen)?;
+                    let parameter = self.parse_parameter()?;
+                    self.expect_token(&Token::RightParen)?;
+
+                    builder.set_parameter(&method_name, parameter)?;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !found_begin {
+            return Err(ParseError::MissingBegin);
+        }
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        // Build the RhythmConfig
+        let config = builder.build();
+
+        // Validate the voice is appropriate for rhythm commands
+        config.validate_voice()?;
+
+        Ok(TerminalCommand::CreateSequencer { config })
     }
 
     fn current_token(&self) -> Option<&Token> {
