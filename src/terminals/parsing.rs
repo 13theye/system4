@@ -299,6 +299,7 @@ impl CommandParser {
             "removeWings" => self.parse_wing_command(voice_id, sub_command, false),
             "newCircle" => self.parse_new_circle_from_voice(voice_id),
             "removeCircle" => self.parse_remove_circle_from_voice(voice_id),
+            "clearRhythm" => self.parse_clear_rhythm_from_voice(voice_id),
             _ => {
                 // Check if this is a parameter modification command
                 // We need to determine what type of parameter this is
@@ -693,6 +694,23 @@ impl CommandParser {
             voice_id,
             config: builder.build(),
         })
+    }
+
+    fn parse_clear_rhythm_from_voice(
+        &mut self,
+        voice_id: i32,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).clearRhythm();
+        // We've already parsed "voice(voice_id).clearRhythm", now expect ()
+        self.expect_token(&Token::LeftParen)?;
+        self.expect_token(&Token::RightParen)?;
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        Ok(TerminalCommand::ClearRhythm { voice_id })
     }
 
     fn parse_remove_circle_from_voice(

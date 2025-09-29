@@ -1493,6 +1493,16 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         );
                                                                         command_queue.push(wing_command);
                                                                     }
+                                                                    TerminalCommand::ClearRhythm { voice_id } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+                                                                        let clear_command = Command::new(
+                                                                            CommandInner::Simple(SimpleCommand::ClearRhythm {
+                                                                                voice_id: voice_enum,
+                                                                            }),
+                                                                            CommandSource::Terminal,
+                                                                        );
+                                                                        command_queue.push(clear_command);
+                                                                    }
                                                                 }
                                                                 
                                                                 // Clear the input after successful execution

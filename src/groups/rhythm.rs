@@ -68,6 +68,10 @@ impl Rhythm {
         }
     }
 
+    pub fn clear_params(&mut self) {
+        self.params = RhythmParams::default();
+    }
+
     pub fn get_params(&self) -> &RhythmParams {
         &self.params
     }
@@ -122,9 +126,7 @@ impl Rhythm {
         let actual_remove_count = number_to_remove.min(wings.len());
 
         // Remove and collect the last N wings in one operation
-        let removed_wings: Vec<usize> = wings
-            .drain(wings.len() - actual_remove_count..)
-            .collect();
+        let removed_wings: Vec<usize> = wings.drain(wings.len() - actual_remove_count..).collect();
 
         // Add them to the buffer (they're already in LIFO order from drain)
         self.params.wings_buffer.extend(removed_wings);

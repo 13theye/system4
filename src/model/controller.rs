@@ -90,6 +90,9 @@ pub enum SimpleCommand {
         voice_id: VoiceId,
         count: usize,
     },
+    ClearRhythm {
+        voice_id: VoiceId,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -214,6 +217,9 @@ fn get_command_key(command: &Command) -> String {
             SimpleCommand::RemoveWings {
                 voice_id: voice, ..
             } => format!("RemoveWings_{:?}", voice),
+            SimpleCommand::ClearRhythm {
+                voice_id: voice, ..
+            } => format!("ClearRhythm_{:?}", voice),
         },
     }
 }
@@ -722,6 +728,24 @@ impl Model {
                     self.command_input.set_success_message(status_message);
                 } else {
                     let error_message = format!("Voice {} has no rhythm to remove wings from", voice_id.to_i32());
+                    println!("Error: {}", error_message);
+                    self.command_input.set_error_message(error_message);
+                }
+            }
+            SimpleCommand::ClearRhythm { voice_id } => {
+                // Check if rhythm exists for this voice
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    // Stop the sequencer before removing the rhythm
+                    rhythm.stop_sequencer(&mut self.sequencer_service);
+
+                    // Remove the rhythm from the model
+                    self.rhythms.remove(&voice_id);
+
+                    let status_message = format!("Voice {} - Cleared rhythm and stopped sequencer", voice_id.to_i32());
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
+                } else {
+                    let error_message = format!("Voice {} has no rhythm to clear", voice_id.to_i32());
                     println!("Error: {}", error_message);
                     self.command_input.set_error_message(error_message);
                 }
