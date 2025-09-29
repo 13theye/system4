@@ -1,7 +1,9 @@
 // src/terminals/parsing.rs
 
 use super::{
-    commands::{drone::DroneBuilder, rhythm::RhythmBuilder, TerminalCommand, TerminalCommandBuilder},
+    commands::{
+        drone::DroneBuilder, rhythm::RhythmBuilder, TerminalCommand, TerminalCommandBuilder,
+    },
     tokens::Token,
 };
 use std::fmt;
@@ -78,7 +80,7 @@ impl CommandParser {
         match command_type.as_str() {
             "drone" => self.parse_drone_command(),
             "makeDrone" => self.parse_make_drone_command(),
-            "rhythm" => self.parse_rhythm_command(),
+            "makeRhythm" => self.parse_make_rhythm_command(),
             _ => Err(ParseError::UnknownCommand(command_type)),
         }
     }
@@ -299,7 +301,7 @@ impl CommandParser {
         Ok(TerminalCommand::CreateDrone(builder.build()))
     }
 
-    fn parse_rhythm_command(&mut self) -> Result<TerminalCommand, ParseError> {
+    fn parse_make_rhythm_command(&mut self) -> Result<TerminalCommand, ParseError> {
         // Parse: rhythm(voice_id).method().method().begin();
         // We've already parsed "rhythm", now expect (voice_id)
         self.expect_token(&Token::LeftParen)?;

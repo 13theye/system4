@@ -89,7 +89,7 @@ pub enum CompositeCommand {
     CreateDrone {
         config: DroneConfig,
     },
-    CreateSequencer {
+    CreateRhythm {
         config: RhythmConfig,
     },
     EraseDrone {
@@ -137,7 +137,7 @@ fn get_command_key(command: &Command) -> String {
             CompositeCommand::CreateDrone { config } => {
                 format!("CreateDrone_{}", config.voice)
             }
-            CompositeCommand::CreateSequencer { config } => {
+            CompositeCommand::CreateRhythm { config } => {
                 format!("CreateSequencer_{:?}", config.voice_id())
             }
             CompositeCommand::EraseDrone { voice_id } => {
@@ -293,7 +293,7 @@ impl Model {
                         self.command_queue.push(param_cmd);
                     }
                 }
-                CompositeCommand::CreateSequencer { config } => {
+                CompositeCommand::CreateRhythm { config } => {
                     // Convert RhythmConfig to RhythmParams
                     let voice_id = config.voice_id();
                     let config = config.merge_with_defaults();
