@@ -396,20 +396,28 @@ impl Model {
 
                     // Check if rhythm exists for this voice
                     if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-                        // Update rhythm parameters
-                        rhythm.set_params(config.to_rhythm_params());
+                        // Update only the specified parameters, preserving existing values
+                        if let Some(capacity) = config.capacity {
+                            rhythm.set_capacity(capacity);
+                        }
+                        if let Some(num_wings) = config.num_wings {
+                            rhythm.set_num_wings(num_wings);
+                            rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
+                        }
+                        if let Some(subdivision) = config.subdivision {
+                            rhythm.set_subdivision(subdivision);
+                        }
 
                         // Update the running sequencer with new parameters
                         rhythm.update_sequencer(&mut self.sequencer_service);
 
-                        let status_message = format!(
-                            "Voice {} - Updated rhythm parameters",
-                            voice_id.to_i32()
-                        );
+                        let status_message =
+                            format!("Voice {} - Updated rhythm parameters", voice_id.to_i32());
                         println!("{}", status_message);
                         self.command_input.set_success_message(status_message);
                     } else {
-                        let error_message = format!("Voice {} has no rhythm to modify", voice_id.to_i32());
+                        let error_message =
+                            format!("Voice {} has no rhythm to modify", voice_id.to_i32());
                         println!("Error: {}", error_message);
                         self.command_input.set_error_message(error_message);
                     }
@@ -826,7 +834,7 @@ pub fn update_feedback(model: &mut Model, _device: &Device, _queue: &Queue) {
 // Implement VoiceValidator trait for Model to enable centralized validation
 impl VoiceValidator for Model {
     fn voice_exists(&self, voice_id: VoiceId) -> bool {
-        self.voices.contains_key(&voice_id)
+        self.voices.contains_key(&voice_id) || self.rhythms.contains_key(&voice_id)
     }
 
     fn circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
