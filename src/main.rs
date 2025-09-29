@@ -26,7 +26,7 @@ use system4::{
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
     services::sequencer::SequencerService,
-    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams, TextJustification}},
+    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification}},
     utils::IdGenerator,
     groups::VoiceId,
 };
@@ -331,7 +331,7 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,
         font: font.clone(),
         font_size: 32,
-        justification: TextJustification::TopLeft,
+        justification: TerminalViewTextJustification::TopLeft,
     };
     
     terminal_manager.new_terminal_view("main", VoiceId::Voice1, terminal_params);
@@ -348,7 +348,7 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,     // Faster typing for parameters
         font: font.clone(),
         font_size: 22,
-        justification: TextJustification::TopLeft,
+        justification: TerminalViewTextJustification::TopLeft,
     };
 
     let drone_params_voice4 = TerminalViewParams {
@@ -362,7 +362,7 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,
         font: font.clone(),
         font_size: 22,
-        justification: TextJustification::TopRight,
+        justification: TerminalViewTextJustification::TopRight,
     };
 
     terminal_manager.add_drone_parameters_display(VoiceId::Voice1, drone_params_voice1);

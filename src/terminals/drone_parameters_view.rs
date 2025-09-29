@@ -2,7 +2,7 @@
 //
 // Live display of drone parameters with color highlighting for recent updates
 
-use super::terminal_view::{TerminalView, TerminalViewParams};
+use super::terminal_view::{TerminalView, TerminalViewLineFadeMode, TerminalViewParams};
 use crate::{
     groups::VoiceId,
     model::controller::{Command, CommandInner, CompositeCommand, SimpleCommand},
@@ -47,7 +47,7 @@ impl DroneParametersView {
 
         // Add initial header
         let header = format!("Voice {} Parameters:", voice.to_i32());
-        terminal_view.add_text(&header, false);
+        terminal_view.add_text(&header, TerminalViewLineFadeMode::NoFade);
 
         let mut line_index = 1; // Start after header
 
@@ -55,13 +55,20 @@ impl DroneParametersView {
         for &param_name in VOICE_PARAMETERS {
             voice_param_to_line.insert(param_name.to_string(), line_index);
             let placeholder_line = format!("{}(-.--)", param_name);
-            terminal_view.update_line_at_index(line_index, &placeholder_line, true);
+            terminal_view.update_line_at_index(
+                line_index,
+                &placeholder_line,
+                TerminalViewLineFadeMode::Fade,
+            );
             line_index += 1;
         }
 
         // Add Wind Circles separator
-        terminal_view.update_line_at_index(line_index, "--- Forces ---", false);
-        //line_index += 1;
+        terminal_view.update_line_at_index(
+            line_index,
+            "--- Forces ---",
+            TerminalViewLineFadeMode::NoFade,
+        );
 
         Self {
             terminal_view,
@@ -290,8 +297,14 @@ impl DroneParametersView {
         let now = Instant::now();
         let was_recently_updated = now.duration_since(timestamp).as_secs_f32() < 0.1; // Very recent
 
+        let fade_mode = if was_recently_updated {
+            TerminalViewLineFadeMode::Fade
+        } else {
+            TerminalViewLineFadeMode::NoFade
+        };
+
         // Update the specific line directly in the terminal view
-        self.update_line_at_index(line_index, &line_text, was_recently_updated);
+        self.update_line_at_index(line_index, &line_text, fade_mode);
     }
 
     /// Update a circle-specific parameter line in the terminal view
@@ -314,8 +327,14 @@ impl DroneParametersView {
         let now = Instant::now();
         let was_recently_updated = now.duration_since(timestamp).as_secs_f32() < 0.1; // Very recent
 
+        let fade_mode = if was_recently_updated {
+            TerminalViewLineFadeMode::Fade
+        } else {
+            TerminalViewLineFadeMode::NoFade
+        };
+
         // Update the specific line directly in the terminal view
-        self.update_line_at_index(line_index, &line_text, was_recently_updated);
+        self.update_line_at_index(line_index, &line_text, fade_mode);
     }
 
     /// Add display lines for a new circle
@@ -338,8 +357,11 @@ impl DroneParametersView {
 
         // Add circle header
         let circle_header = format!("Circle {}:", circle_id);
-        self.terminal_view
-            .update_line_at_index(line_index, &circle_header, false);
+        self.terminal_view.update_line_at_index(
+            line_index,
+            &circle_header,
+            TerminalViewLineFadeMode::NoFade,
+        );
         line_index += 1;
 
         // Add parameter lines for this circle
@@ -348,8 +370,11 @@ impl DroneParametersView {
             self.circle_param_to_line.insert(key, line_index);
 
             let placeholder_line = format!("  {}(-.--)", param_name);
-            self.terminal_view
-                .update_line_at_index(line_index, &placeholder_line, true);
+            self.terminal_view.update_line_at_index(
+                line_index,
+                &placeholder_line,
+                TerminalViewLineFadeMode::Fade,
+            );
             line_index += 1;
         }
 
@@ -373,10 +398,15 @@ impl DroneParametersView {
     }
 
     /// Update a specific line in the terminal view by index
-    fn update_line_at_index(&mut self, line_index: usize, text: &str, should_highlight: bool) {
+    fn update_line_at_index(
+        &mut self,
+        line_index: usize,
+        text: &str,
+        fade_mode: TerminalViewLineFadeMode,
+    ) {
         // Use the new update_line_at_index method to update in place
         self.terminal_view
-            .update_line_at_index(line_index, text, should_highlight);
+            .update_line_at_index(line_index, text, fade_mode);
     }
 
     /// Update the terminal view (handles animations, etc.)
