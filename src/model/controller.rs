@@ -99,6 +99,10 @@ pub enum CompositeCommand {
         voice_id: VoiceId,
         config: DroneConfig,
     },
+    ModifyRhythm {
+        voice_id: VoiceId,
+        config: RhythmConfig,
+    },
     NewCircle {
         voice_id: VoiceId,
         config: DroneConfig,
@@ -145,6 +149,9 @@ fn get_command_key(command: &Command) -> String {
             }
             CompositeCommand::ModifyDrone { voice_id, .. } => {
                 format!("ModifyDrone_{:?}", voice_id)
+            }
+            CompositeCommand::ModifyRhythm { voice_id, .. } => {
+                format!("ModifyRhythm_{:?}", voice_id)
             }
             CompositeCommand::NewCircle { voice_id, .. } => {
                 format!("NewCircle_{:?}", voice_id)
@@ -380,6 +387,32 @@ impl Model {
 
                     // Circle-level parameters require circle_id, which ModifyDrone doesn't specify
                     // These should be handled by explicit circle commands instead
+                }
+                CompositeCommand::ModifyRhythm { voice_id, config } => {
+                    let validation = self.validate_voice(voice_id);
+                    if !self.validate_and_handle_error(validation, "ModifyRhythm") {
+                        return;
+                    }
+
+                    // Check if rhythm exists for this voice
+                    if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                        // Update rhythm parameters
+                        rhythm.set_params(config.to_rhythm_params());
+
+                        // Update the running sequencer with new parameters
+                        rhythm.update_sequencer(&mut self.sequencer_service);
+
+                        let status_message = format!(
+                            "Voice {} - Updated rhythm parameters",
+                            voice_id.to_i32()
+                        );
+                        println!("{}", status_message);
+                        self.command_input.set_success_message(status_message);
+                    } else {
+                        let error_message = format!("Voice {} has no rhythm to modify", voice_id.to_i32());
+                        println!("Error: {}", error_message);
+                        self.command_input.set_error_message(error_message);
+                    }
                 }
                 CompositeCommand::NewCircle { voice_id, config } => {
                     let validation = self.validate_voice(voice_id);

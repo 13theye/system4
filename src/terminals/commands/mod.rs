@@ -24,6 +24,19 @@ pub enum TerminalCommand {
         circle_id: i32,
         config: drone::DroneConfig,
     },
+    ModifyDroneParams {
+        voice_id: i32,
+        config: drone::DroneConfig,
+    },
+    ModifyRhythmParams {
+        voice_id: i32,
+        config: rhythm::RhythmConfig,
+    },
+    ModifyVoiceParams {
+        voice_id: i32,
+        drone_config: Option<drone::DroneConfig>,
+        rhythm_config: Option<rhythm::RhythmConfig>,
+    },
     ListCircles {
         voice_id: i32,
     },
@@ -75,6 +88,30 @@ impl fmt::Display for TerminalCommand {
                 "RemoveCircle for voice {} circle {}:",
                 voice_id, circle_id
             ),
+            TerminalCommand::ModifyDroneParams { voice_id, config } => {
+                writeln!(f, "ModifyDroneParams voice {}:", voice_id)?;
+                write!(f, "{}", config)
+            }
+            TerminalCommand::ModifyRhythmParams { voice_id, config } => {
+                writeln!(f, "ModifyRhythmParams voice {}:", voice_id)?;
+                write!(f, "{}", config)
+            }
+            TerminalCommand::ModifyVoiceParams {
+                voice_id,
+                drone_config,
+                rhythm_config,
+            } => {
+                writeln!(f, "ModifyVoiceParams voice {}:", voice_id)?;
+                if let Some(config) = drone_config {
+                    writeln!(f, "Drone params:")?;
+                    writeln!(f, "{}", config)?;
+                }
+                if let Some(config) = rhythm_config {
+                    writeln!(f, "Rhythm params:")?;
+                    write!(f, "{}", config)?;
+                }
+                Ok(())
+            }
         }
     }
 }

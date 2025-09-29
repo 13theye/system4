@@ -125,6 +125,12 @@ impl CommandInput {
         self.last_error = None; // Clear any previous error
     }
 
+    /// Set a custom error message (for command results)
+    pub fn set_error_message(&mut self, message: String) {
+        self.last_error = Some(ParseError::UnknownCommand(message));
+        self.last_success = None; // Clear any previous success
+    }
+
     /// Check if the input is currently empty
     pub fn is_empty(&self) -> bool {
         self.raw_text.trim().is_empty()

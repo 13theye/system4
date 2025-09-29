@@ -8,6 +8,37 @@ use super::{
 };
 use std::fmt;
 
+/// Voice type for parameter validation
+#[derive(Debug, Clone, PartialEq)]
+pub enum VoiceType {
+    Drone,
+    Rhythm,
+}
+
+/// Parameter categories for validation
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParameterCategory {
+    Drone,
+    Rhythm,
+}
+
+/// Categorize a parameter name for validation
+pub fn categorize_parameter(param_name: &str) -> Option<ParameterCategory> {
+    match param_name {
+        // Drone parameters
+        "brightness" | "volume" | "feedback" | "vibration" | "gravity" | "force"
+        | "outerRadius" | "innerRadius" | "noise" | "centerX" | "centerY" => {
+            Some(ParameterCategory::Drone)
+        }
+        // Rhythm parameters
+        "capacity" | "wings" | "sub" => Some(ParameterCategory::Rhythm),
+        // Voice parameter (used in both contexts)
+        "voice" => None, // Special case - not categorized
+        // Unknown parameter
+        _ => None,
+    }
+}
+
 /// Parameter::Value pair
 #[derive(Debug, Clone)]
 pub enum ParameterValue {
@@ -79,8 +110,8 @@ impl CommandParser {
         // Dispatch to appropriate command parser
         match command_type.as_str() {
             "drone" => self.parse_drone_command(),
-            "makeDrone" => self.parse_make_drone_command(),
-            "makeRhythm" => self.parse_make_rhythm_command(),
+            "rhythm" => self.parse_rhythm_command(),
+            "voice" => self.parse_voice_command(),
             _ => Err(ParseError::UnknownCommand(command_type)),
         }
     }
@@ -224,29 +255,28 @@ impl CommandParser {
                 config: builder.build(),
             })
         } else {
-            Ok(TerminalCommand::ModifyVoice {
+            Ok(TerminalCommand::ModifyDroneParams {
                 voice_id,
                 config: builder.build(),
             })
         }
     }
 
-    fn parse_make_drone_command(&mut self) -> Result<TerminalCommand, ParseError> {
-        // Parse: makeDrone(voice_id).method().method().begin();
-        // We've already parsed "makeDrone", now expect (voice_id)
+    fn parse_voice_command(&mut self) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).makeCommand()...
+        // We've already parsed "voice", now expect (voice_id)
         self.expect_token(&Token::LeftParen)?;
 
-        // Get the voice ID (optional for makeDrone)
+        // Get the voice ID
         let voice_id = match self.current_token() {
             Some(Token::Number(n)) => {
                 let id = *n as i32;
                 self.position += 1;
-                Some(id)
+                id
             }
-            Some(Token::RightParen) => None, // Empty parentheses - no voice provided
             Some(token) => {
                 return Err(ParseError::UnexpectedToken {
-                    expected: "voice ID number or )".to_string(),
+                    expected: "voice ID number".to_string(),
                     found: format!("{:?}", token),
                 })
             }
@@ -255,16 +285,55 @@ impl CommandParser {
 
         self.expect_token(&Token::RightParen)?;
 
+        // Expect dot before the sub-command
+        self.expect_token(&Token::Dot)?;
+
+        // Get the sub-command type
+        let sub_command = self.expect_identifier_any()?;
+
+        match sub_command.as_str() {
+            "makeDrone" => self.parse_make_drone_from_voice(voice_id),
+            "makeRhythm" => self.parse_make_rhythm_from_voice(voice_id),
+            _ => {
+                // Check if this is a parameter modification command
+                // We need to determine what type of parameter this is
+                match categorize_parameter(&sub_command) {
+                    Some(ParameterCategory::Drone) => self.parse_voice_parameter_modification(
+                        voice_id,
+                        sub_command,
+                        VoiceType::Drone,
+                    ),
+                    Some(ParameterCategory::Rhythm) => self.parse_voice_parameter_modification(
+                        voice_id,
+                        sub_command,
+                        VoiceType::Rhythm,
+                    ),
+                    None => Err(ParseError::UnexpectedToken {
+                        expected: "makeDrone, makeRhythm, or valid parameter name".to_string(),
+                        found: sub_command,
+                    }),
+                }
+            }
+        }
+    }
+
+    fn parse_make_drone_from_voice(
+        &mut self,
+        voice_id: i32,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).makeDrone().method().begin();
+        // We've already parsed "voice(voice_id).makeDrone", now expect ()
+        self.expect_token(&Token::LeftParen)?;
+        self.expect_token(&Token::RightParen)?;
+
         let mut builder = DroneBuilder::new();
 
-        // Set the voice if provided in parentheses
-        if let Some(voice) = voice_id {
-            builder.set_parameter("voice", ParameterValue::Number(voice as f32))?;
-        }
+        // Set the voice ID that was parsed from the voice() command
+        builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
         let mut found_begin = false;
 
-        // Parse method chain
+        // Parse method chain (same as existing makeDrone parsing)
         while self.position < self.tokens.len() {
             if let Some(Token::Dot) = self.current_token() {
                 self.expect_token(&Token::Dot)?;
@@ -301,37 +370,23 @@ impl CommandParser {
         Ok(TerminalCommand::CreateDrone(builder.build()))
     }
 
-    fn parse_make_rhythm_command(&mut self) -> Result<TerminalCommand, ParseError> {
-        // Parse: rhythm(voice_id).method().method().begin();
-        // We've already parsed "rhythm", now expect (voice_id)
+    fn parse_make_rhythm_from_voice(
+        &mut self,
+        voice_id: i32,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).makeRhythm().method().begin();
+        // We've already parsed "voice(voice_id).makeRhythm", now expect ()
         self.expect_token(&Token::LeftParen)?;
-
-        // Get the voice ID
-        let voice_id = match self.current_token() {
-            Some(Token::Number(n)) => {
-                let id = *n as i32;
-                self.position += 1;
-                id
-            }
-            Some(token) => {
-                return Err(ParseError::UnexpectedToken {
-                    expected: "voice ID number".to_string(),
-                    found: format!("{:?}", token),
-                })
-            }
-            None => return Err(ParseError::UnexpectedEnd),
-        };
-
         self.expect_token(&Token::RightParen)?;
 
         let mut builder = RhythmBuilder::new();
 
-        // Set the voice ID
+        // Set the voice ID that was parsed from the voice() command
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
         let mut found_begin = false;
 
-        // Parse method chain
+        // Parse method chain (same as existing makeRhythm parsing)
         while self.position < self.tokens.len() {
             if let Some(Token::Dot) = self.current_token() {
                 self.expect_token(&Token::Dot)?;
@@ -430,6 +485,180 @@ impl CommandParser {
                     .unwrap_or("EOF".to_string()),
             })
         }
+    }
+
+    fn parse_voice_parameter_modification(
+        &mut self,
+        voice_id: i32,
+        first_param: String,
+        param_type: VoiceType,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).parameter(value).set();
+        // We've already parsed "voice(voice_id).parameter", now expect (value)
+        self.expect_token(&Token::LeftParen)?;
+        let parameter_value = self.parse_parameter()?;
+        self.expect_token(&Token::RightParen)?;
+
+        let mut drone_builder = DroneBuilder::new();
+        let mut rhythm_builder = RhythmBuilder::new();
+
+        // Set the voice ID for both builders
+        drone_builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
+        rhythm_builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
+
+        // Set the first parameter based on its type
+        match param_type {
+            VoiceType::Drone => {
+                drone_builder.set_parameter(&first_param, parameter_value)?;
+            }
+            VoiceType::Rhythm => {
+                rhythm_builder.set_parameter(&first_param, parameter_value)?;
+            }
+        }
+
+        let mut found_set = false;
+        let mut has_drone_params = param_type == VoiceType::Drone;
+        let mut has_rhythm_params = param_type == VoiceType::Rhythm;
+
+        // Parse additional method calls in the chain
+        while self.position < self.tokens.len() {
+            if let Some(Token::Dot) = self.current_token() {
+                self.expect_token(&Token::Dot)?;
+
+                let method_name = self.expect_identifier_any()?;
+
+                if method_name == "set" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    found_set = true;
+                    break;
+                } else {
+                    // Parse additional parameter
+                    self.expect_token(&Token::LeftParen)?;
+                    let parameter = self.parse_parameter()?;
+                    self.expect_token(&Token::RightParen)?;
+
+                    match categorize_parameter(&method_name) {
+                        Some(ParameterCategory::Drone) => {
+                            drone_builder.set_parameter(&method_name, parameter)?;
+                            has_drone_params = true;
+                        }
+                        Some(ParameterCategory::Rhythm) => {
+                            rhythm_builder.set_parameter(&method_name, parameter)?;
+                            has_rhythm_params = true;
+                        }
+                        None => {
+                            return Err(ParseError::UnexpectedToken {
+                                expected: "valid parameter name".to_string(),
+                                found: method_name,
+                            });
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !found_set {
+            return Err(ParseError::MissingSet);
+        }
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        // Return appropriate command based on what parameters were set
+        match (has_drone_params, has_rhythm_params) {
+            (true, false) => Ok(TerminalCommand::ModifyDroneParams {
+                voice_id,
+                config: drone_builder.build(),
+            }),
+            (false, true) => Ok(TerminalCommand::ModifyRhythmParams {
+                voice_id,
+                config: rhythm_builder.build(),
+            }),
+            (true, true) => Ok(TerminalCommand::ModifyVoiceParams {
+                voice_id,
+                drone_config: Some(drone_builder.build()),
+                rhythm_config: Some(rhythm_builder.build()),
+            }),
+            (false, false) => {
+                // This shouldn't happen if categorize_parameter works correctly
+                Err(ParseError::UnexpectedToken {
+                    expected: "valid parameter name".to_string(),
+                    found: first_param,
+                })
+            }
+        }
+    }
+
+    fn parse_rhythm_command(&mut self) -> Result<TerminalCommand, ParseError> {
+        // Parse: rhythm(voice_id).method().method().set();
+        // We've already parsed "rhythm", now expect (voice_id)
+        self.expect_token(&Token::LeftParen)?;
+
+        let voice_id = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let id = *n as i32;
+                self.position += 1;
+                id
+            }
+            Some(token) => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "voice ID number".to_string(),
+                    found: format!("{:?}", token),
+                })
+            }
+            None => return Err(ParseError::UnexpectedEnd),
+        };
+
+        self.expect_token(&Token::RightParen)?;
+
+        let mut builder = RhythmBuilder::new();
+        builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
+
+        let mut found_set = false;
+
+        // Parse method chain
+        while self.position < self.tokens.len() {
+            if let Some(Token::Dot) = self.current_token() {
+                self.expect_token(&Token::Dot)?;
+
+                let method_name = self.expect_identifier_any()?;
+
+                if method_name == "set" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    found_set = true;
+                    break;
+                } else {
+                    // Parse method call with parameter
+                    self.expect_token(&Token::LeftParen)?;
+                    let parameter = self.parse_parameter()?;
+                    self.expect_token(&Token::RightParen)?;
+
+                    builder.set_parameter(&method_name, parameter)?;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !found_set {
+            return Err(ParseError::MissingSet);
+        }
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        Ok(TerminalCommand::ModifyRhythmParams {
+            voice_id,
+            config: builder.build(),
+        })
     }
 
     fn parse_parameter(&mut self) -> Result<ParameterValue, ParseError> {

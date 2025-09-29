@@ -1438,6 +1438,39 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                         println!("Queueing RemoveCircle command for voice: {:?} circle: {}", voice_id, circle_id);
                                                                         command_queue.push(voice_command);
                                                                     }
+                                                                    TerminalCommand::ModifyDroneParams { voice_id, config } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+                                                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
+                                                                        println!("Queueing ModifyDroneParams command for voice: {:?} with config: {:?}", voice_id, config);
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::ModifyRhythmParams { voice_id, config } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+                                                                        println!("Queueing ModifyRhythmParams command for voice: {:?} with config: {:?}", voice_id, config);
+                                                                        let voice_command = Command::new(
+                                                                            CommandInner::Composite(CompositeCommand::ModifyRhythm { voice_id: voice_enum, config }),
+                                                                            CommandSource::Terminal
+                                                                        );
+                                                                        command_queue.push(voice_command);
+                                                                    }
+                                                                    TerminalCommand::ModifyVoiceParams { voice_id, drone_config, rhythm_config } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+
+                                                                        if let Some(config) = drone_config {
+                                                                            let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
+                                                                            println!("Queueing ModifyVoiceParams drone command for voice: {:?} with config: {:?}", voice_id, config);
+                                                                            command_queue.push(voice_command);
+                                                                        }
+
+                                                                        if let Some(config) = rhythm_config {
+                                                                            println!("Queueing ModifyVoiceParams rhythm command for voice: {:?} with config: {:?}", voice_id, config);
+                                                                            let voice_command = Command::new(
+                                                                                CommandInner::Composite(CompositeCommand::ModifyRhythm { voice_id: voice_enum, config }),
+                                                                                CommandSource::Terminal
+                                                                            );
+                                                                            command_queue.push(voice_command);
+                                                                        }
+                                                                    }
                                                                 }
                                                                 
                                                                 // Clear the input after successful execution
