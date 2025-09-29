@@ -26,7 +26,7 @@ use system4::{
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
     services::sequencer::SequencerService,
-    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
+    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams, TextJustification}},
     utils::IdGenerator,
     groups::VoiceId,
 };
@@ -504,15 +504,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             gpu_particle_buffer,
             rendering.get_named_texture("particles").unwrap(),
         );
-
-        /*
-        model.particle_renderer4.encode_into(
-            &mut encoder,
-            queue,
-            &gpu_buffer4.0,
-            rendering.get_named_texture("particles").unwrap(),
-        );
-         */
 
         model.segment_renderer.encode_into(
             &mut encoder,

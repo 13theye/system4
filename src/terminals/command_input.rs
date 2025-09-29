@@ -2,7 +2,7 @@
 //
 // Multi-line command input for NTerminal
 
-use super::{terminal::Terminal, ParseError, TerminalCommand};
+use super::{commands::TerminalCommand, parsing::ParseError, terminal::Terminal};
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
