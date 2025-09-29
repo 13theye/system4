@@ -135,12 +135,12 @@ impl Sequencer {
             return;
         };
 
-        let Some(ref wings) = self.params.wings else {
-            return;
-        };
-
         // Send 1 if the current beat is in the wings, 0 if not
-        let on_off: i32 = if wings.contains(&beat) { 1 } else { 0 };
+        let on_off: i32 = if self.params.wings.contains(&beat) {
+            1
+        } else {
+            0
+        };
 
         osc_sender.send_rhythm(self.id.to_i32(), beat as i32, on_off);
     }
@@ -279,7 +279,9 @@ impl SequencerService {
 
     /// Update parameters for a specific sequencer.
     pub fn update_sequencer_params(&mut self, id: VoiceId, params: RhythmParams) {
-        let result = self.command_tx.send(SequencerCommand::UpdateParams { id, params });
+        let result = self
+            .command_tx
+            .send(SequencerCommand::UpdateParams { id, params });
         if self.debug {
             println!(
                 "SequencerService: Sent UpdateParams command for {:?} with result: {:?}",

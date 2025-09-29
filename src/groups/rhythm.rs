@@ -14,7 +14,8 @@ pub struct RhythmParams {
     pub capacity: usize,
     pub num_wings: usize,
     pub subdivision: BeatSubdivision,
-    pub wings: Option<Vec<usize>>,
+    pub wings: Vec<usize>,
+    pub wings_buffer: Vec<usize>,
 }
 
 impl Default for RhythmParams {
@@ -23,7 +24,20 @@ impl Default for RhythmParams {
             capacity: 0,
             num_wings: 0,
             subdivision: BeatSubdivision::Eighth,
-            wings: None,
+            wings: Vec::new(),
+            wings_buffer: Vec::new(),
+        }
+    }
+}
+
+impl RhythmParams {
+    pub fn new(capacity: usize, num_wings: usize, subdivision: BeatSubdivision) -> Self {
+        Self {
+            capacity,
+            num_wings,
+            subdivision,
+            wings: Vec::new(),
+            wings_buffer: Vec::new(),
         }
     }
 }
@@ -74,12 +88,50 @@ impl Rhythm {
         self.params.subdivision = subdivision;
     }
 
-    pub fn set_wings(&mut self, rng: &mut ThreadRng) {
-        self.params.wings = Some(Rhythm::roll_wings(
-            rng,
-            self.params.capacity,
-            self.params.num_wings,
-        ));
+    /// Add back wings from buffer, or generate additional wings as needed
+    pub fn add_wings(&mut self, number_to_add: usize, rng: &mut ThreadRng) {
+        let restore_count = number_to_add.min(self.params.wings_buffer.len());
+
+        // restore from buffer
+        let restored: Vec<_> = self
+            .params
+            .wings_buffer
+            .drain(self.params.wings_buffer.len() - restore_count..)
+            .rev()
+            .collect();
+
+        self.params.wings.extend(restored);
+
+        let generate_count = number_to_add - restore_count;
+
+        if generate_count > 0 {
+            let mut available_positions: Vec<usize> = (0..self.params.capacity)
+                .filter(|p| !self.params.wings.contains(p))
+                .collect();
+
+            available_positions.shuffle(rng);
+            self.params
+                .wings
+                .extend(available_positions.into_iter().take(generate_count));
+        }
+    }
+
+    /// Remove wings and save them to a LIFO buffer.
+    pub fn remove_wings(&mut self, number_to_remove: usize) {
+        let wings = &mut self.params.wings;
+        let actual_remove_count = number_to_remove.min(wings.len());
+
+        // Remove and collect the last N wings in one operation
+        let removed_wings: Vec<usize> = wings
+            .drain(wings.len() - actual_remove_count..)
+            .collect();
+
+        // Add them to the buffer (they're already in LIFO order from drain)
+        self.params.wings_buffer.extend(removed_wings);
+    }
+
+    pub fn randomize_wings(&mut self, rng: &mut ThreadRng) {
+        self.params.wings = Rhythm::roll_wings(rng, self.params.capacity, self.params.num_wings);
     }
 
     fn roll_wings(rng: &mut ThreadRng, capacity: usize, num_wings: usize) -> Vec<usize> {
@@ -119,7 +171,7 @@ impl Rhythm {
 
     /// Re-roll wings and update the running sequencer with new wings
     pub fn reroll_wings(&mut self, rng: &mut ThreadRng, sequencer_service: &mut SequencerService) {
-        self.set_wings(rng);
+        self.randomize_wings(rng);
         // Update the running sequencer with new wings
         self.update_sequencer(sequencer_service);
     }

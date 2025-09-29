@@ -27,11 +27,12 @@ pub fn categorize_parameter(param_name: &str) -> Option<ParameterCategory> {
     match param_name {
         // Drone parameters
         "brightness" | "volume" | "feedback" | "vibration" | "gravity" | "force"
-        | "outerRadius" | "innerRadius" | "noise" | "centerX" | "centerY" => {
-            Some(ParameterCategory::Drone)
-        }
+        | "outerRadius" | "innerRadius" | "noise" | "centerX" | "centerY" | "newCircle"
+        | "removeCircle" => Some(ParameterCategory::Drone),
         // Rhythm parameters
-        "capacity" | "wings" | "sub" => Some(ParameterCategory::Rhythm),
+        "capacity" | "wings" | "sub" | "addWings" | "removeWings" => {
+            Some(ParameterCategory::Rhythm)
+        }
         // Voice parameter (used in both contexts)
         "voice" => None, // Special case - not categorized
         // Unknown parameter
@@ -294,6 +295,10 @@ impl CommandParser {
         match sub_command.as_str() {
             "makeDrone" => self.parse_make_drone_from_voice(voice_id),
             "makeRhythm" => self.parse_make_rhythm_from_voice(voice_id),
+            "addWings" => self.parse_wing_command(voice_id, sub_command, true),
+            "removeWings" => self.parse_wing_command(voice_id, sub_command, false),
+            "newCircle" => self.parse_new_circle_from_voice(voice_id),
+            "removeCircle" => self.parse_remove_circle_from_voice(voice_id),
             _ => {
                 // Check if this is a parameter modification command
                 // We need to determine what type of parameter this is
@@ -592,6 +597,138 @@ impl CommandParser {
                 })
             }
         }
+    }
+
+    fn parse_wing_command(
+        &mut self,
+        voice_id: i32,
+        _command_name: String,
+        is_add: bool,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).addWings(count); or voice(voice_id).removeWings(count);
+        // We've already parsed "voice(voice_id).addWings/removeWings", now expect (count)
+        self.expect_token(&Token::LeftParen)?;
+
+        let count = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let count = *n as usize;
+                self.position += 1;
+                count
+            }
+            Some(token) => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "number".to_string(),
+                    found: format!("{:?}", token),
+                })
+            }
+            None => return Err(ParseError::UnexpectedEnd),
+        };
+
+        self.expect_token(&Token::RightParen)?;
+
+        // Expect semicolon at the end (no .set() required)
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        // Return appropriate command
+        if is_add {
+            Ok(TerminalCommand::AddWings { voice_id, count })
+        } else {
+            Ok(TerminalCommand::RemoveWings { voice_id, count })
+        }
+    }
+
+    fn parse_new_circle_from_voice(
+        &mut self,
+        voice_id: i32,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).newCircle().parameters().add();
+        // We've already parsed "voice(voice_id).newCircle", now expect ()
+        self.expect_token(&Token::LeftParen)?;
+        self.expect_token(&Token::RightParen)?;
+
+        let mut builder = DroneBuilder::new();
+
+        // Set the voice ID that was parsed from the voice() command
+        builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
+
+        let mut found_add = false;
+
+        // Parse method chain until we find .add()
+        while self.position < self.tokens.len() {
+            if let Some(Token::Dot) = self.current_token() {
+                self.expect_token(&Token::Dot)?;
+
+                let method_name = self.expect_identifier_any()?;
+
+                if method_name == "add" {
+                    self.expect_token(&Token::LeftParen)?;
+                    self.expect_token(&Token::RightParen)?;
+                    found_add = true;
+                    break;
+                } else {
+                    // Parse method call with parameter
+                    self.expect_token(&Token::LeftParen)?;
+                    let parameter = self.parse_parameter()?;
+                    self.expect_token(&Token::RightParen)?;
+
+                    builder.set_parameter(&method_name, parameter)?;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !found_add {
+            return Err(ParseError::MissingAdd);
+        }
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        Ok(TerminalCommand::NewCircle {
+            voice_id,
+            config: builder.build(),
+        })
+    }
+
+    fn parse_remove_circle_from_voice(
+        &mut self,
+        voice_id: i32,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).removeCircle(circle_id);
+        // We've already parsed "voice(voice_id).removeCircle", now expect (circle_id)
+        self.expect_token(&Token::LeftParen)?;
+
+        let circle_id = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let id = *n as i32;
+                self.position += 1;
+                id
+            }
+            Some(token) => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "circle ID number".to_string(),
+                    found: format!("{:?}", token),
+                })
+            }
+            None => return Err(ParseError::UnexpectedEnd),
+        };
+
+        self.expect_token(&Token::RightParen)?;
+
+        // Expect semicolon at the end
+        if self.position < self.tokens.len() {
+            self.expect_token(&Token::Semicolon)?;
+        }
+
+        Ok(TerminalCommand::RemoveCircle {
+            voice_id,
+            circle_id,
+        })
     }
 
     fn parse_rhythm_command(&mut self) -> Result<TerminalCommand, ParseError> {

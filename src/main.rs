@@ -1471,6 +1471,28 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             command_queue.push(voice_command);
                                                                         }
                                                                     }
+                                                                    TerminalCommand::AddWings { voice_id, count } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+                                                                        let wing_command = Command::new(
+                                                                            CommandInner::Simple(SimpleCommand::AddWings {
+                                                                                voice_id: voice_enum,
+                                                                                count,
+                                                                            }),
+                                                                            CommandSource::Terminal,
+                                                                        );
+                                                                        command_queue.push(wing_command);
+                                                                    }
+                                                                    TerminalCommand::RemoveWings { voice_id, count } => {
+                                                                        let voice_enum = VoiceId::from_i32(voice_id);
+                                                                        let wing_command = Command::new(
+                                                                            CommandInner::Simple(SimpleCommand::RemoveWings {
+                                                                                voice_id: voice_enum,
+                                                                                count,
+                                                                            }),
+                                                                            CommandSource::Terminal,
+                                                                        );
+                                                                        command_queue.push(wing_command);
+                                                                    }
                                                                 }
                                                                 
                                                                 // Clear the input after successful execution

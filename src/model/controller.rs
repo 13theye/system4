@@ -82,6 +82,14 @@ pub enum SimpleCommand {
     ListCircles {
         voice_id: VoiceId,
     },
+    AddWings {
+        voice_id: VoiceId,
+        count: usize,
+    },
+    RemoveWings {
+        voice_id: VoiceId,
+        count: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -200,6 +208,12 @@ fn get_command_key(command: &Command) -> String {
             SimpleCommand::ListCircles {
                 voice_id: voice, ..
             } => format!("ListCircles_{:?}", voice),
+            SimpleCommand::AddWings {
+                voice_id: voice, ..
+            } => format!("AddWings_{:?}", voice),
+            SimpleCommand::RemoveWings {
+                voice_id: voice, ..
+            } => format!("RemoveWings_{:?}", voice),
         },
     }
 }
@@ -319,7 +333,7 @@ impl Model {
                     );
 
                     // Roll wings
-                    rhythm.set_wings(&mut self.rng);
+                    rhythm.randomize_wings(&mut self.rng);
 
                     // Start sequencer via Rhythm gateway method
                     rhythm.start_sequencer(&mut self.sequencer_service);
@@ -671,6 +685,46 @@ impl Model {
 
                 // Send to Performer Control status line
                 self.command_input.set_success_message(status_message);
+            }
+            SimpleCommand::AddWings { voice_id, count } => {
+                // Check if rhythm exists for this voice
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.add_wings(count, &mut self.rng);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+
+                    let status_message = format!(
+                        "Voice {} - Added {} wings (total: {})",
+                        voice_id.to_i32(),
+                        count,
+                        rhythm.get_params().wings.len()
+                    );
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
+                } else {
+                    let error_message = format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
+                    println!("Error: {}", error_message);
+                    self.command_input.set_error_message(error_message);
+                }
+            }
+            SimpleCommand::RemoveWings { voice_id, count } => {
+                // Check if rhythm exists for this voice
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.remove_wings(count);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+
+                    let status_message = format!(
+                        "Voice {} - Removed {} wings (total: {})",
+                        voice_id.to_i32(),
+                        count,
+                        rhythm.get_params().wings.len()
+                    );
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
+                } else {
+                    let error_message = format!("Voice {} has no rhythm to remove wings from", voice_id.to_i32());
+                    println!("Error: {}", error_message);
+                    self.command_input.set_error_message(error_message);
+                }
             }
         }
     }

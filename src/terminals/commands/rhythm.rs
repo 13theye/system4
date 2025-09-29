@@ -163,12 +163,11 @@ impl RhythmConfig {
         // Merge with defaults first to ensure all required fields are present
         let resolved_config = self.merge_with_defaults();
 
-        RhythmParams {
-            capacity: resolved_config.capacity.unwrap(),
-            num_wings: resolved_config.num_wings.unwrap(),
-            subdivision: resolved_config.subdivision.unwrap(),
-            wings: None, // Let Rhythm struct generate wings when appropriate
-        }
+        RhythmParams::new(
+            resolved_config.capacity.unwrap(),
+            resolved_config.num_wings.unwrap(),
+            resolved_config.subdivision.unwrap(),
+        )
     }
 
     /// Validate that the voice is valid for rhythm commands (2 or 3)

@@ -48,6 +48,14 @@ pub enum TerminalCommand {
         voice_id: i32,
         circle_id: i32,
     },
+    AddWings {
+        voice_id: i32,
+        count: usize,
+    },
+    RemoveWings {
+        voice_id: i32,
+        count: usize,
+    },
 }
 
 impl fmt::Display for TerminalCommand {
@@ -111,6 +119,12 @@ impl fmt::Display for TerminalCommand {
                     write!(f, "{}", config)?;
                 }
                 Ok(())
+            }
+            TerminalCommand::AddWings { voice_id, count } => {
+                write!(f, "AddWings voice {} count {}", voice_id, count)
+            }
+            TerminalCommand::RemoveWings { voice_id, count } => {
+                write!(f, "RemoveWings voice {} count {}", voice_id, count)
             }
         }
     }
