@@ -32,13 +32,12 @@ impl OscSender {
     }
 
     /// Sends a beat message
-    pub fn send_rhythm(&self, voice_id: i32, capacity: i32, wings: i32, beat: i32) {
+    pub fn send_rhythm(&self, voice_id: i32, beat: i32, val: i32) {
         let addr = "/sys4/rhythm".to_string();
         let args = vec![
             osc::Type::Int(voice_id),
-            osc::Type::Int(wings),
-            osc::Type::Int(capacity),
             osc::Type::Int(beat),
+            osc::Type::Int(val),
         ];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))

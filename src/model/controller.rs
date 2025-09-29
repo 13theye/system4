@@ -256,22 +256,24 @@ impl Model {
                         return;
                     }
 
+                    // Merge config with defaults as necessary
+                    let resolved_config = config.merge_with_defaults();
+
                     // Phase 1: Initialize drone structure (WindCircle and emitters)
                     let mut voice = Voice::new_with_id(voice_id);
                     let circle_id = voice.initialize_drone(
-                        &config,
+                        &resolved_config,
                         self.particle_system.default_particle_color,
                         self.particle_system.global_max_spawn_rate,
                     );
 
-                    self.osc_send.send_drone_on_off(config.voice, 1);
+                    self.osc_send.send_drone_on_off(resolved_config.voice, 1);
                     voice.set_is_spawning(true);
 
                     // Insert voice before applying parameters so validation can find it
                     self.voices.insert(voice_id, voice);
 
                     // Phase 2: Apply parameters through the command pipeline
-                    let resolved_config = config.merge_with_defaults();
                     let parameter_commands = CommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,

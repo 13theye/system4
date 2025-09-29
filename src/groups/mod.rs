@@ -4,4 +4,7 @@ pub mod voice_id;
 pub use voice_id::VoiceId;
 
 pub mod voice;
-pub use voice::Voice;
+pub use voice::{Voice, VoiceParams};
+
+pub mod rhythm;
+pub use rhythm::{Rhythm, RhythmParams};

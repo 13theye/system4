@@ -2,10 +2,13 @@
 //
 //
 
-use crate::{config::OscSendConfig, groups::VoiceId, osc::OscSender};
+use crate::{
+    config::OscSendConfig,
+    groups::{RhythmParams, VoiceId},
+    osc::OscSender,
+};
 
 use crossbeam_channel as channel;
-use nannou::rand::{rngs::ThreadRng, Rng};
 use prat::clockservice::{BeatEvent, BeatSubdivision, ClockService, TickEvent};
 use std::{
     collections::HashMap,
@@ -17,8 +20,7 @@ use thread_priority::*;
 /// A Euclidian-like sequencer that sends OSC beat messages based on an internal pattern.
 pub struct Sequencer {
     id: VoiceId,
-    capacity: usize,
-    num_wings: usize,
+    params: RhythmParams,
 
     // Data callback channel
     data_tx: channel::Sender<usize>,
@@ -31,16 +33,13 @@ pub struct Sequencer {
     // Business Logic State
     beat_count: usize,
     current_beat: Option<usize>,
-    wings: Option<Vec<usize>>,
 }
 
 #[allow(clippy::too_many_arguments)]
 impl Sequencer {
     pub fn new(
         id: VoiceId,
-        capacity: usize,
-        num_wings: usize,
-        subdivision: BeatSubdivision,
+        params: RhythmParams,
         data_tx: channel::Sender<usize>,
         data_rx: channel::Receiver<usize>,
         debug: bool,
@@ -48,19 +47,16 @@ impl Sequencer {
         let state = SequencerState {
             is_advancing: false,
             is_sending: false,
-            subscribed_to: subdivision,
         };
         Self {
             id,
-            capacity,
-            num_wings,
+            params,
             data_tx,
             data_rx,
             state,
             beat_count: 0,
             current_beat: None,
             debug,
-            wings: None,
         }
     }
 
@@ -70,10 +66,6 @@ impl Sequencer {
             self.state.is_advancing = true;
             self.state.is_sending = true;
             self.current_beat = Some(0);
-
-            if self.wings.is_none() {
-                self.wings = Some(Self::roll_wings(self.capacity, self.num_wings));
-            }
 
             if self.debug {
                 println!("Sequencer: Started sequencer {}", self.id);
@@ -118,7 +110,7 @@ impl Sequencer {
         beat += 1;
 
         // Wrap around
-        if beat > self.capacity - 1 {
+        if beat > self.params.capacity - 1 {
             beat = 0;
         }
 
@@ -143,19 +135,19 @@ impl Sequencer {
             return;
         };
 
-        let Some(ref wings) = self.wings else {
+        let Some(ref wings) = self.params.wings else {
             return;
         };
 
-        // Send msg if the current beat is in the wings
-        if wings.contains(&beat) {
-            osc_sender.send_rhythm(
-                self.id.to_i32(),
-                self.capacity as i32,
-                self.num_wings as i32,
-                beat as i32,
-            );
-        }
+        // Send 1 if the current beat is in the wings, 0 if not
+        let on_off: i32 = if wings.contains(&beat) { 1 } else { 0 };
+
+        osc_sender.send_rhythm(self.id.to_i32(), beat as i32, on_off);
+    }
+
+    /// Retrieve the sequencer's subscribed-to subdivision
+    pub fn subscribed_to_subdivision(&self) -> &BeatSubdivision {
+        &self.params.subdivision
     }
 
     /// Update the sequencer's state.
@@ -163,14 +155,9 @@ impl Sequencer {
         self.state = state;
     }
 
-    /// Get the subdivision the sequencer is subscribed to.
-    pub fn subscribed_to_subdivision(&self) -> &BeatSubdivision {
-        &self.state.subscribed_to
-    }
-
-    /// Subscribe to a beat subdivision
-    fn subscribe_to_subdivision(&mut self, subdivision: BeatSubdivision) {
-        self.state.subscribed_to = subdivision;
+    /// Update the sequencer's rhythmic parameters
+    pub fn update_params(&mut self, params: RhythmParams) {
+        self.params = params;
     }
 
     /// Check if the sequencer is sending.
@@ -181,22 +168,6 @@ impl Sequencer {
     /// Check if the sequencer is advancing.
     pub fn is_advancing(&self) -> bool {
         self.state.is_advancing
-    }
-
-    pub fn roll(&mut self, capacity: usize, num_wings: usize, subdivision: BeatSubdivision) {
-        self.capacity = capacity;
-        self.num_wings = num_wings;
-        self.subscribe_to_subdivision(subdivision);
-        self.wings = Some(Self::roll_wings(self.capacity, self.num_wings));
-    }
-
-    fn roll_wings(capacity: usize, num_wings: usize) -> Vec<usize> {
-        let mut rng = ThreadRng::default();
-        let mut wings = Vec::with_capacity(capacity);
-        for _ in 0..num_wings {
-            wings.push(rng.gen_range(0..capacity));
-        }
-        wings
     }
 }
 
@@ -260,20 +231,12 @@ impl SequencerService {
     /********************** Add and Remove Sequencers ******************************/
 
     /// Add a new sequencer to the service.
-    pub fn add_sequencer(
-        &mut self,
-        id: VoiceId,
-        capacity: usize,
-        num_wings: usize,
-        subdivision: BeatSubdivision,
-    ) {
+    pub fn add_sequencer(&mut self, id: VoiceId, params: RhythmParams) {
         let (data_tx, data_rx) = channel::bounded(1);
 
         let result = self.command_tx.send(SequencerCommand::Add {
             id,
-            capacity,
-            num_wings,
-            subdivision,
+            params,
             data_tx: data_tx.clone(),
             data_rx: data_rx.clone(),
         });
@@ -381,27 +344,15 @@ impl SequencerThread {
                 match command {
                     SequencerCommand::Add {
                         id,
-                        capacity,
-                        num_wings,
-                        subdivision,
+                        params,
                         data_tx,
                         data_rx,
                     } => {
                         if self.debug {
                             println!("SequencerThread: Adding sequencer {}", id);
                         }
-                        self.sequencers.insert(
-                            id,
-                            Sequencer::new(
-                                id,
-                                capacity,
-                                num_wings,
-                                subdivision,
-                                data_tx,
-                                data_rx,
-                                self.debug,
-                            ),
-                        );
+                        self.sequencers
+                            .insert(id, Sequencer::new(id, params, data_tx, data_rx, self.debug));
                     }
                     SequencerCommand::Pause { id } => {
                         if let Some(sequencer) = self.sequencers.get_mut(&id) {
@@ -426,16 +377,7 @@ impl SequencerThread {
                             sequencer.resume();
                         }
                     }
-                    SequencerCommand::Roll {
-                        id,
-                        capacity,
-                        num_wings,
-                        subdivision,
-                    } => {
-                        if let Some(sequencer) = self.sequencers.get_mut(&id) {
-                            sequencer.roll(capacity, num_wings, subdivision);
-                        }
-                    }
+
                     SequencerCommand::Start { id } => {
                         if let Some(sequencer) = self.sequencers.get_mut(&id) {
                             sequencer.start();
@@ -452,6 +394,11 @@ impl SequencerThread {
                     SequencerCommand::StopAll => {
                         for sequencer in self.sequencers.values_mut() {
                             sequencer.stop();
+                        }
+                    }
+                    SequencerCommand::UpdateParams { id, params } => {
+                        if let Some(sequencer) = self.sequencers.get_mut(&id) {
+                            sequencer.update_params(params);
                         }
                     }
                     SequencerCommand::UpdateState { id, state } => {
@@ -552,9 +499,7 @@ impl SequencerThread {
 pub enum SequencerCommand {
     Add {
         id: VoiceId,
-        capacity: usize,
-        num_wings: usize,
-        subdivision: BeatSubdivision,
+        params: RhythmParams,
         data_tx: channel::Sender<usize>,
         data_rx: channel::Receiver<usize>,
     },
@@ -570,12 +515,6 @@ pub enum SequencerCommand {
     Remove {
         id: VoiceId,
     },
-    Roll {
-        id: VoiceId,
-        capacity: usize,
-        num_wings: usize,
-        subdivision: BeatSubdivision,
-    },
     Shutdown,
     Start {
         id: VoiceId,
@@ -585,6 +524,10 @@ pub enum SequencerCommand {
         id: VoiceId,
     },
     StopAll,
+    UpdateParams {
+        id: VoiceId,
+        params: RhythmParams,
+    },
     UpdateState {
         id: VoiceId,
         state: SequencerState,
@@ -596,7 +539,6 @@ pub enum SequencerCommand {
 pub struct SequencerState {
     pub is_advancing: bool,
     pub is_sending: bool,
-    pub subscribed_to: BeatSubdivision,
 }
 
 /// Builder pattern for SequencerService.
