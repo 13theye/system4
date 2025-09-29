@@ -30,7 +30,7 @@ const CIRCLE_PARAMETERS: &[&str] = &[
     "centerY",
 ];
 
-pub struct DroneParametersDisplay {
+pub struct DroneParametersView {
     terminal_view: TerminalView,
     voice_id: VoiceId,
     voice_parameters: HashMap<String, ParameterUpdate>,
@@ -40,7 +40,7 @@ pub struct DroneParametersDisplay {
     known_circles: std::collections::BTreeSet<usize>,
 }
 
-impl DroneParametersDisplay {
+impl DroneParametersView {
     pub fn new(voice: VoiceId, params: TerminalViewParams) -> Self {
         let mut terminal_view = TerminalView::new(voice, params);
         let mut voice_param_to_line = HashMap::new();

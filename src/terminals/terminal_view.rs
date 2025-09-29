@@ -3,7 +3,7 @@
 use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
-use super::{command_input::CommandInput, drone_parameters_display::DroneParametersDisplay};
+use super::{command_input::CommandInput, drone_parameters_view::DroneParametersView};
 use crate::{groups::VoiceId, model::controller::Command};
 
 #[derive(Clone, Copy, Debug)]
@@ -18,7 +18,7 @@ pub enum TextJustification {
 /// Struct to collect and manager TerminalView updates
 pub struct TerminalViewManager {
     terminal_views: HashMap<String, TerminalView>,
-    drone_parameter_displays: HashMap<VoiceId, DroneParametersDisplay>,
+    drone_parameter_displays: HashMap<VoiceId, DroneParametersView>,
 }
 
 impl TerminalViewManager {
@@ -72,7 +72,7 @@ impl TerminalViewManager {
 
     /// Add a new drone parameters display for a voice
     pub fn add_drone_parameters_display(&mut self, voice: VoiceId, params: TerminalViewParams) {
-        let display = DroneParametersDisplay::new(voice, params);
+        let display = DroneParametersView::new(voice, params);
         self.drone_parameter_displays.insert(voice, display);
     }
 
@@ -94,12 +94,12 @@ impl TerminalViewManager {
     pub fn get_mut_drone_parameters_display(
         &mut self,
         voice: VoiceId,
-    ) -> Option<&mut DroneParametersDisplay> {
+    ) -> Option<&mut DroneParametersView> {
         self.drone_parameter_displays.get_mut(&voice)
     }
 
     /// Get a drone parameter display for display/drawing (immutable access)
-    pub fn get_drone_parameters_display(&self, voice: VoiceId) -> Option<&DroneParametersDisplay> {
+    pub fn get_drone_parameters_display(&self, voice: VoiceId) -> Option<&DroneParametersView> {
         self.drone_parameter_displays.get(&voice)
     }
 
