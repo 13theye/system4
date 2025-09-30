@@ -36,7 +36,7 @@ impl VoiceParser {
             "removeWings" => Self::parse_wing_command(tokens, position, voice_id, false),
             "newCircle" => Self::parse_new_circle_from_voice(tokens, position, voice_id),
             "removeCircle" => Self::parse_remove_circle_from_voice(tokens, position, voice_id),
-            "clearRhythm" => Self::parse_clear_rhythm_from_voice(tokens, position, voice_id),
+            "clear" => Self::parse_clear_from_voice(tokens, position, voice_id),
             _ => {
                 // Check if this is a parameter modification command
                 match categorize_parameter(&sub_command) {
@@ -110,7 +110,8 @@ impl VoiceParser {
         is_add: bool,
     ) -> Result<TerminalCommand, ParseError> {
         // Parse: voice(voice_id).addWings(count); or voice(voice_id).removeWings(count);
-        let count = ParsingUtils::parse_parentheses_with_number(tokens, position, "wing count")? as usize;
+        let count =
+            ParsingUtils::parse_parentheses_with_number(tokens, position, "wing count")? as usize;
 
         ParsingUtils::parse_optional_semicolon(tokens, position)?;
 
@@ -142,7 +143,7 @@ impl VoiceParser {
         })
     }
 
-    fn parse_clear_rhythm_from_voice(
+    fn parse_clear_from_voice(
         tokens: &[Token],
         position: &mut usize,
         voice_id: i32,
@@ -152,7 +153,7 @@ impl VoiceParser {
         ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
         ParsingUtils::parse_optional_semicolon(tokens, position)?;
 
-        Ok(TerminalCommand::ClearRhythm { voice_id })
+        Ok(TerminalCommand::Clear { voice_id })
     }
 
     fn parse_remove_circle_from_voice(

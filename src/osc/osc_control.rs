@@ -198,7 +198,7 @@ impl OscController {
                             ));
                         }
                     }
-                    "/sys2/circle/centerX" => {
+                    "/sys4/circle/centerX" => {
                         if let [osc::Type::Int(id), osc::Type::Int(circle_id), osc::Type::Float(val)] =
                             &message.args[..]
                         {

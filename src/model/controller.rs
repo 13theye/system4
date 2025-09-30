@@ -93,18 +93,22 @@ pub enum SimpleCommand {
     ClearRhythm {
         voice_id: VoiceId,
     },
+    ClearDrone {
+        voice_id: VoiceId,
+    },
+    RemoveCircle {
+        voice_id: VoiceId,
+        circle_id: i32,
+    },
+    CreateRhythm {
+        config: RhythmConfig,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum CompositeCommand {
     CreateDrone {
         config: DroneConfig,
-    },
-    CreateRhythm {
-        config: RhythmConfig,
-    },
-    EraseDrone {
-        voice_id: VoiceId,
     },
     ModifyDrone {
         voice_id: VoiceId,
@@ -118,9 +122,8 @@ pub enum CompositeCommand {
         voice_id: VoiceId,
         config: DroneConfig,
     },
-    RemoveCircle {
+    Clear {
         voice_id: VoiceId,
-        circle_id: i32,
     },
 }
 
@@ -152,12 +155,6 @@ fn get_command_key(command: &Command) -> String {
             CompositeCommand::CreateDrone { config } => {
                 format!("CreateDrone_{}", config.voice)
             }
-            CompositeCommand::CreateRhythm { config } => {
-                format!("CreateSequencer_{:?}", config.voice_id())
-            }
-            CompositeCommand::EraseDrone { voice_id } => {
-                format!("EraseDrone_{:?}", voice_id)
-            }
             CompositeCommand::ModifyDrone { voice_id, .. } => {
                 format!("ModifyDrone_{:?}", voice_id)
             }
@@ -167,11 +164,8 @@ fn get_command_key(command: &Command) -> String {
             CompositeCommand::NewCircle { voice_id, .. } => {
                 format!("NewCircle_{:?}", voice_id)
             }
-            CompositeCommand::RemoveCircle {
-                voice_id,
-                circle_id,
-            } => {
-                format!("RemoveCircle_{:?}_{}", voice_id, circle_id)
+            CompositeCommand::Clear { voice_id, .. } => {
+                format!("Clear_{:?}", voice_id)
             }
         },
         CommandInner::Simple(atomic) => match atomic {
@@ -220,6 +214,17 @@ fn get_command_key(command: &Command) -> String {
             SimpleCommand::ClearRhythm {
                 voice_id: voice, ..
             } => format!("ClearRhythm_{:?}", voice),
+            SimpleCommand::ClearDrone {
+                voice_id: voice, ..
+            } => format!("EraseDrone_{:?}", voice),
+            SimpleCommand::RemoveCircle {
+                voice_id: voice,
+                circle_id,
+                ..
+            } => format!("RemoveCircle_{:?}_{}", voice, circle_id),
+            SimpleCommand::CreateRhythm { config, .. } => {
+                format!("CreateSequencer_{:?}", config.voice_id())
+            }
         },
     }
 }
@@ -319,43 +324,6 @@ impl Model {
                     for param_cmd in parameter_commands {
                         self.command_queue.push(param_cmd);
                     }
-                }
-                CompositeCommand::CreateRhythm { config } => {
-                    // Convert RhythmConfig to RhythmParams
-                    let voice_id = config.voice_id();
-                    let config = config.merge_with_defaults();
-                    let params = config.to_rhythm_params();
-
-                    // Create and configure Rhythm object
-                    let mut rhythm = Rhythm::new_with_params(voice_id, params);
-
-                    let params = rhythm.get_params();
-                    let status_message = format!(
-                        "Voice {} - Created sequencer with capacity {}, {} wings, subdivision {:?}",
-                        voice_id.to_i32(),
-                        params.capacity,
-                        params.num_wings,
-                        params.subdivision
-                    );
-
-                    // Roll wings
-                    rhythm.randomize_wings(&mut self.rng);
-
-                    // Start sequencer via Rhythm gateway method
-                    rhythm.start_sequencer(&mut self.sequencer_service);
-
-                    // Store the Rhythm object in the model (like voices)
-                    self.rhythms.insert(voice_id, rhythm);
-
-                    // Start all sequencers to sync on the next beat
-                    self.sequencer_service.start_all();
-
-                    println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
-                }
-                CompositeCommand::EraseDrone { voice_id } => {
-                    self.kill_voice(voice_id);
-                    self.osc_send.send_drone_on_off(voice_id.to_i32(), 0);
                 }
                 CompositeCommand::ModifyDrone { voice_id, config } => {
                     let validation = self.validate_voice(voice_id);
@@ -499,35 +467,28 @@ impl Model {
                     println!("{}", status_message);
                     self.command_input.set_success_message(status_message);
                 }
-                CompositeCommand::RemoveCircle {
-                    voice_id,
-                    circle_id,
-                } => {
+                CompositeCommand::Clear { voice_id } => {
                     let validation = self.validate_voice(voice_id);
-                    if !self.validate_and_handle_error(validation, "RemoveCircle") {
+                    if !self.validate_and_handle_error(validation, "Clear") {
                         return;
                     }
 
-                    // Remove the circle from the voioce
-                    let voice = self.voices.get_mut(&voice_id).unwrap();
-                    let Some(circle) = voice.wind_circles.get_mut(&(circle_id as usize)) else {
-                        return;
-                    };
-
-                    let wind_field = &mut self.particle_system.forces.wind_field;
-                    circle.remove_from_field(wind_field);
-                    voice.remove_wind_circle(circle_id as usize);
-
-                    // Set success message
-                    let status_message = format!(
-                        "Voice {} - Removed WindCircle {}",
-                        voice_id.to_i32(),
-                        circle_id
-                    );
-                    println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    if self.rhythms.contains_key(&voice_id) {
+                        let cmd = Command::new(
+                            CommandInner::Simple(SimpleCommand::ClearRhythm { voice_id }),
+                            command.source.clone(),
+                        );
+                        self.command_queue.push(cmd);
+                    } else if self.voices.contains_key(&voice_id) {
+                        let cmd = Command::new(
+                            CommandInner::Simple(SimpleCommand::ClearDrone { voice_id }),
+                            command.source.clone(),
+                        );
+                        self.command_queue.push(cmd);
+                    }
                 }
             },
+
             CommandInner::Simple(atomic) => {
                 self.execute_simple_command(atomic);
             }
@@ -707,7 +668,8 @@ impl Model {
                     println!("{}", status_message);
                     self.command_input.set_success_message(status_message);
                 } else {
-                    let error_message = format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
+                    let error_message =
+                        format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
                     println!("Error: {}", error_message);
                     self.command_input.set_error_message(error_message);
                 }
@@ -727,7 +689,10 @@ impl Model {
                     println!("{}", status_message);
                     self.command_input.set_success_message(status_message);
                 } else {
-                    let error_message = format!("Voice {} has no rhythm to remove wings from", voice_id.to_i32());
+                    let error_message = format!(
+                        "Voice {} has no rhythm to remove wings from",
+                        voice_id.to_i32()
+                    );
                     println!("Error: {}", error_message);
                     self.command_input.set_error_message(error_message);
                 }
@@ -741,14 +706,83 @@ impl Model {
                     // Remove the rhythm from the model
                     self.rhythms.remove(&voice_id);
 
-                    let status_message = format!("Voice {} - Cleared rhythm and stopped sequencer", voice_id.to_i32());
+                    let status_message = format!(
+                        "Voice {} - Cleared rhythm and stopped sequencer",
+                        voice_id.to_i32()
+                    );
                     println!("{}", status_message);
                     self.command_input.set_success_message(status_message);
                 } else {
-                    let error_message = format!("Voice {} has no rhythm to clear", voice_id.to_i32());
+                    let error_message =
+                        format!("Voice {} has no rhythm to clear", voice_id.to_i32());
                     println!("Error: {}", error_message);
                     self.command_input.set_error_message(error_message);
                 }
+            }
+            SimpleCommand::ClearDrone { voice_id } => {
+                self.kill_voice(voice_id);
+                self.osc_send.send_drone_on_off(voice_id.to_i32(), 0);
+            }
+            SimpleCommand::RemoveCircle {
+                voice_id,
+                circle_id,
+            } => {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "RemoveCircle") {
+                    return;
+                }
+
+                // Remove the circle from the voice
+                let voice = self.voices.get_mut(&voice_id).unwrap();
+                let Some(circle) = voice.wind_circles.get_mut(&(circle_id as usize)) else {
+                    return;
+                };
+
+                let wind_field = &mut self.particle_system.forces.wind_field;
+                circle.remove_from_field(wind_field);
+                voice.remove_wind_circle(circle_id as usize);
+
+                // Set success message
+                let status_message = format!(
+                    "Voice {} - Removed WindCircle {}",
+                    voice_id.to_i32(),
+                    circle_id
+                );
+                println!("{}", status_message);
+                self.command_input.set_success_message(status_message);
+            }
+            SimpleCommand::CreateRhythm { config } => {
+                // Convert RhythmConfig to RhythmParams
+                let voice_id = config.voice_id();
+                let config = config.merge_with_defaults();
+                let params = config.to_rhythm_params();
+
+                // Create and configure Rhythm object
+                let mut rhythm = Rhythm::new_with_params(voice_id, params);
+
+                let params = rhythm.get_params();
+                let status_message = format!(
+                    "Voice {} - Created sequencer with capacity {}, {} wings, subdivision {:?}",
+                    voice_id.to_i32(),
+                    params.capacity,
+                    params.num_wings,
+                    params.subdivision
+                );
+
+                // Roll wings
+                rhythm.randomize_wings(&mut self.rng);
+
+                // Start sequencer via Rhythm gateway method
+                rhythm.start_sequencer(&mut self.sequencer_service);
+
+                // Store the Rhythm object in the model (like voices)
+                self.rhythms.insert(voice_id, rhythm);
+
+                // Start all sequencers to sync on the next beat
+                self.sequencer_service.start_all();
+
+                println!("{}", status_message);
+                self.command_input.set_success_message(status_message);
             }
         }
     }
@@ -885,7 +919,7 @@ pub fn make_drone_command(
 /// Create an erase drone command using the unified command system
 pub fn erase_drone_command(voice: VoiceId, source: CommandSource) -> Command {
     Command::new(
-        CommandInner::Composite(CompositeCommand::EraseDrone { voice_id: voice }),
+        CommandInner::Simple(SimpleCommand::ClearDrone { voice_id: voice }),
         source,
     )
 }

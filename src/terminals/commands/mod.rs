@@ -56,7 +56,7 @@ pub enum TerminalCommand {
         voice_id: i32,
         count: usize,
     },
-    ClearRhythm {
+    Clear {
         voice_id: i32,
     },
 }
@@ -129,8 +129,8 @@ impl fmt::Display for TerminalCommand {
             TerminalCommand::RemoveWings { voice_id, count } => {
                 write!(f, "RemoveWings voice {} count {}", voice_id, count)
             }
-            TerminalCommand::ClearRhythm { voice_id } => {
-                write!(f, "ClearRhythm voice {}", voice_id)
+            TerminalCommand::Clear { voice_id } => {
+                write!(f, "Clear voice {}", voice_id)
             }
         }
     }

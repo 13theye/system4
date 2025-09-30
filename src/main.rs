@@ -22,14 +22,18 @@ use std::{
 use system4::{
     config::*,
     fps::FpsManager,
-    model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand, CompositeCommand}},
+    model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand}},
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
     services::sequencer::SequencerService,
-    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification}},
+    terminals::{command_input::CommandInput, terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification}},
     utils::IdGenerator,
     groups::VoiceId,
 };
+
+// Import terminal processor to bring process_terminal_command method into scope
+#[allow(unused_imports)]
+use system4::model::terminal_processor;
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
@@ -707,6 +711,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     let mut show_forces_changed = false;
     let mut command_queue = Vec::<Command>::new();
+    let mut terminal_commands_to_process = Vec::new();
 
     egui::Window::new("Control Panel")
         .fixed_pos(egui::pos2(0.0, 0.0))
@@ -1362,143 +1367,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                         && model.command_input.is_ready_for_execution() {
                                                             if let Some(command) = model.command_input.try_execute() {
                                                                 println!("Executing command: {:?}", command);
-                                                                
-                                                                // Execute the command using unified VoiceCommand system
-                                                                match command {
-                                                                    TerminalCommand::CreateDrone(config) => {
-                                                                        let voice_command = config.to_create_command(CommandSource::Terminal);
-                                                                        println!("Queuing CreateDrone command with config: {:?}", config);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::CreateSequencer { config } => {
-                                                                        let voice_id = config.voice;
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Composite(CompositeCommand::CreateRhythm { config }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queuing CreateSequencer command for voice: {:?}", voice_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyVoice { voice_id, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
-                                                                        println!("Queuing ModifyVoice command for voice: {:?} with config: {:?}", voice_id, config);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyVoiceCircle { voice_id, circle_id, config} => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
 
-                                                                        // Generate circle-specific parameter commands
-                                                                        let parameter_commands = config.generate_circle_parameter_commands(
-                                                                            voice_enum,
-                                                                            circle_id as usize,
-                                                                            CommandSource::Terminal
-                                                                        );
+                                                                // Collect terminal command for processing after egui context is dropped
+                                                                terminal_commands_to_process.push(command);
 
-                                                                        println!("Queueing {} circle parameter commands for voice: {:?} circle: {:?}",
-                                                                                parameter_commands.len(), voice_id, circle_id);
-
-                                                                        for cmd in parameter_commands {
-                                                                            command_queue.push(cmd);
-                                                                        }
-                                                                    }
-                                                                    TerminalCommand::ListCircles { voice_id } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Simple(SimpleCommand::ListCircles { voice_id: voice_enum }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queueing ListCircles command for voice: {:?}", voice_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::NewCircle { voice_id, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Composite(CompositeCommand::NewCircle { voice_id: voice_enum, config }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queueing NewCircle command for voice: {:?}", voice_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::RemoveCircle {voice_id, circle_id} => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Composite(CompositeCommand::RemoveCircle { voice_id: voice_enum, circle_id }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queueing RemoveCircle command for voice: {:?} circle: {}", voice_id, circle_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyDroneParams { voice_id, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
-                                                                        println!("Queueing ModifyDroneParams command for voice: {:?} with config: {:?}", voice_id, config);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyRhythmParams { voice_id, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        println!("Queueing ModifyRhythmParams command for voice: {:?} with config: {:?}", voice_id, config);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Composite(CompositeCommand::ModifyRhythm { voice_id: voice_enum, config }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyVoiceParams { voice_id, drone_config, rhythm_config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-
-                                                                        if let Some(config) = drone_config {
-                                                                            let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
-                                                                            println!("Queueing ModifyVoiceParams drone command for voice: {:?} with config: {:?}", voice_id, config);
-                                                                            command_queue.push(voice_command);
-                                                                        }
-
-                                                                        if let Some(config) = rhythm_config {
-                                                                            println!("Queueing ModifyVoiceParams rhythm command for voice: {:?} with config: {:?}", voice_id, config);
-                                                                            let voice_command = Command::new(
-                                                                                CommandInner::Composite(CompositeCommand::ModifyRhythm { voice_id: voice_enum, config }),
-                                                                                CommandSource::Terminal
-                                                                            );
-                                                                            command_queue.push(voice_command);
-                                                                        }
-                                                                    }
-                                                                    TerminalCommand::AddWings { voice_id, count } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let wing_command = Command::new(
-                                                                            CommandInner::Simple(SimpleCommand::AddWings {
-                                                                                voice_id: voice_enum,
-                                                                                count,
-                                                                            }),
-                                                                            CommandSource::Terminal,
-                                                                        );
-                                                                        command_queue.push(wing_command);
-                                                                    }
-                                                                    TerminalCommand::RemoveWings { voice_id, count } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let wing_command = Command::new(
-                                                                            CommandInner::Simple(SimpleCommand::RemoveWings {
-                                                                                voice_id: voice_enum,
-                                                                                count,
-                                                                            }),
-                                                                            CommandSource::Terminal,
-                                                                        );
-                                                                        command_queue.push(wing_command);
-                                                                    }
-                                                                    TerminalCommand::ClearRhythm { voice_id } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let clear_command = Command::new(
-                                                                            CommandInner::Simple(SimpleCommand::ClearRhythm {
-                                                                                voice_id: voice_enum,
-                                                                            }),
-                                                                            CommandSource::Terminal,
-                                                                        );
-                                                                        command_queue.push(clear_command);
-                                                                    }
-                                                                }
-                                                                
                                                                 // Clear the input after successful execution
                                                                 model.command_input.clear();
-                                                                
+
                                                                 // Clear the terminal display
                                                                 model.terminal_manager.borrow_mut().clear_terminal_view("main");
                                                             }
@@ -1596,6 +1471,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
         });
 
     drop(ctx);
+
+    // Process any terminal commands that were collected during the UI update
+    for terminal_command in terminal_commands_to_process {
+        model.process_terminal_command(terminal_command);
+    }
 
     // Queue all UI voice commands for priority processing
     for command in command_queue {

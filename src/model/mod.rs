@@ -4,6 +4,7 @@
 
 pub mod command_builder;
 pub mod controller;
+pub mod terminal_processor;
 
 use crate::{
     fps::FpsManager,
