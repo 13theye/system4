@@ -338,7 +338,7 @@ fn model(app: &App) -> Model {
         justification: TerminalViewTextJustification::TopLeft,
     };
     
-    terminal_manager.new_terminal_view("main", VoiceId::Voice1, terminal_params);
+    terminal_manager.new_terminal_view("main", VoiceId::Voice0, terminal_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
@@ -369,8 +369,8 @@ fn model(app: &App) -> Model {
         justification: TerminalViewTextJustification::TopRight,
     };
 
-    terminal_manager.add_drone_parameters_display(VoiceId::Voice1, drone_params_voice1);
-    terminal_manager.add_drone_parameters_display(VoiceId::Voice4, drone_params_voice4);
+    terminal_manager.add_drone_parameters_display(VoiceId::Voice0, drone_params_voice1);
+    terminal_manager.add_drone_parameters_display(VoiceId::Voice3, drone_params_voice4);
 
     Model {
         particle_system,
@@ -678,30 +678,30 @@ fn update_control_ui(app: &App, model: &mut Model) {
     // Extract all parameters before creating egui context to avoid borrowing conflicts
 
     // Voice 1 parameters
-    let voice1_circle_ids = model.get_wind_circle_ids(VoiceId::Voice1);
+    let voice1_circle_ids = model.get_wind_circle_ids(VoiceId::Voice0);
     let voice1_all_circle_params: Vec<(usize, _)> = voice1_circle_ids.iter()
-        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice1, id).cloned().map(|params| (id, params)))
+        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice0, id).cloned().map(|params| (id, params)))
         .collect();
     let voice1_all_noise: Vec<(usize, f32)> = voice1_circle_ids.iter()
-        .map(|&id| (id, model.get_noise(VoiceId::Voice1, id)))
+        .map(|&id| (id, model.get_noise(VoiceId::Voice0, id)))
         .collect();
-    let voice1_alpha = model.get_alpha_limit(VoiceId::Voice1);
-    let voice1_volume = model.get_volume(VoiceId::Voice1);
-    let voice1_feedback = model.get_feedback(VoiceId::Voice1);
-    let voice1_vibration_offset = model.get_vibration(VoiceId::Voice1);
+    let voice1_alpha = model.get_alpha_limit(VoiceId::Voice0);
+    let voice1_volume = model.get_volume(VoiceId::Voice0);
+    let voice1_feedback = model.get_feedback(VoiceId::Voice0);
+    let voice1_vibration_offset = model.get_vibration(VoiceId::Voice0);
 
     // Voice 4 parameters
-    let voice4_circle_ids = model.get_wind_circle_ids(VoiceId::Voice4);
+    let voice4_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
     let voice4_all_circle_params: Vec<(usize, _)> = voice4_circle_ids.iter()
-        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice4, id).cloned().map(|params| (id, params)))
+        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice3, id).cloned().map(|params| (id, params)))
         .collect();
     let voice4_all_noise: Vec<(usize, f32)> = voice4_circle_ids.iter()
-        .map(|&id| (id, model.get_noise(VoiceId::Voice4, id)))
+        .map(|&id| (id, model.get_noise(VoiceId::Voice3, id)))
         .collect();
-    let voice4_alpha = model.get_alpha_limit(VoiceId::Voice4);
-    let voice4_volume = model.get_volume(VoiceId::Voice4);
-    let voice4_feedback = model.get_feedback(VoiceId::Voice4);
-    let voice4_vibration_offset = model.get_vibration(VoiceId::Voice4);
+    let voice4_alpha = model.get_alpha_limit(VoiceId::Voice3);
+    let voice4_volume = model.get_volume(VoiceId::Voice3);
+    let voice4_feedback = model.get_feedback(VoiceId::Voice3);
+    let voice4_vibration_offset = model.get_vibration(VoiceId::Voice3);
 
     let ctx = model.egui.begin_frame();
 
@@ -803,7 +803,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Alpha {
-                                                voice_id: VoiceId::Voice1,
+                                                voice_id: VoiceId::Voice0,
                                                 value: alpha,
                                             }), CommandSource::Ui));
                                         }
@@ -819,7 +819,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Volume {
-                                                voice_id: VoiceId::Voice1,
+                                                voice_id: VoiceId::Voice0,
                                                 value: volume,
                                             }), CommandSource::Ui));
                                         }
@@ -836,7 +836,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Vibration {
-                                                    voice_id: VoiceId::Voice1,
+                                                    voice_id: VoiceId::Voice0,
                                                     value: vibration_offset,
                                                 }), CommandSource::Ui),
                                             );
@@ -854,7 +854,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
-                                                    voice_id: VoiceId::Voice1,
+                                                    voice_id: VoiceId::Voice0,
                                                     value: feedback,
                                                 }), CommandSource::Ui),
                                             );
@@ -896,7 +896,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::OuterRadius {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: radius,
                                                                         }), CommandSource::Ui),
@@ -915,7 +915,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::InnerRadius {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: inner_radius,
                                                                         }), CommandSource::Ui),
@@ -934,7 +934,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Force {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: strength,
                                                                         }), CommandSource::Ui),
@@ -953,7 +953,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Gravity {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_bias,
                                                                         }), CommandSource::Ui),
@@ -972,7 +972,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Noise {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: angle_variation,
                                                                         }), CommandSource::Ui),
@@ -991,7 +991,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterX {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_x,
                                                                         }), CommandSource::Ui),
@@ -1010,7 +1010,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterY {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_y,
                                                                         }), CommandSource::Ui),
@@ -1085,7 +1085,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Alpha {
-                                                voice_id: VoiceId::Voice4,
+                                                voice_id: VoiceId::Voice3,
                                                 value: alpha,
                                             }), CommandSource::Ui));
                                         }
@@ -1101,7 +1101,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Volume {
-                                                voice_id: VoiceId::Voice4,
+                                                voice_id: VoiceId::Voice3,
                                                 value: volume,
                                             }), CommandSource::Ui));
                                         }
@@ -1118,7 +1118,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Vibration {
-                                                    voice_id: VoiceId::Voice4,
+                                                    voice_id: VoiceId::Voice3,
                                                     value: vibration_offset,
                                                 }), CommandSource::Ui),
                                             );
@@ -1136,7 +1136,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
-                                                    voice_id: VoiceId::Voice4,
+                                                    voice_id: VoiceId::Voice3,
                                                     value: feedback,
                                                 }), CommandSource::Ui),
                                             );
@@ -1178,7 +1178,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::OuterRadius {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: radius,
                                                                         }), CommandSource::Ui),
@@ -1197,7 +1197,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::InnerRadius {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: inner_radius,
                                                                         }), CommandSource::Ui),
@@ -1216,7 +1216,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Force {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: strength,
                                                                         }), CommandSource::Ui),
@@ -1235,7 +1235,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Gravity {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_bias,
                                                                         }), CommandSource::Ui),
@@ -1254,7 +1254,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Noise {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: angle_variation,
                                                                         }), CommandSource::Ui),
@@ -1273,7 +1273,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterX {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_x,
                                                                         }), CommandSource::Ui),
@@ -1292,7 +1292,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterY {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_y,
                                                                         }), CommandSource::Ui),

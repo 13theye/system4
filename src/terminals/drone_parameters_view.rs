@@ -183,7 +183,7 @@ impl DroneParametersView {
             CommandInner::Composite(composite_command) => {
                 match composite_command {
                     CompositeCommand::CreateDrone { config } => {
-                        if config.voice_enum() == self.voice_id {
+                        if config.voice == self.voice_id {
                             self.process_drone_config(config, now);
                         }
                     }

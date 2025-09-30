@@ -286,11 +286,11 @@ impl Model {
             CommandInner::Composite(composite) => match composite {
                 CompositeCommand::CreateDrone { config } => {
                     // Convert voice ID to Voice enum
-                    let voice_id = VoiceId::from_i32(config.voice);
+                    let voice_id = config.voice;
 
-                    if self.voices.contains_key(&voice_id) {
+                    if self.voices.contains_key(&config.voice) {
                         // Voice already exists, do nothing
-                        println!("Controller: Voice {} already exists", voice_id);
+                        println!("Controller: Voice {} already exists", &config.voice);
                         return;
                     }
 
@@ -305,7 +305,8 @@ impl Model {
                         self.particle_system.global_max_spawn_rate,
                     );
 
-                    self.osc_send.send_drone_on_off(resolved_config.voice, 1);
+                    self.osc_send
+                        .send_drone_on_off(resolved_config.voice.to_i32(), 1);
                     voice.set_is_spawning(true);
 
                     // Insert voice before applying parameters so validation can find it
@@ -897,7 +898,7 @@ pub fn make_drone_command(
     use crate::terminals::commands::drone::DroneConfig;
 
     let config = DroneConfig {
-        voice: voice_id,
+        voice: VoiceId::from_i32(voice_id),
         brightness: Some(brightness),
         volume: Some(volume),
         gravity: Some(gravity),
@@ -929,16 +930,16 @@ pub fn erase_drone_command(voice: VoiceId, source: CommandSource) -> Command {
 /// Update the "Feedback" feature by setting segment length in voice parameters
 pub fn update_feedback(model: &mut Model, _device: &Device, _queue: &Queue) {
     // Read feedback value for segment length before updating particle system
-    let voice1_feedback = model.get_feedback(VoiceId::Voice1);
-    let voice4_feedback = model.get_feedback(VoiceId::Voice4);
+    let voice1_feedback = model.get_feedback(VoiceId::Voice0);
+    let voice4_feedback = model.get_feedback(VoiceId::Voice3);
 
     // Update segment length based on Voice1 feedback slider
-    if let Some(voice1) = model.voices.get_mut(&VoiceId::Voice1) {
+    if let Some(voice1) = model.voices.get_mut(&VoiceId::Voice0) {
         voice1.set_segment_length(voice1_feedback);
     }
 
     // Update segment length based on Voice4 feedback slider
-    if let Some(voice4) = model.voices.get_mut(&VoiceId::Voice4) {
+    if let Some(voice4) = model.voices.get_mut(&VoiceId::Voice3) {
         voice4.set_segment_length(voice4_feedback);
     }
 }

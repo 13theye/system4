@@ -121,9 +121,9 @@ fn number_to_subdivision(n: i32) -> Result<BeatSubdivision, ParseError> {
 /// Returns Voice2 if available, otherwise Voice3, otherwise Voice2 as fallback
 pub fn determine_rhythm_voice(voice_hint: Option<i32>) -> VoiceId {
     match voice_hint {
-        Some(2) => VoiceId::Voice2,
-        Some(3) => VoiceId::Voice3,
-        _ => VoiceId::Voice2, // Default to Voice2
+        Some(2) => VoiceId::Voice1,
+        Some(3) => VoiceId::Voice2,
+        _ => VoiceId::Voice1, // Default to Voice2
     }
 }
 
@@ -192,9 +192,9 @@ impl RhythmConfig {
     /// Convert this RhythmConfig's voice ID to a VoiceId enum
     pub fn voice_id(&self) -> VoiceId {
         match self.voice {
-            2 => VoiceId::Voice2,
-            3 => VoiceId::Voice3,
-            _ => VoiceId::Voice2, // Default fallback
+            2 => VoiceId::Voice1,
+            3 => VoiceId::Voice2,
+            _ => VoiceId::Voice1, // Default fallback
         }
     }
 }
