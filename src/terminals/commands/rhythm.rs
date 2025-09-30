@@ -11,7 +11,7 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct RhythmBuilder {
-    pub voice: Option<i32>,
+    pub voice: Option<VoiceId>,
     pub capacity: Option<usize>,
     pub num_wings: Option<usize>,
     pub subdivision: Option<BeatSubdivision>,
@@ -20,7 +20,7 @@ pub struct RhythmBuilder {
 
 #[derive(Debug, Clone)]
 pub struct RhythmConfig {
-    pub voice: i32,
+    pub voice: VoiceId,
     pub capacity: Option<usize>,
     pub num_wings: Option<usize>,
     pub subdivision: Option<BeatSubdivision>,
@@ -44,7 +44,8 @@ impl TerminalCommandBuilder for RhythmBuilder {
         match name {
             "voice" => {
                 if let ParameterValue::Number(n) = value {
-                    self.voice = Some(n as i32);
+                    let voice = VoiceId::from_i32(n as i32);
+                    self.voice = Some(voice);
                 } else {
                     return Err(ParseError::UnexpectedToken {
                         expected: "number".to_string(),
@@ -92,7 +93,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
 
     fn build(self) -> RhythmConfig {
         RhythmConfig {
-            voice: self.voice.unwrap_or(2), // Default to Voice2
+            voice: self.voice.unwrap_or(VoiceId::Voice1), // Default to Voice2
             capacity: self.capacity,
             num_wings: self.num_wings,
             subdivision: self.subdivision,
@@ -129,11 +130,11 @@ pub fn determine_rhythm_voice(voice_hint: Option<i32>) -> VoiceId {
 
 impl RhythmConfig {
     /// Get default values for a specific voice
-    pub fn get_defaults_for_voice(voice: i32) -> Self {
+    pub fn get_defaults_for_voice(voice: VoiceId) -> Self {
         let (default_capacity, default_num_wings, default_subdivision) = match voice {
-            2 => (8, 3, BeatSubdivision::Eighth), // Voice2: Fast, simple rhythm
-            3 => (16, 5, BeatSubdivision::Quarter), // Voice3: Longer, more complex rhythm
-            _ => (8, 4, BeatSubdivision::Eighth), // Fallback
+            VoiceId::Voice1 => (8, 3, BeatSubdivision::Eighth), // Voice2: Fast, simple rhythm
+            VoiceId::Voice3 => (16, 5, BeatSubdivision::Quarter), // Voice3: Longer, more complex rhythm
+            _ => (8, 4, BeatSubdivision::Eighth),                 // Fallback
         };
 
         Self {
@@ -173,28 +174,19 @@ impl RhythmConfig {
     /// Validate that the voice is valid for rhythm commands (2 or 3)
     pub fn validate_voice(&self) -> Result<(), ParseError> {
         match self.voice {
-            2 | 3 => Ok(()),
-            1 => Err(ParseError::UnexpectedToken {
-                expected: "voice 2 or 3".to_string(),
-                found: format!("voice {} (Voice 1 is reserved for drones)", self.voice),
+            VoiceId::Voice1 | VoiceId::Voice2 => Ok(()),
+            VoiceId::Voice0 => Err(ParseError::UnexpectedToken {
+                expected: "voice 1 or 2".to_string(),
+                found: format!("voice {} (Voice 0 is reserved for drones)", self.voice),
             }),
-            4 => Err(ParseError::UnexpectedToken {
+            VoiceId::Voice3 => Err(ParseError::UnexpectedToken {
                 expected: "voice 2 or 3".to_string(),
-                found: format!("voice {} (Voice 4 is reserved for drones)", self.voice),
+                found: format!("voice {} (Voice 3 is reserved for drones)", self.voice),
             }),
             _ => Err(ParseError::UnexpectedToken {
-                expected: "voice 2 or 3".to_string(),
+                expected: "voice 1 or 2".to_string(),
                 found: format!("voice {} (invalid voice number)", self.voice),
             }),
-        }
-    }
-
-    /// Convert this RhythmConfig's voice ID to a VoiceId enum
-    pub fn voice_id(&self) -> VoiceId {
-        match self.voice {
-            2 => VoiceId::Voice1,
-            3 => VoiceId::Voice2,
-            _ => VoiceId::Voice1, // Default fallback
         }
     }
 }

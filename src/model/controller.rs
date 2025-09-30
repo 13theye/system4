@@ -223,7 +223,7 @@ fn get_command_key(command: &Command) -> String {
                 ..
             } => format!("RemoveCircle_{:?}_{}", voice, circle_id),
             SimpleCommand::CreateRhythm { config, .. } => {
-                format!("CreateSequencer_{:?}", config.voice_id())
+                format!("CreateSequencer_{:?}", config.voice)
             }
         },
     }
@@ -754,7 +754,7 @@ impl Model {
             }
             SimpleCommand::CreateRhythm { config } => {
                 // Convert RhythmConfig to RhythmParams
-                let voice_id = config.voice_id();
+                let voice_id = config.voice;
                 let config = config.merge_with_defaults();
                 let params = config.to_rhythm_params();
 
