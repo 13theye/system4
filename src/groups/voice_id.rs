@@ -4,30 +4,30 @@
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum VoiceId {
+    Voice0,
     Voice1,
     Voice2,
     Voice3,
-    Voice4,
     Invalid,
 }
 
 impl VoiceId {
     pub fn to_i32(&self) -> i32 {
         match self {
+            VoiceId::Voice0 => 0,
             VoiceId::Voice1 => 1,
             VoiceId::Voice2 => 2,
             VoiceId::Voice3 => 3,
-            VoiceId::Voice4 => 4,
-            VoiceId::Invalid => 0,
+            VoiceId::Invalid => -1,
         }
     }
 
     pub fn from_i32(i: i32) -> VoiceId {
         match i {
+            0 => VoiceId::Voice0,
             1 => VoiceId::Voice1,
             2 => VoiceId::Voice2,
             3 => VoiceId::Voice3,
-            4 => VoiceId::Voice4,
             _ => VoiceId::Invalid,
         }
     }

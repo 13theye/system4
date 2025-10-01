@@ -2,7 +2,7 @@
 //
 // Multi-line command input for NTerminal
 
-use super::{terminal::Terminal, ParseError, TerminalCommand};
+use super::{commands::TerminalCommand, parsing::ParseError, terminal::Terminal};
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -123,6 +123,12 @@ impl CommandInput {
     pub fn set_success_message(&mut self, message: String) {
         self.last_success = Some(message);
         self.last_error = None; // Clear any previous error
+    }
+
+    /// Set a custom error message (for command results)
+    pub fn set_error_message(&mut self, message: String) {
+        self.last_error = Some(ParseError::UnknownCommand(message));
+        self.last_success = None; // Clear any previous success
     }
 
     /// Check if the input is currently empty

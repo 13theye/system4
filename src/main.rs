@@ -9,6 +9,7 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
+use prat::clockservice::ClockService;
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -21,13 +22,18 @@ use std::{
 use system4::{
     config::*,
     fps::FpsManager,
-    model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand, CompositeCommand}},
+    model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand}},
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
-    terminals::{command_input::CommandInput, commands::TerminalCommand, terminal_view::{TerminalViewManager, TerminalViewParams}, TextJustification},
+    services::sequencer::SequencerService,
+    terminals::{command_input::CommandInput, terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification}},
     utils::IdGenerator,
     groups::VoiceId,
 };
+
+// Import terminal processor to bring process_terminal_command method into scope
+#[allow(unused_imports)]
+use system4::model::terminal_processor;
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
@@ -46,6 +52,27 @@ fn model(app: &App) -> Model {
     );
 
     let render_rect = Rect::from_x_y_w_h(0.0, 0.0, render_size.x, render_size.y);
+
+    // Init clock
+    let mut clock = ClockService::with()
+        .tempo(config.speed.bpm as f64)
+        .quantum(4.0)
+        .ppqn(24)
+        .enable_ticks()
+        .thread_priority(47)
+        .build();
+    // Start the clock thread or quit game if it fails
+    clock
+        .start_thread()
+        .expect("\nSystem4: fatal error: Failed to start clock thread");
+
+    clock
+        .start_clock()
+        .expect("System4: fatal error: Failed to start clock");
+
+    let sequencer_service = SequencerService::with_clock_and_osc_config(&clock, &config.osc_send)
+        .build()
+        .expect("System4: fatal error: Failed to build sequencer service");
 
     let osc = OscController::new(config.osc_receive.receive_port).unwrap();
     let osc_send = OscSender::new(&config.osc_send).unwrap();
@@ -308,10 +335,10 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,
         font: font.clone(),
         font_size: 32,
-        justification: TextJustification::TopLeft,
+        justification: TerminalViewTextJustification::TopLeft,
     };
     
-    terminal_manager.add_new_terminal_view("main", VoiceId::Voice1, terminal_params);
+    terminal_manager.new_terminal_view("main", VoiceId::Voice0, terminal_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
@@ -325,7 +352,7 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,     // Faster typing for parameters
         font: font.clone(),
         font_size: 22,
-        justification: TextJustification::TopLeft,
+        justification: TerminalViewTextJustification::TopLeft,
     };
 
     let drone_params_voice4 = TerminalViewParams {
@@ -339,15 +366,18 @@ fn model(app: &App) -> Model {
         chars_per_second: 6.0,
         font: font.clone(),
         font_size: 22,
-        justification: TextJustification::TopRight,
+        justification: TerminalViewTextJustification::TopRight,
     };
 
-    terminal_manager.add_drone_parameters_display(VoiceId::Voice1, drone_params_voice1);
-    terminal_manager.add_drone_parameters_display(VoiceId::Voice4, drone_params_voice4);
+    terminal_manager.add_drone_parameters_display(VoiceId::Voice0, drone_params_voice1);
+    terminal_manager.add_drone_parameters_display(VoiceId::Voice3, drone_params_voice4);
 
     Model {
         particle_system,
         voices: HashMap::new(),
+        rhythms: HashMap::new(),
+        clock,
+        sequencer_service,
         osc,
         osc_send,
         osc_loop,
@@ -479,15 +509,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        /*
-        model.particle_renderer4.encode_into(
-            &mut encoder,
-            queue,
-            &gpu_buffer4.0,
-            rendering.get_named_texture("particles").unwrap(),
-        );
-         */
-
         model.segment_renderer.encode_into(
             &mut encoder,
             queue,
@@ -520,7 +541,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         }
 
         // Update and draw terminal view as overlay on top of post-processed texture
-        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_terminal_view("main") {
+        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {
             terminal_view.update(&rendering.draw);
         }
 
@@ -656,31 +677,31 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     // Extract all parameters before creating egui context to avoid borrowing conflicts
 
-    // Voice 1 parameters
-    let voice1_circle_ids = model.get_wind_circle_ids(VoiceId::Voice1);
-    let voice1_all_circle_params: Vec<(usize, _)> = voice1_circle_ids.iter()
-        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice1, id).cloned().map(|params| (id, params)))
+    // Voice 0 parameters
+    let voice0_circle_ids = model.get_wind_circle_ids(VoiceId::Voice0);
+    let voice0_all_circle_params: Vec<(usize, _)> = voice0_circle_ids.iter()
+        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice0, id).cloned().map(|params| (id, params)))
         .collect();
-    let voice1_all_noise: Vec<(usize, f32)> = voice1_circle_ids.iter()
-        .map(|&id| (id, model.get_noise(VoiceId::Voice1, id)))
+    let voice0_all_noise: Vec<(usize, f32)> = voice0_circle_ids.iter()
+        .map(|&id| (id, model.get_noise(VoiceId::Voice0, id)))
         .collect();
-    let voice1_alpha = model.get_alpha_limit(VoiceId::Voice1);
-    let voice1_volume = model.get_volume(VoiceId::Voice1);
-    let voice1_feedback = model.get_feedback(VoiceId::Voice1);
-    let voice1_vibration_offset = model.get_vibration(VoiceId::Voice1);
+    let voice0_alpha = model.get_alpha_limit(VoiceId::Voice0);
+    let voice0_volume = model.get_volume(VoiceId::Voice0);
+    let voice0_feedback = model.get_feedback(VoiceId::Voice0);
+    let voice0_vibration_offset = model.get_vibration(VoiceId::Voice0);
 
-    // Voice 4 parameters
-    let voice4_circle_ids = model.get_wind_circle_ids(VoiceId::Voice4);
-    let voice4_all_circle_params: Vec<(usize, _)> = voice4_circle_ids.iter()
-        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice4, id).cloned().map(|params| (id, params)))
+    // Voice 3 parameters
+    let voice3_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
+    let voice3_all_circle_params: Vec<(usize, _)> = voice3_circle_ids.iter()
+        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice3, id).cloned().map(|params| (id, params)))
         .collect();
-    let voice4_all_noise: Vec<(usize, f32)> = voice4_circle_ids.iter()
-        .map(|&id| (id, model.get_noise(VoiceId::Voice4, id)))
+    let voice3_all_noise: Vec<(usize, f32)> = voice3_circle_ids.iter()
+        .map(|&id| (id, model.get_noise(VoiceId::Voice3, id)))
         .collect();
-    let voice4_alpha = model.get_alpha_limit(VoiceId::Voice4);
-    let voice4_volume = model.get_volume(VoiceId::Voice4);
-    let voice4_feedback = model.get_feedback(VoiceId::Voice4);
-    let voice4_vibration_offset = model.get_vibration(VoiceId::Voice4);
+    let voice3_alpha = model.get_alpha_limit(VoiceId::Voice3);
+    let voice3_volume = model.get_volume(VoiceId::Voice3);
+    let voice3_feedback = model.get_feedback(VoiceId::Voice3);
+    let voice3_vibration_offset = model.get_vibration(VoiceId::Voice3);
 
     let ctx = model.egui.begin_frame();
 
@@ -690,6 +711,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     let mut show_forces_changed = false;
     let mut command_queue = Vec::<Command>::new();
+    let mut terminal_commands_to_process = Vec::new();
 
     egui::Window::new("Control Panel")
         .fixed_pos(egui::pos2(0.0, 0.0))
@@ -756,14 +778,14 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         1 => {
                             // Voices tab content with scrollable columns
                             ui.horizontal(|ui| {
-                                // Voice 1 (col 2) - column with scrollable content
+                                // Voice 0 (col 2) - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(320.0);
                                     ui.set_min_height(height);
-                                    ui.heading("Voice 1: Drone");
+                                    ui.heading("Voice 0: Drone");
                                     ui.add_space(2.0);
                                     egui::ScrollArea::vertical()
-                                        .id_source("voice1_scroll")
+                                        .id_source("voice0_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
 
@@ -771,7 +793,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
 
                                         // Alpha slider
-                                        let mut alpha = voice1_alpha;
+                                        let mut alpha = voice0_alpha;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut alpha, 0.0..=1.0)
@@ -781,13 +803,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Alpha {
-                                                voice_id: VoiceId::Voice1,
+                                                voice_id: VoiceId::Voice0,
                                                 value: alpha,
                                             }), CommandSource::Ui));
                                         }
 
                                         // Volume slider
-                                        let mut volume = voice1_volume;
+                                        let mut volume = voice0_volume;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut volume, 0.0..=1.0)
@@ -797,13 +819,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Volume {
-                                                voice_id: VoiceId::Voice1,
+                                                voice_id: VoiceId::Voice0,
                                                 value: volume,
                                             }), CommandSource::Ui));
                                         }
 
                                         // Vibration offset slider
-                                        let mut vibration_offset = voice1_vibration_offset;
+                                        let mut vibration_offset = voice0_vibration_offset;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
@@ -814,14 +836,14 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Vibration {
-                                                    voice_id: VoiceId::Voice1,
+                                                    voice_id: VoiceId::Voice0,
                                                     value: vibration_offset,
                                                 }), CommandSource::Ui),
                                             );
                                         }
 
                                         // Feedback slider
-                                        let mut feedback = voice1_feedback;
+                                        let mut feedback = voice0_feedback;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut feedback, 0.0..=1.0)
@@ -832,7 +854,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
-                                                    voice_id: VoiceId::Voice1,
+                                                    voice_id: VoiceId::Voice0,
                                                     value: feedback,
                                                 }), CommandSource::Ui),
                                             );
@@ -843,15 +865,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
                                         ui.label("Wind Circles:");
 
-                                        if !voice1_all_circle_params.is_empty() {
+                                        if !voice0_all_circle_params.is_empty() {
                                             // Horizontal scroll area for multiple circles
                                             egui::ScrollArea::horizontal()
-                                                .id_source("voice1_circles_scroll")
+                                                .id_source("voice0_circles_scroll")
                                                 .auto_shrink([false, false])
                                                 .show(ui, |ui| {
                                                     ui.horizontal(|ui| {
-                                                        for (circle_id, params) in &voice1_all_circle_params {
-                                                            let circle_noise = voice1_all_noise.iter()
+                                                        for (circle_id, params) in &voice0_all_circle_params {
+                                                            let circle_noise = voice0_all_noise.iter()
                                                                 .find(|(id, _)| id == circle_id)
                                                                 .map(|(_, noise)| *noise)
                                                                 .unwrap_or(0.0);
@@ -874,7 +896,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::OuterRadius {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: radius,
                                                                         }), CommandSource::Ui),
@@ -893,7 +915,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::InnerRadius {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: inner_radius,
                                                                         }), CommandSource::Ui),
@@ -912,7 +934,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Force {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: strength,
                                                                         }), CommandSource::Ui),
@@ -931,7 +953,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Gravity {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_bias,
                                                                         }), CommandSource::Ui),
@@ -950,7 +972,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Noise {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: angle_variation,
                                                                         }), CommandSource::Ui),
@@ -969,7 +991,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterX {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_x,
                                                                         }), CommandSource::Ui),
@@ -988,7 +1010,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterY {
-                                                                            voice_id: VoiceId::Voice1,
+                                                                            voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_y,
                                                                         }), CommandSource::Ui),
@@ -1005,10 +1027,23 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.label("No wind circles found");
                                             ui.label("Use: makeDrone(1).begin();");
                                         }
-                                    }); // end Voice 1 scroll area
-                                }); // end Voice 1 column
+                                    }); // end Voice 0 scroll area
+                                }); // end Voice 0 column
 
-                                // Voice 2 (col 3) - column with scrollable content
+                                // Voice 1 (col 3) - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Voice 1: Rhythm");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("voice1_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |_ui| {
+                                    }); // end Voice 2 scroll area
+                                }); // end Voice 2 column
+
+                                // Voice 2 - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(320.0);
                                     ui.set_min_height(height);
@@ -1017,35 +1052,22 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     egui::ScrollArea::vertical()
                                         .id_source("voice2_scroll")
                                         .auto_shrink([false, false])
-                                        .show(ui, |_ui| {
-                                    }); // end Voice 2 scroll area
-                                }); // end Voice 2 column
-
-                                // Voice 3 - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(320.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("Voice 3: Rhythm");
-                                    ui.add_space(2.0);
-                                    egui::ScrollArea::vertical()
-                                        .id_source("voice3_scroll")
-                                        .auto_shrink([false, false])
                                         .show(ui, |ui| {
                                         
                                         // Voice 3 rhythm controls placeholder
                                         ui.label("Rhythm controls");
                                         ui.label("coming soon...");
-                                    }); // end Voice 3 scroll area
-                                }); // end Voice 3 column
+                                    }); // end Voice 2 scroll area
+                                }); // end Voice 2 column
 
-                                // Voice 4: Column 5 - column with scrollable content
+                                // Voice 3: Column 5 - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(320.0);
                                     ui.set_min_height(height);
-                                    ui.heading("Voice 4: Drone");
+                                    ui.heading("Voice 3: Drone");
                                     ui.add_space(2.0);
                                     egui::ScrollArea::vertical()
-                                        .id_source("voice4_scroll")
+                                        .id_source("voice3_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
 
@@ -1053,7 +1075,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
 
                                         // Alpha slider
-                                        let mut alpha = voice4_alpha;
+                                        let mut alpha = voice3_alpha;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut alpha, 0.0..=1.0)
@@ -1063,13 +1085,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Alpha {
-                                                voice_id: VoiceId::Voice4,
+                                                voice_id: VoiceId::Voice3,
                                                 value: alpha,
                                             }), CommandSource::Ui));
                                         }
 
                                         // Volume slider
-                                        let mut volume = voice4_volume;
+                                        let mut volume = voice3_volume;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut volume, 0.0..=1.0)
@@ -1079,13 +1101,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             .changed()
                                         {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Volume {
-                                                voice_id: VoiceId::Voice4,
+                                                voice_id: VoiceId::Voice3,
                                                 value: volume,
                                             }), CommandSource::Ui));
                                         }
 
                                         // Vibration offset slider
-                                        let mut vibration_offset = voice4_vibration_offset;
+                                        let mut vibration_offset = voice3_vibration_offset;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
@@ -1096,14 +1118,14 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Vibration {
-                                                    voice_id: VoiceId::Voice4,
+                                                    voice_id: VoiceId::Voice3,
                                                     value: vibration_offset,
                                                 }), CommandSource::Ui),
                                             );
                                         }
 
                                         // Feedback slider
-                                        let mut feedback = voice4_feedback;
+                                        let mut feedback = voice3_feedback;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut feedback, 0.0..=1.0)
@@ -1114,7 +1136,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         {
                                             command_queue.push(
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
-                                                    voice_id: VoiceId::Voice4,
+                                                    voice_id: VoiceId::Voice3,
                                                     value: feedback,
                                                 }), CommandSource::Ui),
                                             );
@@ -1125,15 +1147,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
                                         ui.label("Wind Circles:");
 
-                                        if !voice4_all_circle_params.is_empty() {
+                                        if !voice3_all_circle_params.is_empty() {
                                             // Horizontal scroll area for multiple circles
                                             egui::ScrollArea::horizontal()
-                                                .id_source("voice4_circles_scroll")
+                                                .id_source("voice3_circles_scroll")
                                                 .auto_shrink([false, false])
                                                 .show(ui, |ui| {
                                                     ui.horizontal(|ui| {
-                                                        for (circle_id, params) in &voice4_all_circle_params {
-                                                            let circle_noise = voice4_all_noise.iter()
+                                                        for (circle_id, params) in &voice3_all_circle_params {
+                                                            let circle_noise = voice3_all_noise.iter()
                                                                 .find(|(id, _)| id == circle_id)
                                                                 .map(|(_, noise)| *noise)
                                                                 .unwrap_or(0.0);
@@ -1156,7 +1178,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::OuterRadius {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: radius,
                                                                         }), CommandSource::Ui),
@@ -1175,7 +1197,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::InnerRadius {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: inner_radius,
                                                                         }), CommandSource::Ui),
@@ -1194,7 +1216,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Force {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: strength,
                                                                         }), CommandSource::Ui),
@@ -1213,7 +1235,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Gravity {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_bias,
                                                                         }), CommandSource::Ui),
@@ -1232,7 +1254,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::Noise {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: angle_variation,
                                                                         }), CommandSource::Ui),
@@ -1251,7 +1273,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterX {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_x,
                                                                         }), CommandSource::Ui),
@@ -1270,7 +1292,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 {
                                                                     command_queue.push(
                                                                         Command::new(CommandInner::Simple(SimpleCommand::CenterY {
-                                                                            voice_id: VoiceId::Voice4,
+                                                                            voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_y,
                                                                         }), CommandSource::Ui),
@@ -1287,8 +1309,8 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.label("No wind circles found");
                                             ui.label("Use: makeDrone(4).begin();");
                                         }
-                                    }); // end Voice 4 scroll area
-                                }); // end Voice 4 column
+                                    }); // end Voice 3 scroll area
+                                }); // end Voice 3 column
                             }); // end voices horizontal layout
                         }
                         0 => {
@@ -1345,71 +1367,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                         && model.command_input.is_ready_for_execution() {
                                                             if let Some(command) = model.command_input.try_execute() {
                                                                 println!("Executing command: {:?}", command);
-                                                                
-                                                                // Execute the command using unified VoiceCommand system
-                                                                match command {
-                                                                    TerminalCommand::CreateDrone(config) => {
-                                                                        let voice_command = config.to_create_command(CommandSource::Terminal);
-                                                                        println!("Queuing CreateDrone command with config: {:?}", config);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyVoice { voice_id, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = config.to_modify_command(voice_enum, CommandSource::Terminal);
-                                                                        println!("Queuing ModifyVoice command for voice: {:?} with config: {:?}", voice_id, config);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::ModifyVoiceCircle { voice_id, circle_id, config} => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
 
-                                                                        // Generate circle-specific parameter commands
-                                                                        let parameter_commands = config.generate_circle_parameter_commands(
-                                                                            voice_enum,
-                                                                            circle_id as usize,
-                                                                            CommandSource::Terminal
-                                                                        );
+                                                                // Collect terminal command for processing after egui context is dropped
+                                                                terminal_commands_to_process.push(command);
 
-                                                                        println!("Queueing {} circle parameter commands for voice: {:?} circle: {:?}",
-                                                                                parameter_commands.len(), voice_id, circle_id);
-
-                                                                        for cmd in parameter_commands {
-                                                                            command_queue.push(cmd);
-                                                                        }
-                                                                    }
-                                                                    TerminalCommand::ListCircles { voice_id } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Simple(SimpleCommand::ListCircles { voice_id: voice_enum }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queueing ListCircles command for voice: {:?}", voice_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::NewCircle { voice_id, config } => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Composite(CompositeCommand::NewCircle { voice_id: voice_enum, config }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queueing NewCircle command for voice: {:?}", voice_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                    TerminalCommand::RemoveCircle {voice_id, circle_id} => {
-                                                                        let voice_enum = VoiceId::from_i32(voice_id);
-                                                                        let voice_command = Command::new(
-                                                                            CommandInner::Composite(CompositeCommand::RemoveCircle { voice_id: voice_enum, circle_id }),
-                                                                            CommandSource::Terminal
-                                                                        );
-                                                                        println!("Queueing RemoveCircle command for voice: {:?} circle: {}", voice_id, circle_id);
-                                                                        command_queue.push(voice_command);
-                                                                    }
-                                                                }
-                                                                
                                                                 // Clear the input after successful execution
                                                                 model.command_input.clear();
-                                                                
+
                                                                 // Clear the terminal display
-                                                                model.terminal_manager.borrow_mut().clear_terminal("main");
+                                                                model.terminal_manager.borrow_mut().clear_terminal_view("main");
                                                             }
                                                         }
                                                     
@@ -1505,6 +1471,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
         });
 
     drop(ctx);
+
+    // Process any terminal commands that were collected during the UI update
+    for terminal_command in terminal_commands_to_process {
+        model.process_terminal_command(terminal_command);
+    }
 
     // Queue all UI voice commands for priority processing
     for command in command_queue {

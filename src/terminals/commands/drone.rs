@@ -12,7 +12,7 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct DroneBuilder {
-    pub voice: Option<i32>,
+    pub voice: Option<VoiceId>,
     pub brightness: Option<f32>,
     pub volume: Option<f32>,
     pub feedback: Option<f32>,
@@ -52,7 +52,8 @@ impl TerminalCommandBuilder for DroneBuilder {
         match name {
             "voice" => {
                 if let ParameterValue::Number(n) = value {
-                    self.voice = Some(n as i32);
+                    let voice = VoiceId::from_i32(n as i32);
+                    self.voice = Some(voice);
                 } else {
                     return Err(ParseError::UnexpectedToken {
                         expected: "number".to_string(),
@@ -180,11 +181,11 @@ impl TerminalCommandBuilder for DroneBuilder {
 
     fn build(self) -> DroneConfig {
         DroneConfig {
-            voice: self.voice.unwrap_or(1), // Voice is always required
-            brightness: self.brightness,    // None = unchanged, Some = set to value
-            volume: self.volume,            // None = unchanged, Some = set to value
-            feedback: self.feedback,        // None = unchanged, Some = set to value
-            vibration: self.vibration,      // None = unchanged, Some = set to value
+            voice: self.voice.unwrap_or(VoiceId::Voice0), // Voice is always required
+            brightness: self.brightness,                  // None = unchanged, Some = set to value
+            volume: self.volume,                          // None = unchanged, Some = set to value
+            feedback: self.feedback,                      // None = unchanged, Some = set to value
+            vibration: self.vibration,                    // None = unchanged, Some = set to value
 
             gravity: self.gravity, // None = unchanged, Some = set to value
             force: self.force,     // None = unchanged, Some = set to value
@@ -201,7 +202,7 @@ impl TerminalCommandBuilder for DroneBuilder {
 
 #[derive(Debug, Clone)]
 pub struct DroneConfig {
-    pub voice: i32,
+    pub voice: VoiceId,
     pub brightness: Option<f32>,
     pub volume: Option<f32>,
     pub feedback: Option<f32>,
@@ -220,16 +221,16 @@ pub struct DroneConfig {
 
 impl DroneConfig {
     /// Get default values for a specific voice
-    pub fn get_defaults_for_voice(voice: i32) -> Self {
+    pub fn get_defaults_for_voice(voice: VoiceId) -> Self {
         let (default_center_x, default_center_y) = match voice {
-            1 => (-1280.0, 0.0),
-            4 => (1280.0, 0.0),
+            VoiceId::Voice0 => (-1280.0, 0.0),
+            VoiceId::Voice3 => (1280.0, 0.0),
             _ => (0.0, 0.0),
         };
 
         let gravity = match voice {
-            1 => 0.5,
-            4 => 1.5,
+            VoiceId::Voice0 => 0.5,
+            VoiceId::Voice3 => 1.5,
             _ => 0.0,
         };
 
@@ -310,15 +311,6 @@ impl DroneConfig {
             }),
             source,
         )
-    }
-
-    /// Convert this DroneConfig's voice ID to a Voice enum
-    pub fn voice_enum(&self) -> VoiceId {
-        match self.voice {
-            1 => VoiceId::Voice1,
-            4 => VoiceId::Voice4,
-            _ => VoiceId::Voice1, // Default fallback
-        }
     }
 }
 

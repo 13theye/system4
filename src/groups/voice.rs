@@ -62,22 +62,24 @@ impl Voice {
     }
 
     pub fn issue_wind_circle_idx(&mut self) -> usize {
-        let idx = self.wind_circle_idx;
-        self.wind_circle_idx += 1;
-        idx
+        if let Some(i) = (0..self.wind_circle_idx).find(|&i| !self.wind_circles.contains_key(&i)) {
+            i
+        } else {
+            let idx = self.wind_circle_idx;
+            self.wind_circle_idx += 1;
+            idx
+        }
     }
 
     /// Initialize drone structure (WindCircle and emitters) without setting parameters
     /// Parameters should be set through the command pipeline after this call
+    /// DroneConfig should have been merged with defaults as necessary
     pub fn initialize_drone(
         &mut self,
-        config: &DroneConfig,
+        resolved_config: &DroneConfig,
         default_particle_color: Rgb,
         default_spawn_rate: f32,
     ) -> usize {
-        // Merge config with defaults to get all resolved values for structural setup
-        let resolved_config = config.clone().merge_with_defaults();
-
         // Extract resolved values for WindCircle creation
         let gravity = resolved_config.gravity.unwrap();
         let force = resolved_config.force.unwrap();

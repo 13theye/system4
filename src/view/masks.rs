@@ -26,9 +26,9 @@ impl Mask {
     pub fn make_drone(voice: VoiceId) -> Self {
         let origin = match voice {
             //Voice::Voice1 => vec2(-1280.0, 200.0),
-            VoiceId::Voice1 => vec2(0.0, 0.0),
+            VoiceId::Voice0 => vec2(0.0, 0.0),
             //Voice::Voice4 => vec2(1280.0, 200.0),
-            VoiceId::Voice4 => vec2(0.0, 0.0),
+            VoiceId::Voice3 => vec2(0.0, 0.0),
             _ => vec2(0.0, 0.0),
         };
 
