@@ -397,6 +397,17 @@ impl Model {
                             rhythm.set_subdivision(subdivision);
                         }
 
+                        // Handle slot modifications
+                        if let Some(modification) = config.length_modification {
+                            rhythm.modify_all_slots_length(modification, &mut self.rng);
+                        }
+                        if let Some(modification) = config.velocity_modification {
+                            rhythm.modify_all_slots_velocity(modification, &mut self.rng);
+                        }
+                        if let Some(modification) = config.cutoff_modification {
+                            rhythm.modify_all_slots_cutoff(modification, &mut self.rng);
+                        }
+
                         // Update the running sequencer with new parameters
                         rhythm.update_sequencer(&mut self.sequencer_service);
 
@@ -769,6 +780,9 @@ impl Model {
                     params.num_wings,
                     params.subdivision
                 );
+
+                // Roll slot parameters
+                rhythm.initialized_slots(&mut self.rng);
 
                 // Roll wings
                 rhythm.randomize_wings(&mut self.rng);

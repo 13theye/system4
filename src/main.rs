@@ -677,31 +677,31 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     // Extract all parameters before creating egui context to avoid borrowing conflicts
 
-    // Voice 1 parameters
-    let voice1_circle_ids = model.get_wind_circle_ids(VoiceId::Voice0);
-    let voice1_all_circle_params: Vec<(usize, _)> = voice1_circle_ids.iter()
+    // Voice 0 parameters
+    let voice0_circle_ids = model.get_wind_circle_ids(VoiceId::Voice0);
+    let voice0_all_circle_params: Vec<(usize, _)> = voice0_circle_ids.iter()
         .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice0, id).cloned().map(|params| (id, params)))
         .collect();
-    let voice1_all_noise: Vec<(usize, f32)> = voice1_circle_ids.iter()
+    let voice0_all_noise: Vec<(usize, f32)> = voice0_circle_ids.iter()
         .map(|&id| (id, model.get_noise(VoiceId::Voice0, id)))
         .collect();
-    let voice1_alpha = model.get_alpha_limit(VoiceId::Voice0);
-    let voice1_volume = model.get_volume(VoiceId::Voice0);
-    let voice1_feedback = model.get_feedback(VoiceId::Voice0);
-    let voice1_vibration_offset = model.get_vibration(VoiceId::Voice0);
+    let voice0_alpha = model.get_alpha_limit(VoiceId::Voice0);
+    let voice0_volume = model.get_volume(VoiceId::Voice0);
+    let voice0_feedback = model.get_feedback(VoiceId::Voice0);
+    let voice0_vibration_offset = model.get_vibration(VoiceId::Voice0);
 
-    // Voice 4 parameters
-    let voice4_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
-    let voice4_all_circle_params: Vec<(usize, _)> = voice4_circle_ids.iter()
+    // Voice 3 parameters
+    let voice3_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
+    let voice3_all_circle_params: Vec<(usize, _)> = voice3_circle_ids.iter()
         .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice3, id).cloned().map(|params| (id, params)))
         .collect();
-    let voice4_all_noise: Vec<(usize, f32)> = voice4_circle_ids.iter()
+    let voice3_all_noise: Vec<(usize, f32)> = voice3_circle_ids.iter()
         .map(|&id| (id, model.get_noise(VoiceId::Voice3, id)))
         .collect();
-    let voice4_alpha = model.get_alpha_limit(VoiceId::Voice3);
-    let voice4_volume = model.get_volume(VoiceId::Voice3);
-    let voice4_feedback = model.get_feedback(VoiceId::Voice3);
-    let voice4_vibration_offset = model.get_vibration(VoiceId::Voice3);
+    let voice3_alpha = model.get_alpha_limit(VoiceId::Voice3);
+    let voice3_volume = model.get_volume(VoiceId::Voice3);
+    let voice3_feedback = model.get_feedback(VoiceId::Voice3);
+    let voice3_vibration_offset = model.get_vibration(VoiceId::Voice3);
 
     let ctx = model.egui.begin_frame();
 
@@ -778,14 +778,14 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         1 => {
                             // Voices tab content with scrollable columns
                             ui.horizontal(|ui| {
-                                // Voice 1 (col 2) - column with scrollable content
+                                // Voice 0 (col 2) - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(320.0);
                                     ui.set_min_height(height);
-                                    ui.heading("Voice 1: Drone");
+                                    ui.heading("Voice 0: Drone");
                                     ui.add_space(2.0);
                                     egui::ScrollArea::vertical()
-                                        .id_source("voice1_scroll")
+                                        .id_source("voice0_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
 
@@ -793,7 +793,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
 
                                         // Alpha slider
-                                        let mut alpha = voice1_alpha;
+                                        let mut alpha = voice0_alpha;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut alpha, 0.0..=1.0)
@@ -809,7 +809,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         }
 
                                         // Volume slider
-                                        let mut volume = voice1_volume;
+                                        let mut volume = voice0_volume;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut volume, 0.0..=1.0)
@@ -825,7 +825,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         }
 
                                         // Vibration offset slider
-                                        let mut vibration_offset = voice1_vibration_offset;
+                                        let mut vibration_offset = voice0_vibration_offset;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
@@ -843,7 +843,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         }
 
                                         // Feedback slider
-                                        let mut feedback = voice1_feedback;
+                                        let mut feedback = voice0_feedback;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut feedback, 0.0..=1.0)
@@ -865,15 +865,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
                                         ui.label("Wind Circles:");
 
-                                        if !voice1_all_circle_params.is_empty() {
+                                        if !voice0_all_circle_params.is_empty() {
                                             // Horizontal scroll area for multiple circles
                                             egui::ScrollArea::horizontal()
-                                                .id_source("voice1_circles_scroll")
+                                                .id_source("voice0_circles_scroll")
                                                 .auto_shrink([false, false])
                                                 .show(ui, |ui| {
                                                     ui.horizontal(|ui| {
-                                                        for (circle_id, params) in &voice1_all_circle_params {
-                                                            let circle_noise = voice1_all_noise.iter()
+                                                        for (circle_id, params) in &voice0_all_circle_params {
+                                                            let circle_noise = voice0_all_noise.iter()
                                                                 .find(|(id, _)| id == circle_id)
                                                                 .map(|(_, noise)| *noise)
                                                                 .unwrap_or(0.0);
@@ -1027,10 +1027,23 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.label("No wind circles found");
                                             ui.label("Use: makeDrone(1).begin();");
                                         }
-                                    }); // end Voice 1 scroll area
-                                }); // end Voice 1 column
+                                    }); // end Voice 0 scroll area
+                                }); // end Voice 0 column
 
-                                // Voice 2 (col 3) - column with scrollable content
+                                // Voice 1 (col 3) - column with scrollable content
+                                ui.vertical(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("Voice 1: Rhythm");
+                                    ui.add_space(2.0);
+                                    egui::ScrollArea::vertical()
+                                        .id_source("voice1_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |_ui| {
+                                    }); // end Voice 2 scroll area
+                                }); // end Voice 2 column
+
+                                // Voice 2 - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(320.0);
                                     ui.set_min_height(height);
@@ -1039,35 +1052,22 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     egui::ScrollArea::vertical()
                                         .id_source("voice2_scroll")
                                         .auto_shrink([false, false])
-                                        .show(ui, |_ui| {
-                                    }); // end Voice 2 scroll area
-                                }); // end Voice 2 column
-
-                                // Voice 3 - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(320.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("Voice 3: Rhythm");
-                                    ui.add_space(2.0);
-                                    egui::ScrollArea::vertical()
-                                        .id_source("voice3_scroll")
-                                        .auto_shrink([false, false])
                                         .show(ui, |ui| {
                                         
                                         // Voice 3 rhythm controls placeholder
                                         ui.label("Rhythm controls");
                                         ui.label("coming soon...");
-                                    }); // end Voice 3 scroll area
-                                }); // end Voice 3 column
+                                    }); // end Voice 2 scroll area
+                                }); // end Voice 2 column
 
-                                // Voice 4: Column 5 - column with scrollable content
+                                // Voice 3: Column 5 - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(320.0);
                                     ui.set_min_height(height);
-                                    ui.heading("Voice 4: Drone");
+                                    ui.heading("Voice 3: Drone");
                                     ui.add_space(2.0);
                                     egui::ScrollArea::vertical()
-                                        .id_source("voice4_scroll")
+                                        .id_source("voice3_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
 
@@ -1075,7 +1075,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
 
                                         // Alpha slider
-                                        let mut alpha = voice4_alpha;
+                                        let mut alpha = voice3_alpha;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut alpha, 0.0..=1.0)
@@ -1091,7 +1091,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         }
 
                                         // Volume slider
-                                        let mut volume = voice4_volume;
+                                        let mut volume = voice3_volume;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut volume, 0.0..=1.0)
@@ -1107,7 +1107,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         }
 
                                         // Vibration offset slider
-                                        let mut vibration_offset = voice4_vibration_offset;
+                                        let mut vibration_offset = voice3_vibration_offset;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut vibration_offset, 0.0..=1.0)
@@ -1125,7 +1125,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         }
 
                                         // Feedback slider
-                                        let mut feedback = voice4_feedback;
+                                        let mut feedback = voice3_feedback;
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut feedback, 0.0..=1.0)
@@ -1147,15 +1147,15 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.add_space(5.0);
                                         ui.label("Wind Circles:");
 
-                                        if !voice4_all_circle_params.is_empty() {
+                                        if !voice3_all_circle_params.is_empty() {
                                             // Horizontal scroll area for multiple circles
                                             egui::ScrollArea::horizontal()
-                                                .id_source("voice4_circles_scroll")
+                                                .id_source("voice3_circles_scroll")
                                                 .auto_shrink([false, false])
                                                 .show(ui, |ui| {
                                                     ui.horizontal(|ui| {
-                                                        for (circle_id, params) in &voice4_all_circle_params {
-                                                            let circle_noise = voice4_all_noise.iter()
+                                                        for (circle_id, params) in &voice3_all_circle_params {
+                                                            let circle_noise = voice3_all_noise.iter()
                                                                 .find(|(id, _)| id == circle_id)
                                                                 .map(|(_, noise)| *noise)
                                                                 .unwrap_or(0.0);
@@ -1309,8 +1309,8 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.label("No wind circles found");
                                             ui.label("Use: makeDrone(4).begin();");
                                         }
-                                    }); // end Voice 4 scroll area
-                                }); // end Voice 4 column
+                                    }); // end Voice 3 scroll area
+                                }); // end Voice 3 column
                             }); // end voices horizontal layout
                         }
                         0 => {

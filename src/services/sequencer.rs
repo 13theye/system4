@@ -135,6 +135,11 @@ impl Sequencer {
             return;
         };
 
+        // Don't send if the slot is missing
+        let Some(slot) = self.params.slots.get(beat) else {
+            return;
+        };
+
         // Send 1 if the current beat is in the wings, 0 if not
         let on_off: i32 = if self.params.wings.contains(&beat) {
             1
@@ -142,7 +147,14 @@ impl Sequencer {
             0
         };
 
-        osc_sender.send_rhythm(self.id.to_i32(), beat as i32, on_off);
+        osc_sender.send_rhythm(
+            self.id.to_i32(),
+            beat as i32,
+            on_off,
+            slot.velocity,
+            slot.length,
+            slot.cutoff,
+        );
     }
 
     /// Retrieve the sequencer's subscribed-to subdivision

@@ -77,7 +77,21 @@ impl Tokenizer {
                 Ok(Token::Semicolon)
             }
             '"' => self.read_string(),
-            c if c.is_ascii_digit() || c == '-' => self.read_number(),
+            '+' => {
+                // Always treat + as a symbol (identifier)
+                Ok(Token::Identifier(self.read_symbols()))
+            }
+            '-' => {
+                // Lookahead: if followed by digit, it's a negative number; otherwise it's a symbol
+                if self.position + 1 < self.input.len()
+                    && self.input[self.position + 1].is_ascii_digit()
+                {
+                    self.read_number()
+                } else {
+                    Ok(Token::Identifier(self.read_symbols()))
+                }
+            }
+            c if c.is_ascii_digit() => self.read_number(),
             c if c.is_ascii_alphabetic() || c == '_' => {
                 Ok(Token::Identifier(self.read_identifier()))
             }
@@ -134,6 +148,21 @@ impl Tokenizer {
             && (self.current_char().is_ascii_alphanumeric() || self.current_char() == '_')
         {
             self.position += 1;
+        }
+
+        self.input[start..self.position].iter().collect()
+    }
+
+    fn read_symbols(&mut self) -> String {
+        let start = self.position;
+
+        while self.position < self.input.len() {
+            let ch = self.current_char();
+            if ch == '+' || ch == '-' {
+                self.position += 1;
+            } else {
+                break;
+            }
         }
 
         self.input[start..self.position].iter().collect()

@@ -40,9 +40,8 @@ pub fn categorize_parameter(param_name: &str) -> Option<ParameterCategory> {
         | "outerRadius" | "innerRadius" | "noise" | "centerX" | "centerY" | "newCircle"
         | "removeCircle" => Some(ParameterCategory::Drone),
         // Rhythm parameters
-        "capacity" | "wings" | "sub" | "addWings" | "removeWings" => {
-            Some(ParameterCategory::Rhythm)
-        }
+        "capacity" | "wings" | "sub" | "addWings" | "removeWings" | "length" | "velocity"
+        | "cutoff" => Some(ParameterCategory::Rhythm),
         // Voice parameter (used in both contexts)
         "voice" => None, // Special case - not categorized
         // Unknown parameter

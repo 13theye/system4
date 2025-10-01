@@ -1,21 +1,35 @@
 // src/groups/rhythm.rs
 
-use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
+use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
 
 use crate::{
     groups::{VoiceId, VoiceParams},
     particle::emitter::Emitter,
     services::sequencer::SequencerService,
+    terminals::commands::rhythm::RangeSize,
 };
+
+const NUM_SLOTS: usize = 32;
+
+#[derive(Debug, Clone)]
+pub struct RhythmSlot {
+    pub velocity: f32,
+    pub length: f32,
+    pub cutoff: f32,
+}
 
 #[derive(Debug, Clone)]
 pub struct RhythmParams {
     pub capacity: usize,
     pub num_wings: usize,
     pub subdivision: BeatSubdivision,
+    pub length_range: RangeSize,
+    pub velocity_range: RangeSize,
+    pub pitch_range: RangeSize,
     pub wings: Vec<usize>,
     pub wings_buffer: Vec<usize>,
+    pub slots: Vec<RhythmSlot>,
 }
 
 impl Default for RhythmParams {
@@ -24,20 +38,35 @@ impl Default for RhythmParams {
             capacity: 0,
             num_wings: 0,
             subdivision: BeatSubdivision::Eighth,
+            length_range: RangeSize::default(),
+            velocity_range: RangeSize::default(),
+            pitch_range: RangeSize::default(),
             wings: Vec::new(),
             wings_buffer: Vec::new(),
+            slots: Vec::new(),
         }
     }
 }
 
 impl RhythmParams {
-    pub fn new(capacity: usize, num_wings: usize, subdivision: BeatSubdivision) -> Self {
+    pub fn new(
+        capacity: usize,
+        num_wings: usize,
+        subdivision: BeatSubdivision,
+        length_range: RangeSize,
+        velocity_range: RangeSize,
+        pitch_range: RangeSize,
+    ) -> Self {
         Self {
             capacity,
             num_wings,
             subdivision,
+            length_range,
+            velocity_range,
+            pitch_range,
             wings: Vec::new(),
             wings_buffer: Vec::new(),
+            slots: Vec::new(),
         }
     }
 }
@@ -136,12 +165,136 @@ impl Rhythm {
         self.params.wings = Rhythm::roll_wings(rng, self.params.capacity, self.params.num_wings);
     }
 
+    pub fn initialized_slots(&mut self, rng: &mut ThreadRng) {
+        for _ in 0..NUM_SLOTS {
+            let slot = self.roll_slot(rng);
+            self.params.slots.push(slot);
+        }
+    }
+
     fn roll_wings(rng: &mut ThreadRng, capacity: usize, num_wings: usize) -> Vec<usize> {
         let mut nums: Vec<usize> = (0..capacity).collect();
         nums.shuffle(rng);
         nums.truncate(num_wings);
         nums
     }
+
+    pub fn roll_slot(&mut self, rng: &mut ThreadRng) -> RhythmSlot {
+        let length = rng.gen_range(self.params.length_range.to_range_inclusive());
+        let velocity = rng.gen_range(self.params.velocity_range.to_range_inclusive());
+        let pitch = rng.gen_range(self.params.pitch_range.to_range_inclusive());
+        RhythmSlot {
+            length,
+            velocity,
+            cutoff: pitch,
+        }
+    }
+
+    pub fn set_all_slot_velocity(&mut self, val: f32) {
+        for slot in &mut self.params.slots {
+            slot.velocity = val;
+        }
+    }
+
+    pub fn set_all_slot_length(&mut self, val: f32) {
+        for slot in &mut self.params.slots {
+            slot.length = val;
+        }
+    }
+
+    pub fn set_all_slot_cutoff(&mut self, val: f32) {
+        for slot in &mut self.params.slots {
+            slot.cutoff = val;
+        }
+    }
+
+    /// Randomize all slots' length within a range
+    pub fn randomize_all_slots_length(&mut self, range: RangeSize, rng: &mut ThreadRng) {
+        for slot in &mut self.params.slots {
+            slot.length = rng.gen_range(range.to_range_inclusive());
+        }
+    }
+
+    /// Randomize all slots' velocity within a range
+    pub fn randomize_all_slots_velocity(&mut self, range: RangeSize, rng: &mut ThreadRng) {
+        for slot in &mut self.params.slots {
+            slot.velocity = rng.gen_range(range.to_range_inclusive());
+        }
+    }
+
+    /// Randomize all slots' cutoff within a range
+    pub fn randomize_all_slots_cutoff(&mut self, range: RangeSize, rng: &mut ThreadRng) {
+        for slot in &mut self.params.slots {
+            slot.cutoff = rng.gen_range(range.to_range_inclusive());
+        }
+    }
+
+    /// Modify all slots' length based on ParameterModification
+    pub fn modify_all_slots_length(
+        &mut self,
+        modification: crate::terminals::commands::rhythm::ParameterModification,
+        rng: &mut ThreadRng,
+    ) {
+        use crate::terminals::commands::rhythm::ParameterModification;
+        match modification {
+            ParameterModification::Absolute(value) => {
+                self.set_all_slot_length(value.clamp(0.0, 1.0));
+            }
+            ParameterModification::Relative(delta) => {
+                for slot in &mut self.params.slots {
+                    slot.length = (slot.length + delta).clamp(0.0, 1.0);
+                }
+            }
+            ParameterModification::Randomize(range) => {
+                self.randomize_all_slots_length(range, rng);
+            }
+        }
+    }
+
+    /// Modify all slots' velocity based on ParameterModification
+    pub fn modify_all_slots_velocity(
+        &mut self,
+        modification: crate::terminals::commands::rhythm::ParameterModification,
+        rng: &mut ThreadRng,
+    ) {
+        use crate::terminals::commands::rhythm::ParameterModification;
+        match modification {
+            ParameterModification::Absolute(value) => {
+                self.set_all_slot_velocity(value.clamp(0.0, 1.0));
+            }
+            ParameterModification::Relative(delta) => {
+                for slot in &mut self.params.slots {
+                    slot.velocity = (slot.velocity + delta).clamp(0.0, 1.0);
+                }
+            }
+            ParameterModification::Randomize(range) => {
+                self.randomize_all_slots_velocity(range, rng);
+            }
+        }
+    }
+
+    /// Modify all slots' cutoff based on ParameterModification
+    pub fn modify_all_slots_cutoff(
+        &mut self,
+        modification: crate::terminals::commands::rhythm::ParameterModification,
+        rng: &mut ThreadRng,
+    ) {
+        use crate::terminals::commands::rhythm::ParameterModification;
+        match modification {
+            ParameterModification::Absolute(value) => {
+                self.set_all_slot_cutoff(value.clamp(0.0, 1.0));
+            }
+            ParameterModification::Relative(delta) => {
+                for slot in &mut self.params.slots {
+                    slot.cutoff = (slot.cutoff + delta).clamp(0.0, 1.0);
+                }
+            }
+            ParameterModification::Randomize(range) => {
+                self.randomize_all_slots_cutoff(range, rng);
+            }
+        }
+    }
+
     /********Gateway methods for SequencerService communication *********/
 
     /// Start the sequencer for this rhythm via SequencerService

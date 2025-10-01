@@ -46,7 +46,7 @@ impl ParsingUtils {
         Ok(parameter)
     }
 
-    /// Parse a parameter value (string or number)
+    /// Parse a parameter value (string, identifier, or number)
     pub fn parse_parameter(
         tokens: &[Token],
         position: &mut usize,
@@ -57,13 +57,18 @@ impl ParsingUtils {
                 *position += 1;
                 Ok(ParameterValue::String(value))
             }
+            Some(Token::Identifier(id)) => {
+                let value = id.clone();
+                *position += 1;
+                Ok(ParameterValue::String(value))
+            }
             Some(Token::Number(n)) => {
                 let value = *n;
                 *position += 1;
                 Ok(ParameterValue::Number(value))
             }
             Some(token) => Err(ParseError::UnexpectedToken {
-                expected: "string or number".to_string(),
+                expected: "string, identifier, or number".to_string(),
                 found: format!("{:?}", token),
             }),
             None => Err(ParseError::UnexpectedEnd),

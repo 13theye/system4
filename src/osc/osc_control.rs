@@ -17,6 +17,10 @@ pub struct OscSender {
     target_port: u16,
 }
 
+fn round3(f: f32) -> f32 {
+    (f * 1000.0).round() / 1000.0
+}
+
 impl OscSender {
     pub fn new(config: &OscSendConfig) -> Result<Self, Box<dyn Error>> {
         let target_addr = config.target_addr.to_owned();
@@ -32,12 +36,23 @@ impl OscSender {
     }
 
     /// Sends a beat message
-    pub fn send_rhythm(&self, voice_id: i32, beat: i32, val: i32) {
+    pub fn send_rhythm(
+        &self,
+        voice_id: i32,
+        beat: i32,
+        on_off: i32,
+        velocity: f32,
+        length: f32,
+        cutoff: f32,
+    ) {
         let addr = "/sys4/rhythm".to_string();
         let args = vec![
             osc::Type::Int(voice_id),
             osc::Type::Int(beat),
-            osc::Type::Int(val),
+            osc::Type::Int(on_off),
+            osc::Type::Float(round3(velocity)),
+            osc::Type::Float(round3(length)),
+            osc::Type::Float(round3(cutoff)),
         ];
         self.sender
             .send((addr, args), (self.target_addr.as_str(), self.target_port))

@@ -62,9 +62,13 @@ impl Voice {
     }
 
     pub fn issue_wind_circle_idx(&mut self) -> usize {
-        let idx = self.wind_circle_idx;
-        self.wind_circle_idx += 1;
-        idx
+        if let Some(i) = (0..self.wind_circle_idx).find(|&i| !self.wind_circles.contains_key(&i)) {
+            i
+        } else {
+            let idx = self.wind_circle_idx;
+            self.wind_circle_idx += 1;
+            idx
+        }
     }
 
     /// Initialize drone structure (WindCircle and emitters) without setting parameters

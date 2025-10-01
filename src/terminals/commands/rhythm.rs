@@ -9,12 +9,47 @@ use prat::BeatSubdivision;
 use std::collections::HashMap;
 use std::fmt;
 
+#[derive(Debug, Clone, Copy)]
+pub enum ParameterModification {
+    Absolute(f32),        // Set to exact value
+    Relative(f32),        // Add/subtract delta
+    Randomize(RangeSize), // Re-roll within range
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum RangeSize {
+    XS = 0,
+    S = 1,
+    #[default]
+    M = 2,
+    L = 3,
+    XL = 4,
+}
+
+impl RangeSize {
+    pub fn to_range_inclusive(&self) -> std::ops::RangeInclusive<f32> {
+        match self {
+            RangeSize::XS => 0.0..=0.25,
+            RangeSize::S => 0.2..=0.45,
+            RangeSize::M => 0.4..=0.66,
+            RangeSize::L => 0.5..=0.88,
+            RangeSize::XL => 0.75..=1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RhythmBuilder {
     pub voice: Option<VoiceId>,
     pub capacity: Option<usize>,
     pub num_wings: Option<usize>,
     pub subdivision: Option<BeatSubdivision>,
+    pub length_range: Option<RangeSize>,
+    pub velocity_range: Option<RangeSize>,
+    pub cutoff_range: Option<RangeSize>,
+    pub length_modification: Option<ParameterModification>,
+    pub velocity_modification: Option<ParameterModification>,
+    pub cutoff_modification: Option<ParameterModification>,
     pub parameters: HashMap<String, ParameterValue>,
 }
 
@@ -24,6 +59,12 @@ pub struct RhythmConfig {
     pub capacity: Option<usize>,
     pub num_wings: Option<usize>,
     pub subdivision: Option<BeatSubdivision>,
+    pub length_range: Option<RangeSize>,
+    pub velocity_range: Option<RangeSize>,
+    pub cutoff_range: Option<RangeSize>,
+    pub length_modification: Option<ParameterModification>,
+    pub velocity_modification: Option<ParameterModification>,
+    pub cutoff_modification: Option<ParameterModification>,
     pub additional_parameters: HashMap<String, ParameterValue>,
 }
 
@@ -36,6 +77,12 @@ impl TerminalCommandBuilder for RhythmBuilder {
             capacity: None,
             num_wings: None,
             subdivision: None,
+            length_range: None,
+            velocity_range: None,
+            cutoff_range: None,
+            length_modification: None,
+            velocity_modification: None,
+            cutoff_modification: None,
             parameters: HashMap::new(),
         }
     }
@@ -83,6 +130,64 @@ impl TerminalCommandBuilder for RhythmBuilder {
                     });
                 }
             }
+            "length" => {
+                match value {
+                    ParameterValue::Number(n) => {
+                        // Absolute value: .length(0.5)
+                        self.length_modification = Some(ParameterModification::Absolute(n));
+                    }
+                    ParameterValue::String(s) => {
+                        // Try parsing as range size first, then as relative modification
+                        if let Ok(range) = string_to_range_size(s.clone()) {
+                            // Set both: range for future slot generation, modification for editing
+                            self.length_range = Some(range);
+                            self.length_modification =
+                                Some(ParameterModification::Randomize(range));
+                        } else {
+                            self.length_modification = Some(parse_relative_modification(s)?);
+                        }
+                    }
+                }
+            }
+            "velocity" => {
+                match value {
+                    ParameterValue::Number(n) => {
+                        // Absolute value: .velocity(0.5)
+                        self.velocity_modification = Some(ParameterModification::Absolute(n));
+                    }
+                    ParameterValue::String(s) => {
+                        // Try parsing as range size first, then as relative modification
+                        if let Ok(range) = string_to_range_size(s.clone()) {
+                            // Set both: range for future slot generation, modification for editing
+                            self.velocity_range = Some(range);
+                            self.velocity_modification =
+                                Some(ParameterModification::Randomize(range));
+                        } else {
+                            self.velocity_modification = Some(parse_relative_modification(s)?);
+                        }
+                    }
+                }
+            }
+            "cutoff" => {
+                match value {
+                    ParameterValue::Number(n) => {
+                        // Absolute value: .cutoff(0.5)
+                        self.cutoff_modification = Some(ParameterModification::Absolute(n));
+                    }
+                    ParameterValue::String(s) => {
+                        // Try parsing as range size first, then as relative modification
+                        if let Ok(range) = string_to_range_size(s.clone()) {
+                            // Set both: range for future slot generation, modification for editing
+                            self.cutoff_range = Some(range);
+                            self.cutoff_modification =
+                                Some(ParameterModification::Randomize(range));
+                        } else {
+                            self.cutoff_modification = Some(parse_relative_modification(s)?);
+                        }
+                    }
+                }
+            }
+
             _ => {
                 // Store unknown parameters for future extensibility
                 self.parameters.insert(name.to_string(), value);
@@ -97,8 +202,56 @@ impl TerminalCommandBuilder for RhythmBuilder {
             capacity: self.capacity,
             num_wings: self.num_wings,
             subdivision: self.subdivision,
+            length_range: self.length_range,
+            velocity_range: self.velocity_range,
+            cutoff_range: self.cutoff_range,
+            length_modification: self.length_modification,
+            velocity_modification: self.velocity_modification,
+            cutoff_modification: self.cutoff_modification,
             additional_parameters: self.parameters,
         }
+    }
+}
+
+/// Parse relative modification symbols (+, ++, +++, -, --, ---)
+fn parse_relative_modification(s: String) -> Result<ParameterModification, ParseError> {
+    match s.as_str() {
+        "+" => Ok(ParameterModification::Relative(0.1)),
+        "++" => Ok(ParameterModification::Relative(0.2)),
+        "+++" => Ok(ParameterModification::Relative(0.3)),
+        "-" => Ok(ParameterModification::Relative(-0.1)),
+        "--" => Ok(ParameterModification::Relative(-0.2)),
+        "---" => Ok(ParameterModification::Relative(-0.3)),
+        _ => Err(ParseError::UnexpectedToken {
+            expected: "+, ++, +++, -, --, ---, or range size (xs, s, m, l, xl)".to_string(),
+            found: s,
+        }),
+    }
+}
+
+/// Convert a string to a RangeSize
+fn string_to_range_size(s: String) -> Result<RangeSize, ParseError> {
+    match s.to_lowercase().as_str() {
+        "xs" => Ok(RangeSize::XS),
+        "s" => Ok(RangeSize::S),
+        "m" => Ok(RangeSize::M),
+        "l" => Ok(RangeSize::L),
+        "xl" => Ok(RangeSize::XL),
+        _ => Err(ParseError::UnexpectedToken {
+            expected: "xs, s, m, l, or xl".to_string(),
+            found: s,
+        }),
+    }
+}
+
+/// Attempt to convert a string to a number
+fn string_to_number(s: String) -> Result<f32, ParseError> {
+    match s.parse::<f32>() {
+        Ok(n) => Ok(n),
+        Err(_) => Err(ParseError::UnexpectedToken {
+            expected: "number".to_string(),
+            found: s,
+        }),
     }
 }
 
@@ -137,11 +290,23 @@ impl RhythmConfig {
             _ => (8, 4, BeatSubdivision::Eighth),                 // Fallback
         };
 
+        let (default_length_range, default_velocity_range, default_pitch_range) = match voice {
+            VoiceId::Voice1 => (RangeSize::M, RangeSize::M, RangeSize::M), // Voice2: Fast, simple rhythm
+            VoiceId::Voice3 => (RangeSize::M, RangeSize::M, RangeSize::M), // Voice3: Longer, more complex rhythm
+            _ => (RangeSize::M, RangeSize::M, RangeSize::M),               // Fallback
+        };
+
         Self {
             voice,
             capacity: Some(default_capacity),
             num_wings: Some(default_num_wings),
             subdivision: Some(default_subdivision),
+            length_range: Some(default_length_range),
+            velocity_range: Some(default_velocity_range),
+            cutoff_range: Some(default_pitch_range),
+            length_modification: None,
+            velocity_modification: None,
+            cutoff_modification: None,
             additional_parameters: HashMap::new(),
         }
     }
@@ -155,6 +320,12 @@ impl RhythmConfig {
             capacity: self.capacity.or(defaults.capacity),
             num_wings: self.num_wings.or(defaults.num_wings),
             subdivision: self.subdivision.or(defaults.subdivision),
+            length_range: self.length_range.or(defaults.length_range),
+            velocity_range: self.velocity_range.or(defaults.velocity_range),
+            cutoff_range: self.cutoff_range.or(defaults.cutoff_range),
+            length_modification: self.length_modification,
+            velocity_modification: self.velocity_modification,
+            cutoff_modification: self.cutoff_modification,
             additional_parameters: self.additional_parameters,
         }
     }
@@ -168,6 +339,9 @@ impl RhythmConfig {
             resolved_config.capacity.unwrap(),
             resolved_config.num_wings.unwrap(),
             resolved_config.subdivision.unwrap(),
+            resolved_config.length_range.unwrap(),
+            resolved_config.velocity_range.unwrap(),
+            resolved_config.cutoff_range.unwrap(),
         )
     }
 
