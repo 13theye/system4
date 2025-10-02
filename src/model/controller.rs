@@ -6,7 +6,7 @@ use crate::{
     forces::WindCircleParams,
     groups::{Rhythm, Voice, VoiceId},
     model::{
-        command_builder::{CommandBuilder, ValidationResult, VoiceValidator},
+        command_builder::{DroneCommandBuilder, ValidationResult, VoiceValidator},
         Model,
     },
     terminals::commands::{drone::DroneConfig, rhythm::RhythmConfig},
@@ -313,7 +313,7 @@ impl Model {
                     self.voices.insert(voice_id, voice);
 
                     // Phase 2: Apply parameters through the command pipeline
-                    let parameter_commands = CommandBuilder::generate_all_parameter_commands(
+                    let parameter_commands = DroneCommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,
                         circle_id,
@@ -332,45 +332,15 @@ impl Model {
                         return;
                     }
 
-                    // Generate atomic commands for voice-level parameters only
-                    if let Some(brightness) = config.brightness {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Alpha {
-                                voice_id,
-                                value: brightness,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(volume) = config.volume {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Volume {
-                                voice_id,
-                                value: volume,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(feedback) = config.feedback {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Feedback {
-                                voice_id,
-                                value: feedback,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(vibration) = config.vibration {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Vibration {
-                                voice_id,
-                                value: vibration,
-                            }),
-                            command.source.clone(),
-                        );
+                    // Generate atomic commands for voice-level parameters using DroneCommandBuilder
+                    let parameter_commands = DroneCommandBuilder::generate_voice_parameter_commands(
+                        &config,
+                        voice_id,
+                        command.source.clone(),
+                    );
+
+                    // Queue parameter commands
+                    for cmd in parameter_commands {
                         self.command_queue.push(cmd);
                     }
 
@@ -460,12 +430,13 @@ impl Model {
                     voice.add_wind_circle(circle);
 
                     // Queue parameter update commands for processing after this command completes
-                    let parameter_commands = CommandBuilder::generate_circle_parameter_commands(
-                        &resolved_config,
-                        voice_id,
-                        circle_id,
-                        command.source.clone(),
-                    );
+                    let parameter_commands =
+                        DroneCommandBuilder::generate_circle_parameter_commands(
+                            &resolved_config,
+                            voice_id,
+                            circle_id,
+                            command.source.clone(),
+                        );
 
                     // Add commands to queue instead of executing recursively
                     self.command_queue.extend(parameter_commands);
@@ -782,7 +753,7 @@ impl Model {
                 );
 
                 // Roll slot parameters
-                rhythm.initialized_slots(&mut self.rng);
+                rhythm.initialize_slots(&mut self.rng);
 
                 // Roll wings
                 rhythm.randomize_wings(&mut self.rng);

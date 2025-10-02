@@ -165,7 +165,7 @@ impl Rhythm {
         self.params.wings = Rhythm::roll_wings(rng, self.params.capacity, self.params.num_wings);
     }
 
-    pub fn initialized_slots(&mut self, rng: &mut ThreadRng) {
+    pub fn initialize_slots(&mut self, rng: &mut ThreadRng) {
         for _ in 0..NUM_SLOTS {
             let slot = self.roll_slot(rng);
             self.params.slots.push(slot);

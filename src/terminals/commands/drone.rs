@@ -4,7 +4,7 @@
 
 use super::TerminalCommandBuilder;
 use crate::groups::VoiceId;
-use crate::model::command_builder::CommandBuilder;
+use crate::model::command_builder::DroneCommandBuilder;
 use crate::model::controller::{Command, CommandInner, CommandSource, CompositeCommand};
 use crate::terminals::parsing::{ParameterValue, ParseError};
 use std::collections::HashMap;
@@ -279,7 +279,7 @@ impl DroneConfig {
         circle_id: usize,
         source: CommandSource,
     ) -> Vec<Command> {
-        CommandBuilder::generate_all_parameter_commands(self, voice_id, circle_id, source)
+        DroneCommandBuilder::generate_all_parameter_commands(self, voice_id, circle_id, source)
     }
 
     /// Generate only circle-specific parameter commands (for modifying existing circles)
@@ -289,7 +289,7 @@ impl DroneConfig {
         circle_id: usize,
         source: CommandSource,
     ) -> Vec<Command> {
-        CommandBuilder::generate_circle_parameter_commands(self, voice_id, circle_id, source)
+        DroneCommandBuilder::generate_circle_parameter_commands(self, voice_id, circle_id, source)
     }
 
     /// Convert this DroneConfig to a CreateDrone VoiceCommand

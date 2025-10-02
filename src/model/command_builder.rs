@@ -31,9 +31,9 @@ pub enum ValidationResult {
 }
 
 /// Centralized command builder for drone parameters
-pub struct CommandBuilder;
+pub struct DroneCommandBuilder;
 
-impl CommandBuilder {
+impl DroneCommandBuilder {
     /// Parameter definitions mapping for all drone parameters
     pub fn get_parameter_definitions() -> HashMap<&'static str, ParameterDef> {
         let mut defs = HashMap::new();
