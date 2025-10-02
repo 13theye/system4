@@ -382,6 +382,8 @@ impl Model {
                     self.voices.insert(voice_id, voice);
 
                     // Phase 2: Apply parameters through the command pipeline
+                    // This is redundant until we make a default drone maker
+
                     let parameter_commands = DroneCommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,
@@ -415,12 +417,18 @@ impl Model {
                     rhythm.randomize_wings(&mut self.rng);
 
                     // Start sequencer
-                    rhythm.start_sequencer(&mut self.sequencer_service);
+                    rhythm.add_sequencer(&mut self.sequencer_service);
+
+                    // Subscribe to sequencer callbacks
+                    if let Some(data_rx) = self.sequencer_service.get_data_rx(voice_id) {
+                        rhythm.set_sequencer_data_rx(data_rx);
+                    }
 
                     // Insert rhythm before applying parameters so validation can find it
                     self.rhythms.insert(voice_id, rhythm);
 
                     // Phase 2: Apply parameters through the command pipeline
+                    // This is redundant until we make a default rhythm maker
                     let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,

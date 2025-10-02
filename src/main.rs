@@ -462,6 +462,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update feedback render params
     controller::update_feedback(model, device, queue);
 
+    // Update Rhythm groups
+    for rhythm in model.rhythms.values_mut() {
+        rhythm.update();
+    }
+
     // Update particle system
     model
         .particle_system

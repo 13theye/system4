@@ -103,6 +103,14 @@ impl Rhythm {
         }
     }
 
+    pub fn update(&mut self) {
+        if let Some(beat) = self.receive_beat() {
+            if self.wing_has_beat(beat) {
+                println!("Rhythm: Is on wing on beat {}", beat);
+            }
+        }
+    }
+
     fn receive_beat(&mut self) -> Option<usize> {
         let sequencer = self.sequencer_data_rx.as_ref()?;
 
@@ -110,7 +118,16 @@ impl Rhythm {
         result.ok()
     }
 
+    /*************** Beat logic helpers *************************** */
+    fn wing_has_beat(&self, beat: usize) -> bool {
+        self.params.wings.contains(&beat)
+    }
+
     /*************** Parameter setting ****************************** */
+
+    pub fn set_sequencer_data_rx(&mut self, rx: channel::Receiver<usize>) {
+        self.sequencer_data_rx = Some(rx);
+    }
 
     pub fn clear_params(&mut self) {
         self.params = RhythmParams::default();
@@ -325,7 +342,7 @@ impl Rhythm {
     /********Gateway methods for SequencerService communication *********/
 
     /// Start the sequencer for this rhythm via SequencerService
-    pub fn start_sequencer(&self, sequencer_service: &mut SequencerService) {
+    pub fn add_sequencer(&self, sequencer_service: &mut SequencerService) {
         let params = self.params.clone();
         sequencer_service.add_sequencer(self.id, params);
     }
