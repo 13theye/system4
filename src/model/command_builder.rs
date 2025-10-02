@@ -6,6 +6,7 @@
 use super::controller::{Command, CommandInner, CommandSource, SimpleCommand};
 use crate::groups::VoiceId;
 use crate::terminals::commands::drone::DroneConfig;
+use crate::terminals::commands::rhythm::RhythmConfig;
 use std::collections::HashMap;
 
 /// Parameter types for categorizing drone parameters
@@ -362,5 +363,152 @@ impl ValidationResult {
     /// Check if validation was successful
     pub fn is_success(&self) -> bool {
         matches!(self, ValidationResult::Success)
+    }
+}
+
+/// Centralized command builder for rhythm parameters
+pub struct RhythmCommandBuilder;
+
+impl RhythmCommandBuilder {
+    /// Generate all parameter commands from RhythmConfig
+    pub fn generate_all_parameter_commands(
+        config: &RhythmConfig,
+        voice_id: VoiceId,
+        source: CommandSource,
+    ) -> Vec<Command> {
+        let mut commands = Vec::new();
+
+        // Structure parameters
+        commands.extend(Self::generate_structure_commands(
+            config,
+            voice_id,
+            source.clone(),
+        ));
+
+        // Range parameters (for creation)
+        commands.extend(Self::generate_range_commands(
+            config,
+            voice_id,
+            source.clone(),
+        ));
+
+        // Modification parameters (for editing)
+        commands.extend(Self::generate_modification_commands(config, voice_id, source));
+
+        commands
+    }
+
+    /// Generate structure parameter commands (capacity, num_wings, subdivision)
+    pub fn generate_structure_commands(
+        config: &RhythmConfig,
+        voice_id: VoiceId,
+        source: CommandSource,
+    ) -> Vec<Command> {
+        let mut commands = Vec::new();
+
+        if let Some(capacity) = config.capacity {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmCapacity {
+                    voice_id,
+                    value: capacity,
+                }),
+                source.clone(),
+            ));
+        }
+
+        if let Some(num_wings) = config.num_wings {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmNumWings {
+                    voice_id,
+                    value: num_wings,
+                }),
+                source.clone(),
+            ));
+        }
+
+        if let Some(subdivision) = config.subdivision {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmSubdivision {
+                    voice_id,
+                    value: subdivision,
+                }),
+                source.clone(),
+            ));
+        }
+
+        commands
+    }
+
+    /// Generate range parameter commands (for makeRhythm)
+    pub fn generate_range_commands(
+        config: &RhythmConfig,
+        voice_id: VoiceId,
+        source: CommandSource,
+    ) -> Vec<Command> {
+        let mut commands = Vec::new();
+
+        if let Some(range) = config.length_range {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmLengthRange { voice_id, range }),
+                source.clone(),
+            ));
+        }
+
+        if let Some(range) = config.velocity_range {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmVelocityRange { voice_id, range }),
+                source.clone(),
+            ));
+        }
+
+        if let Some(range) = config.cutoff_range {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmCutoffRange { voice_id, range }),
+                source.clone(),
+            ));
+        }
+
+        commands
+    }
+
+    /// Generate modification parameter commands (for editing)
+    pub fn generate_modification_commands(
+        config: &RhythmConfig,
+        voice_id: VoiceId,
+        source: CommandSource,
+    ) -> Vec<Command> {
+        let mut commands = Vec::new();
+
+        if let Some(modification) = config.length_modification {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmModifyLength {
+                    voice_id,
+                    modification,
+                }),
+                source.clone(),
+            ));
+        }
+
+        if let Some(modification) = config.velocity_modification {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmModifyVelocity {
+                    voice_id,
+                    modification,
+                }),
+                source.clone(),
+            ));
+        }
+
+        if let Some(modification) = config.cutoff_modification {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmModifyCutoff {
+                    voice_id,
+                    modification,
+                }),
+                source.clone(),
+            ));
+        }
+
+        commands
     }
 }

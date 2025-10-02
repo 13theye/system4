@@ -1,5 +1,6 @@
 // src/groups/rhythm.rs
 
+use crossbeam_channel as channel;
 use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
 
@@ -76,6 +77,9 @@ pub struct Rhythm {
     params: RhythmParams,
     pub voice_params: VoiceParams,
     pub emitters: Vec<Box<dyn Emitter>>,
+
+    // Callback channel from the sequencer
+    pub sequencer_data_rx: Option<channel::Receiver<usize>>,
 }
 
 impl Rhythm {
@@ -85,6 +89,7 @@ impl Rhythm {
             params: RhythmParams::default(),
             voice_params: VoiceParams::default(),
             emitters: Vec::new(),
+            sequencer_data_rx: None,
         }
     }
 
@@ -94,8 +99,18 @@ impl Rhythm {
             params,
             voice_params: VoiceParams::default(),
             emitters: Vec::new(),
+            sequencer_data_rx: None,
         }
     }
+
+    fn receive_beat(&mut self) -> Option<usize> {
+        let sequencer = self.sequencer_data_rx.as_ref()?;
+
+        let result = sequencer.try_recv();
+        result.ok()
+    }
+
+    /*************** Parameter setting ****************************** */
 
     pub fn clear_params(&mut self) {
         self.params = RhythmParams::default();
@@ -119,6 +134,18 @@ impl Rhythm {
 
     pub fn set_subdivision(&mut self, subdivision: BeatSubdivision) {
         self.params.subdivision = subdivision;
+    }
+
+    pub fn set_length_range(&mut self, range: RangeSize) {
+        self.params.length_range = range;
+    }
+
+    pub fn set_velocity_range(&mut self, range: RangeSize) {
+        self.params.velocity_range = range;
+    }
+
+    pub fn set_cutoff_range(&mut self, range: RangeSize) {
+        self.params.pitch_range = range; // Note: cutoff maps to pitch_range internally
     }
 
     /// Add back wings from buffer, or generate additional wings as needed

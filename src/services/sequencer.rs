@@ -117,6 +117,11 @@ impl Sequencer {
         self.current_beat = Some(beat);
 
         // Send the beat to the data callback channel
+        self.send_callback(beat);
+    }
+
+    /// Via callback channel, send the current beat
+    fn send_callback(&self, beat: usize) {
         let _ = self.data_tx.try_send(beat).or_else(|_| {
             let _ = self.data_rx.try_recv(); // clear the old data from the channel
             self.data_tx.try_send(beat)

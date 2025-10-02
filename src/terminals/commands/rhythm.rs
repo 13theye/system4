@@ -312,7 +312,7 @@ impl RhythmConfig {
     }
 
     /// Merge this config with defaults, keeping specified values and using defaults for None values
-    pub fn merge_with_defaults(self) -> Self {
+    pub fn merge_with_defaults(&self) -> Self {
         let defaults = Self::get_defaults_for_voice(self.voice);
 
         Self {
@@ -326,12 +326,12 @@ impl RhythmConfig {
             length_modification: self.length_modification,
             velocity_modification: self.velocity_modification,
             cutoff_modification: self.cutoff_modification,
-            additional_parameters: self.additional_parameters,
+            additional_parameters: self.additional_parameters.clone(),
         }
     }
 
     /// Convert this RhythmConfig to RhythmParams (without wings - let Rhythm generate those)
-    pub fn to_rhythm_params(self) -> RhythmParams {
+    pub fn to_rhythm_params(&self) -> RhythmParams {
         // Merge with defaults first to ensure all required fields are present
         let resolved_config = self.merge_with_defaults();
 

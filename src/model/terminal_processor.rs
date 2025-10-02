@@ -23,7 +23,7 @@ impl Model {
             TerminalCommand::CreateSequencer { config } => {
                 let voice_id = config.voice;
                 let voice_command = Command::new(
-                    CommandInner::Simple(SimpleCommand::CreateRhythm { config }),
+                    CommandInner::Composite(CompositeCommand::CreateRhythm { config }),
                     CommandSource::Terminal,
                 );
                 println!("Queuing CreateSequencer command for voice: {:?}", voice_id);
