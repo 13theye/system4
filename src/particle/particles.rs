@@ -241,12 +241,14 @@ impl Particle {
     }
 
     /********************* Convert to GPU *********************/
-    pub fn to_gpu(&self, offset: Vec2) -> ParticleGpu {
+    pub fn to_gpu(&self, offset: Vec2, segment_length: f32) -> ParticleGpu {
         ParticleGpu::new(
             self.particle_id,
             [self.position.x + offset.x, self.position.y + offset.y],
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,
+            self.age,
+            segment_length,
         )
     }
 

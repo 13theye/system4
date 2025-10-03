@@ -137,11 +137,6 @@ impl ParticleSystem {
                 segment_line_width.unwrap(),
             );
 
-            // Ensure buffer exists for this voice
-            let sgpu_buf = gpu_segment_buffers
-                .entry(*voice_id)
-                .or_insert_with(|| EMPTY_GPU_SEGMENT_BUFFER);
-
             // Pre-compute mass variation factors for all particles in this voice
             let mass_variations: Vec<f32> =
                 if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
@@ -195,7 +190,7 @@ impl ParticleSystem {
                     }
 
                     if particle.is_alive() && particle.is_activated() {
-                        Some(particle.to_gpu(offset))
+                        Some(particle.to_gpu(offset, segment_length))
                     } else {
                         None
                     }

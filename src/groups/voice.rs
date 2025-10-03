@@ -33,7 +33,7 @@ impl Default for VoiceParams {
             color_limit: Rgb::new(0.0, 0.0, 0.0),
             feedback: 0.0,
             vibration: 0.0,
-            segment_length: 1.0,
+            segment_length: 0.0, // Changed to match feedback default
             segment_line_width: 2.0,
         }
     }
@@ -190,6 +190,8 @@ impl Voice {
 
     pub fn set_feedback(&mut self, value: f32) {
         self.params.feedback = value;
+        // Sync segment_length to feedback value for GPU trail rendering
+        self.params.segment_length = value;
     }
 
     pub fn set_vibration(&mut self, value: f32) {
@@ -198,6 +200,8 @@ impl Voice {
 
     pub fn set_segment_length(&mut self, value: f32) {
         self.params.segment_length = value;
+        // Sync feedback to segment_length value
+        self.params.feedback = value;
     }
 
     pub fn set_segment_line_width(&mut self, value: f32) {

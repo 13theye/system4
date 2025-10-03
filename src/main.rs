@@ -533,11 +533,11 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // New approach: GPU-based particle history with compute shader
         // Uses same particle buffer as particle renderer (no duplicate data!)
+        // segment_length (feedback) is now per-particle in ParticleGpu
         model.particle_history_renderer.encode_into(
             &mut encoder,
             queue,
-            gpu_particle_buffer,  // Reuse particle buffer instead of separate history updates
-            1.0,  // segment_length (0.0-1.0, could be parameterized per voice later)
+            gpu_particle_buffer,
             2.0,  // line_width
             rendering.get_named_texture("particles").unwrap(),
         );
