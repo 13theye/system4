@@ -13,6 +13,7 @@ const FEEDBACK_POSITIONS: usize = 128;
 
 #[derive(Clone, Copy)]
 pub struct Particle {
+    pub particle_id: u32, // Stable ID for GPU history buffer
     position: Point2,
     feedback_positions: [Option<Point2>; FEEDBACK_POSITIONS],
     current_feedback_position: usize,
@@ -34,6 +35,7 @@ pub struct Particle {
 impl Particle {
     pub fn new(position: Point2, size: f32, color: Rgba) -> Self {
         Self {
+            particle_id: 0, // Will be set by particle system
             acceleration: vec2(0.0, 0.0),
             velocity: vec2(0.0, 0.0),
             position,
@@ -50,6 +52,10 @@ impl Particle {
         }
     }
 
+    pub fn set_particle_id(&mut self, id: u32) {
+        self.particle_id = id;
+    }
+
     pub fn with_velocity(mut self, velocity: Vec2) -> Self {
         self.velocity = velocity;
         self
@@ -63,7 +69,7 @@ impl Particle {
         } else {
             self.position
         };
-        self.record_feedback_position(offset_position);
+        //self.record_feedback_position(offset_position);
 
         self.velocity += self.acceleration;
         self.position += self.velocity;
@@ -110,16 +116,10 @@ impl Particle {
         self.position
     }
 
+    /// Record the current position in a ring buffer for feedback trails
     fn record_feedback_position(&mut self, position: Vec2) {
         self.feedback_positions[self.current_feedback_position] = Some(position);
         self.current_feedback_position = (self.current_feedback_position + 1) % FEEDBACK_POSITIONS;
-    }
-
-    fn _record_feedback_position(&mut self, position: Point2) {
-        for i in (1..FEEDBACK_POSITIONS).rev() {
-            self.feedback_positions[i] = self.feedback_positions[i - 1];
-        }
-        self.feedback_positions[0] = Some(position);
     }
 
     /// Deprecated draw command that uses Nannou::draw to draw the particle as a short line.
@@ -243,6 +243,7 @@ impl Particle {
     /********************* Convert to GPU *********************/
     pub fn to_gpu(&self, offset: Vec2) -> ParticleGpu {
         ParticleGpu::new(
+            self.particle_id,
             [self.position.x + offset.x, self.position.y + offset.y],
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,

@@ -7,7 +7,9 @@
 
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
-use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
+use nnpipe::renderers::{
+    HeatmapRenderer, ParticleHistoryRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer,
+};
 use nnpipe::*;
 use prat::clockservice::ClockService;
 use thread_priority::*;
@@ -229,6 +231,9 @@ fn model(app: &App) -> Model {
     // Create segment renderer
     let segment_renderer = SegmentRenderer::new(device, hi_config, 25000);
 
+    // Create particle history renderer (GPU-based trails)
+    let particle_history_renderer = ParticleHistoryRenderer::new(device, hi_config, 25000);
+
     // Create pipeline textures
     rendering.create_named_texture(device, "terminal", hi_config);
     rendering.create_named_texture(device, "particles", hi_config);
@@ -402,6 +407,7 @@ fn model(app: &App) -> Model {
         //particle_renderer4,
 
         segment_renderer,
+        particle_history_renderer,
 
         egui,
         rng,
@@ -468,9 +474,12 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     }
 
     // Update particle system
-    model
-        .particle_system
-        .update(&mut model.voices, &mut model.rng, &mut model.gpu_particle_buffer, &mut model.gpu_segment_buffers);
+    model.particle_system.update(
+        &mut model.voices,
+        &mut model.rng,
+        &mut model.gpu_particle_buffer,
+        &mut model.gpu_segment_buffers,
+    );
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
@@ -514,10 +523,22 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        model.segment_renderer.encode_into(
+        // Old approach: CPU-generated segments (comment out to use GPU history instead)
+        //model.segment_renderer.encode_into(
+        //    &mut encoder,
+        //    queue,
+        //    &combined_segment_buffer,
+        //    rendering.get_named_texture("particles").unwrap(),
+        //);
+
+        // New approach: GPU-based particle history with compute shader
+        // Uses same particle buffer as particle renderer (no duplicate data!)
+        model.particle_history_renderer.encode_into(
             &mut encoder,
             queue,
-            &combined_segment_buffer,
+            gpu_particle_buffer,  // Reuse particle buffer instead of separate history updates
+            1.0,  // segment_length (0.0-1.0, could be parameterized per voice later)
+            2.0,  // line_width
             rendering.get_named_texture("particles").unwrap(),
         );
 

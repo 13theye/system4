@@ -25,6 +25,10 @@ pub struct ParticleSystem {
     // Particles
     pub particles: HashMap<VoiceId, Vec<Particle>>,
 
+    // Particle ID allocation (for GPU history buffer)
+    next_particle_id: HashMap<VoiceId, u32>,
+    max_particles_per_voice: u32,
+
     // forces
     pub forces: ForceFields,
 
@@ -65,6 +69,8 @@ impl ParticleSystem {
         Self {
             origin,
             particles: HashMap::new(),
+            next_particle_id: HashMap::new(),
+            max_particles_per_voice: 25000, // Match max capacity from renderer init
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
             global_max_spawn_rate: MAX_SPAWN_RATE,
             bounds_size,
@@ -96,7 +102,7 @@ impl ParticleSystem {
 
         self.forces.update(voices, rng);
 
-        // Reuse existing buffer to avoid allocations
+        // Reuse existing buffers to avoid allocations
         for (_, s_gpu) in gpu_segment_buffers.iter_mut() {
             s_gpu.clear();
         }
@@ -163,47 +169,42 @@ impl ParticleSystem {
             };
 
             // Parallel update, collect simple particle data and segments
-            let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
-                particles
-                    .par_iter_mut()
-                    .enumerate()
-                    .filter_map(|(index, particle)| {
-                        let mass_variation_factor = mass_variations[index];
-                        self.forces
-                            .apply_forces_to_particle(particle, mass_variation_factor);
+            let gpu_particle_group: Vec<ParticleGpu> = particles
+                .par_iter_mut()
+                .enumerate()
+                .filter_map(|(index, particle)| {
+                    let mass_variation_factor = mass_variations[index];
+                    self.forces
+                        .apply_forces_to_particle(particle, mass_variation_factor);
 
-                        // Calculate position offset perpendicular to velocity BEFORE updating particle
-                        // This ensures we use the velocity from this frame for the offset calculation
-                        let offset = if vibration > 0.0 && particle.velocity.length_squared() > 0.0
-                        {
-                            let normal =
-                                vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
-                            normal * MAX_POSITION_OFFSET * position_offsets[index]
-                        } else {
-                            vec2(0.0, 0.0)
-                        };
+                    // Calculate position offset perpendicular to velocity BEFORE updating particle
+                    // This ensures we use the velocity from this frame for the offset calculation
+                    let offset = if vibration > 0.0 && particle.velocity.length_squared() > 0.0 {
+                        let normal =
+                            vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
+                        normal * MAX_POSITION_OFFSET * position_offsets[index]
+                    } else {
+                        vec2(0.0, 0.0)
+                    };
 
-                        // Update particle with the calculated offset for feedback recording
-                        particle.update(color_limit, alpha_limit, offset);
+                    // Update particle with the calculated offset for feedback recording
+                    particle.update(color_limit, alpha_limit, offset);
 
-                        if particle.is_out_of_bounds(self.bounds_rect) {
-                            particle.kill();
-                        }
+                    if particle.is_out_of_bounds(self.bounds_rect) {
+                        particle.kill();
+                    }
 
-                        if particle.is_alive() && particle.is_activated() {
-                            Some((
-                                particle.to_gpu(offset),
-                                particle.to_segment_gpu(offset, segment_length, segment_line_width),
-                            ))
-                        } else {
-                            None
-                        }
-                    })
-                    .unzip();
+                    if particle.is_alive() && particle.is_activated() {
+                        Some(particle.to_gpu(offset))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
             // Append to buffers
             gpu_particle_buffer.extend(gpu_particle_group);
-            sgpu_buf.extend(gpu_segment_group);
+            //sgpu_buf.extend(gpu_segment_group);
 
             // Cull dead particles
             particles.retain(|particle| particle.is_alive());
@@ -243,13 +244,20 @@ impl ParticleSystem {
                         .map(|v| v.params.color_limit)
                         .unwrap_or(self.default_particle_color);
 
-                    let new_particles = emitter.emit(
+                    let mut new_particles = emitter.emit(
                         emission_scaling,
                         10.0,
                         self.default_particle_size,
                         rgba_from(color_limit, 0.0),
                         rng,
                     );
+
+                    // Assign particle IDs (wrapping at max_particles_per_voice)
+                    let next_id = self.next_particle_id.entry(parent_voice).or_insert(0);
+                    for particle in &mut new_particles {
+                        particle.set_particle_id(*next_id);
+                        *next_id = (*next_id + 1) % self.max_particles_per_voice;
+                    }
 
                     // Add particles to the voice's particle vector
                     particle_vec.extend(new_particles);

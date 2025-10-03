@@ -19,7 +19,8 @@ use crate::{
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::renderers::{
-    HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
+    HeatmapRenderer, ParticleGpu, ParticleHistoryRenderer, ParticleRenderer, SegmentGpu,
+    SegmentRenderer,
 };
 use nnpipe::*;
 use prat::clockservice::ClockService;
@@ -69,6 +70,7 @@ pub struct Model {
     pub particle_renderer1: ParticleRenderer,
     //pub particle_renderer4: ParticleRenderer,
     pub segment_renderer: SegmentRenderer,
+    pub particle_history_renderer: ParticleHistoryRenderer,
     pub dpi_scale: f32,
     pub font: Font,
 
