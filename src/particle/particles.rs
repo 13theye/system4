@@ -15,6 +15,7 @@ const FEEDBACK_POSITIONS: usize = 128;
 pub struct Particle {
     position: Point2,
     feedback_positions: [Option<Point2>; FEEDBACK_POSITIONS],
+    current_feedback_position: usize,
     pub velocity: Vec2,
     pub acceleration: Vec2,
 
@@ -37,6 +38,7 @@ impl Particle {
             velocity: vec2(0.0, 0.0),
             position,
             feedback_positions: [None; FEEDBACK_POSITIONS],
+            current_feedback_position: 0,
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
             age_per_tick: 1.0,
@@ -108,7 +110,12 @@ impl Particle {
         self.position
     }
 
-    fn record_feedback_position(&mut self, position: Point2) {
+    fn record_feedback_position(&mut self, position: Vec2) {
+        self.feedback_positions[self.current_feedback_position] = Some(position);
+        self.current_feedback_position = (self.current_feedback_position + 1) % FEEDBACK_POSITIONS;
+    }
+
+    fn _record_feedback_position(&mut self, position: Point2) {
         for i in (1..FEEDBACK_POSITIONS).rev() {
             self.feedback_positions[i] = self.feedback_positions[i - 1];
         }
@@ -248,10 +255,14 @@ impl Particle {
         // First point is current position
         points[0] = [self.position.x + offset.x, self.position.y + offset.y];
 
-        // Fill remaining points from feedback positions
+        // Fill remaining points from feedback positions (reading from ring buffer)
         let mut last_valid_pos = [self.position.x, self.position.y];
         for i in 0..(FEEDBACK_POSITIONS - 1) {
-            if let Some(feedback_pos) = self.feedback_positions[i] {
+            // Calculate ring buffer index: read backwards from most recent
+            let ring_index =
+                (self.current_feedback_position + FEEDBACK_POSITIONS - 1 - i) % FEEDBACK_POSITIONS;
+
+            if let Some(feedback_pos) = self.feedback_positions[ring_index] {
                 points[i + 1] = [feedback_pos.x, feedback_pos.y];
                 last_valid_pos = [feedback_pos.x, feedback_pos.y];
             } else {
