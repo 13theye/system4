@@ -103,12 +103,8 @@ impl Rhythm {
         }
     }
 
-    pub fn update(&mut self) {
-        if let Some(beat) = self.receive_beat() {
-            if self.wing_has_beat(beat) {
-                println!("Rhythm: Is on wing on beat {}", beat);
-            }
-        }
+    pub fn update(&mut self) -> Option<usize> {
+        self.receive_beat().filter(|&beat| self.wing_has_beat(beat))
     }
 
     fn receive_beat(&mut self) -> Option<usize> {
@@ -145,12 +141,24 @@ impl Rhythm {
         self.params.capacity = capacity;
     }
 
+    pub fn get_capacity(&self) -> usize {
+        self.params.capacity
+    }
+
     pub fn set_num_wings(&mut self, num_wings: usize) {
         self.params.num_wings = num_wings;
     }
 
+    pub fn get_num_wings(&self) -> usize {
+        self.params.num_wings
+    }
+
     pub fn set_subdivision(&mut self, subdivision: BeatSubdivision) {
         self.params.subdivision = subdivision;
+    }
+
+    pub fn get_subdivision(&self) -> &BeatSubdivision {
+        &self.params.subdivision
     }
 
     pub fn set_length_range(&mut self, range: RangeSize) {

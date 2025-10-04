@@ -9,7 +9,8 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
-use prat::clockservice::ClockService;
+use prat::clockservice::{BeatSubdivision, ClockService};
+use system4::view::rhythm_view::RhythmViewUpdateParams;
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -376,6 +377,7 @@ fn model(app: &App) -> Model {
         particle_system,
         voices: HashMap::new(),
         rhythms: HashMap::new(),
+        rhythm_views: HashMap::new(),
         clock,
         sequencer_service,
         osc,
@@ -462,9 +464,23 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update feedback render params
     controller::update_feedback(model, device, queue);
 
-    // Update Rhythm groups
-    for rhythm in model.rhythms.values_mut() {
-        rhythm.update();
+    // Update Rhythm logical groups & views
+    for (voice_id, rhythm) in model.rhythms.iter_mut() {
+        let Some(rhythm_view) = model.rhythm_views.get_mut(voice_id) else {
+            continue;
+        };
+
+        let current_wing = rhythm.update();
+
+
+        let update_params = RhythmViewUpdateParams {
+            current_wing,
+            tempo: model.clock.tempo(),
+            subdivision: rhythm.get_subdivision().to_owned(),
+        };
+
+        rhythm_view.update(update_params, app.time);
+
     }
 
     // Update particle system
@@ -545,6 +561,11 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
+        // Draw all rhythm views
+        for rhythm_view in model.rhythm_views.values() {
+            rhythm_view.draw(&rendering.draw);
+        }
+
         // Update and draw terminal view as overlay on top of post-processed texture
         if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {
             terminal_view.update(&rendering.draw);
@@ -571,7 +592,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
-
     }
 
     // Draw over the texture

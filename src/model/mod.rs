@@ -15,6 +15,7 @@ use crate::{
     services::sequencer::SequencerService,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
+    view::rhythm_view::RhythmView,
 };
 use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
@@ -34,6 +35,7 @@ pub struct Model {
 
     pub voices: HashMap<VoiceId, Voice>,
     pub rhythms: HashMap<VoiceId, Rhythm>,
+    pub rhythm_views: HashMap<VoiceId, RhythmView>,
 
     // Clock and Sequencers
     pub clock: ClockService,
