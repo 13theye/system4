@@ -9,7 +9,7 @@ use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
-use prat::clockservice::{BeatSubdivision, ClockService};
+use prat::clockservice::{ClockService};
 use system4::view::rhythm_view::RhythmViewUpdateParams;
 use thread_priority::*;
 
@@ -288,8 +288,8 @@ fn model(app: &App) -> Model {
 
     let final_composite = PipelineBuilder::new()
         .name("Final overlay composite")
-        .input_textures(&["terminal", "post-processed"])
-        .simple_additive_composite(hi_config, 1.0)
+        .input_textures(&["post-processed", "terminal"])
+        .simple_over_composite(hi_config, 1.0)
         .build(device);
 
     if let Ok(effect) = final_composite {
@@ -479,7 +479,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             subdivision: rhythm.get_subdivision().to_owned(),
         };
 
-        rhythm_view.update(update_params, app.time);
+        rhythm_view.update(rhythm.get_params(), update_params, app.time);
 
     }
 
@@ -505,8 +505,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         let queue = window.queue();
 
         // Clear all textures
-        rendering.draw.background().color(BLACK);
-        rendering.encode_clear_all_textures(&mut encoder, wgpu::Color::BLACK);
+        //rendering.draw.background().color(BLACK);
+        rendering.encode_clear_all_textures(&mut encoder, wgpu::Color::TRANSPARENT);
 
         // Encode Nannou Draw
         rendering.encode_draw_commands(device, &mut encoder);
@@ -561,10 +561,12 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
+        
         // Draw all rhythm views
         for rhythm_view in model.rhythm_views.values() {
             rhythm_view.draw(&rendering.draw);
         }
+         
 
         // Update and draw terminal view as overlay on top of post-processed texture
         if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {

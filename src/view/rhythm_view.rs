@@ -2,7 +2,7 @@ use nannou::prelude::*;
 use prat::BeatSubdivision;
 use std::collections::HashMap;
 
-use crate::{groups::rhythm::Rhythm, view::rhythm_rect::RhythmRect};
+use crate::{groups::rhythm::RhythmParams, view::rhythm_rect::RhythmRect};
 
 const RECT_DEFAULT_R: f32 = 0.7;
 const RECT_DEFAULT_G: f32 = 0.7;
@@ -46,7 +46,12 @@ impl RhythmView {
         }
     }
 
-    pub fn update(&mut self, update_params: RhythmViewUpdateParams, time: f32) {
+    pub fn update(
+        &mut self,
+        rhythm_params: &RhythmParams,
+        update_params: RhythmViewUpdateParams,
+        time: f32,
+    ) {
         if let Some(wing) = update_params.current_wing {
             self.last_update_times.insert(wing, time);
         }
@@ -67,18 +72,29 @@ impl RhythmView {
             let color = interpolate_color(time, *last_update_time, factor);
             rect.color = color;
 
-            // Interpolate dims
+            // Get slot parameters for scaling
+            let slot = rhythm_params.slots.get(i);
+            let length_scale = slot.map(|s| s.length).unwrap_or(1.0);
+            let velocity_scale = slot.map(|s| s.velocity).unwrap_or(1.0);
+
+            let (base_width, base_height) = if rhythm_params.wings.contains(&i) {
+                (RECT_MAX_WIDTH, RECT_MAX_HEIGHT)
+            } else {
+                (RECT_DEFAULT_WIDTH, RECT_MAX_HEIGHT)
+            };
+
+            // Interpolate dims with slot parameter scaling
             let width = interpolate_dimension(
-                RECT_MAX_WIDTH,
-                RECT_DEFAULT_WIDTH,
+                base_width * (2.0 + length_scale),
+                base_width,
                 time,
                 *last_update_time,
                 factor,
             );
 
             let height = interpolate_dimension(
-                RECT_MAX_HEIGHT,
-                RECT_DEFAULT_HEIGHT,
+                base_height + (2.0 + velocity_scale),
+                base_height,
                 time,
                 *last_update_time,
                 factor,
@@ -94,12 +110,7 @@ impl RhythmView {
             draw.rect()
                 .x_y(pos.x, pos.y)
                 .w_h(rect.dims.x, rect.dims.y)
-                .color(rgba(
-                    rect.color.red,
-                    rect.color.green,
-                    rect.color.blue,
-                    rect.alpha,
-                ));
+                .color(rgb(rect.color.red, rect.color.green, rect.color.blue));
         }
     }
 
