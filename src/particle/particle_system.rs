@@ -23,11 +23,11 @@ const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position o
 const MAX_SPAWN_RATE: f32 = 80.0;
 
 const HIGH_R: f32 = 1.0;
-const HIGH_G: f32 = 0.0;
+const HIGH_G: f32 = 1.0;
 const HIGH_B: f32 = 0.0;
 
 // Animation timing constants
-const FADE_DURATION: f32 = 0.5;
+const FADE_DURATION: f32 = 1.0;
 const RAMP_UP_PERCENT: f32 = 0.1;
 const DWELL_PERCENT: f32 = 0.3;
 const RAMP_CURVE_EXPONENT: f32 = 3.0;

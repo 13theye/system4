@@ -15,6 +15,7 @@ const FEEDBACK_POSITIONS: usize = 128;
 pub struct Particle {
     position: Point2,
     feedback_positions: [Option<Point2>; FEEDBACK_POSITIONS],
+    feedback_colors: [Option<Rgb>; FEEDBACK_POSITIONS],
     current_feedback_position: usize,
     pub velocity: Vec2,
     pub acceleration: Vec2,
@@ -38,6 +39,7 @@ impl Particle {
             velocity: vec2(0.0, 0.0),
             position,
             feedback_positions: [None; FEEDBACK_POSITIONS],
+            feedback_colors: [None; FEEDBACK_POSITIONS],
             current_feedback_position: 0,
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
@@ -63,7 +65,7 @@ impl Particle {
         } else {
             self.position
         };
-        self.record_feedback_position(offset_position);
+        self.record_feedback_position(offset_position, color_limit);
 
         self.velocity += self.acceleration;
         self.position += self.velocity;
@@ -110,8 +112,9 @@ impl Particle {
         self.position
     }
 
-    fn record_feedback_position(&mut self, position: Vec2) {
+    fn record_feedback_position(&mut self, position: Vec2, color: Rgb) {
         self.feedback_positions[self.current_feedback_position] = Some(position);
+        self.feedback_colors[self.current_feedback_position] = Some(color);
         self.current_feedback_position = (self.current_feedback_position + 1) % FEEDBACK_POSITIONS;
     }
 
@@ -251,11 +254,13 @@ impl Particle {
 
     pub fn to_segment_gpu(&self, offset: Vec2, segment_length: f32, line_width: f32) -> SegmentGpu {
         let mut points = [[0.0f32; 2]; FEEDBACK_POSITIONS];
+        let mut colors = [[0.0f32; 3]; FEEDBACK_POSITIONS];
 
         // First point is current position
         points[0] = [self.position.x + offset.x, self.position.y + offset.y];
+        colors[0] = [self.rgba.red, self.rgba.green, self.rgba.blue];
 
-        // Fill remaining points from feedback positions (reading from ring buffer)
+        // Fill remaining points and colors from feedback history (reading from ring buffer)
         let mut last_valid_pos = [self.position.x, self.position.y];
         for i in 0..(FEEDBACK_POSITIONS - 1) {
             // Calculate ring buffer index: read backwards from most recent
@@ -269,6 +274,13 @@ impl Particle {
                 // If no feedback position, use the last valid position to avoid ray artifacts
                 points[i + 1] = last_valid_pos;
             }
+
+            if let Some(feedback_color) = self.feedback_colors[ring_index] {
+                colors[i + 1] = [feedback_color.red, feedback_color.green, feedback_color.blue];
+            } else {
+                // If no feedback color, default to black
+                colors[i + 1] = [0.0, 0.0, 0.0];
+            }
         }
 
         // Calculate actual history length from particle age, ensuring it's at least 1
@@ -277,7 +289,7 @@ impl Particle {
 
         SegmentGpu::new(
             points,
-            [self.rgba.red, self.rgba.green, self.rgba.blue],
+            colors,
             self.rgba.alpha,
             segment_length,
             line_width,
