@@ -4,11 +4,12 @@ use std::collections::HashMap;
 
 use crate::{
     groups::{rhythm::RhythmParams, VoiceId},
-    view::{RhythmCircleFormation, RhythmFormation},
+    view::{RhythmCircleFormation, RhythmFormation, RhythmLinesFormation},
 };
 
 pub enum RhythmFormationType {
     Circle,
+    Lines,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -33,14 +34,22 @@ impl RhythmView {
     pub fn add_formation(
         &mut self,
         voice_id: VoiceId,
-        _typ: RhythmFormationType,
+        typ: RhythmFormationType,
         rhythm_params: &RhythmParams,
     ) {
-        let mut formation = Box::new(RhythmCircleFormation::new(
-            vec2(0.0, 0.0),
-            200.0,
-            rhythm_params.capacity,
-        ));
+        let mut formation: Box<dyn RhythmFormation> = match typ {
+            RhythmFormationType::Circle => Box::new(RhythmCircleFormation::new(
+                vec2(0.0, 0.0),
+                200.0,
+                rhythm_params.capacity,
+            )),
+            RhythmFormationType::Lines => Box::new(RhythmLinesFormation::new(
+                vec2(-960.0, 0.0),
+                1800.0,
+                500.0,
+                rhythm_params.capacity,
+            )),
+        };
 
         formation.initialize_rhythm(rhythm_params);
         self.formations.insert(voice_id, formation);

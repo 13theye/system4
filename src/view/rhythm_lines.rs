@@ -7,18 +7,18 @@ use crate::{
     view::{RhythmElement, RhythmFormation, RhythmViewUpdateParams},
 };
 
-const RECT_DEFAULT_R: f32 = 0.7;
-const RECT_DEFAULT_G: f32 = 0.7;
-const RECT_DEFAULT_B: f32 = 0.7;
-const RECT_DEFAULT_A: f32 = 1.0;
-const RECT_HIGH_R: f32 = 1.0;
-const RECT_HIGH_G: f32 = 0.0;
-const RECT_HIGH_B: f32 = 0.0;
-const RECT_HIGH_A: f32 = 1.0;
-const RECT_DEFAULT_WIDTH: f32 = 16.0;
-const RECT_DEFAULT_HEIGHT: f32 = 20.0;
-const RECT_MAX_WIDTH: f32 = 80.0;
-const RECT_MAX_HEIGHT: f32 = 100.0;
+const LINE_DEFAULT_R: f32 = 0.7;
+const LINE_DEFAULT_G: f32 = 0.7;
+const LINE_DEFAULT_B: f32 = 0.7;
+const LINE_DEFAULT_A: f32 = 1.0;
+const LINE_HIGH_R: f32 = 1.0;
+const LINE_HIGH_G: f32 = 0.0;
+const LINE_HIGH_B: f32 = 0.0;
+const LINE_HIGH_A: f32 = 1.0;
+const LINE_DEFAULT_WIDTH: f32 = 5.0;
+const LINE_DEFAULT_HEIGHT: f32 = 50.0;
+const LINE_MAX_WIDTH: f32 = 5.0;
+const LINE_MAX_HEIGHT: f32 = 1000.0;
 
 // Animation timing constants
 const RAMP_UP_PERCENT: f32 = 0.1;
@@ -27,14 +27,15 @@ const RAMP_CURVE_EXPONENT: f32 = 3.0;
 const FADE_CURVE_EXPONENT: f32 = 1.5;
 
 #[derive(Debug)]
-pub struct RhythmCircleFormation {
+pub struct RhythmLinesFormation {
     pub center: Vec2,
     pub capacity: usize,
-    pub radius: f32,
-    pub elements: HashMap<usize, RhythmRect>, // HashMap<wing, <RhythmRect>,
+    pub width: f32,
+    pub length: f32,
+    pub elements: HashMap<usize, RhythmLine>,
 }
 
-impl RhythmFormation for RhythmCircleFormation {
+impl RhythmFormation for RhythmLinesFormation {
     fn center(&self) -> Vec2 {
         self.center
     }
@@ -45,13 +46,13 @@ impl RhythmFormation for RhythmCircleFormation {
 
     fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams) {
         self.capacity = rhythm_params.capacity;
-        let positions = Self::initialize_positions(self.radius, self.capacity);
+        let positions = Self::initialize_positions(self.center, self.width, self.capacity);
 
         for i in 0..self.capacity {
             let Some(pos) = positions.get(&i) else {
                 continue;
             };
-            self.elements.insert(i, RhythmRect::new_with_pos(*pos));
+            self.elements.insert(i, RhythmLine::new_with_pos(*pos));
         }
     }
 
@@ -63,9 +64,12 @@ impl RhythmFormation for RhythmCircleFormation {
     ) {
         for (wing, rect) in self.elements.iter_mut() {
             // Update last update time of the current wing's Rect
+
+            let mut active_wing = false;
             if let Some(current_wing) = update_params.current_wing {
                 if *wing == current_wing {
                     rect.last_update_time = time;
+                    active_wing = true;
                 }
             }
 
@@ -74,8 +78,8 @@ impl RhythmFormation for RhythmCircleFormation {
                 * (60.0 / update_params.tempo)) as f32;
 
             rect.color = tween::interpolate_color(
-                rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
-                rgb(RECT_HIGH_R, RECT_HIGH_G, RECT_HIGH_B),
+                rgb(LINE_DEFAULT_R, LINE_DEFAULT_G, LINE_DEFAULT_B),
+                rgb(LINE_HIGH_R, LINE_HIGH_G, LINE_HIGH_B),
                 wing_duration,
                 RAMP_UP_PERCENT,
                 DWELL_PERCENT,
@@ -90,15 +94,22 @@ impl RhythmFormation for RhythmCircleFormation {
             let length_scale = slot.map(|s| s.length).unwrap_or(1.0);
             let velocity_scale = slot.map(|s| s.velocity).unwrap_or(1.0);
 
+            if active_wing {
+                println!(
+                    "Wing: {}, Length Scale: {}, Velocity Scale: {}",
+                    wing, length_scale, velocity_scale
+                );
+            }
+
             let (base_width, base_height) = if rhythm_params.wings.contains(wing) {
-                (RECT_MAX_WIDTH, RECT_MAX_HEIGHT)
+                (LINE_MAX_WIDTH, LINE_MAX_HEIGHT)
             } else {
-                (RECT_DEFAULT_WIDTH, RECT_MAX_HEIGHT)
+                (LINE_DEFAULT_WIDTH, LINE_DEFAULT_HEIGHT)
             };
 
             // Interpolate dims with slot parameter scaling
             let width = tween::interpolate_dimension(
-                base_width * (2.0 + length_scale),
+                base_width * (5.0 * length_scale),
                 base_width,
                 wing_duration,
                 RAMP_UP_PERCENT,
@@ -110,7 +121,7 @@ impl RhythmFormation for RhythmCircleFormation {
             );
 
             let height = tween::interpolate_dimension(
-                base_height * (2.0 + velocity_scale),
+                base_height * (2.0 * length_scale),
                 base_height,
                 wing_duration,
                 RAMP_UP_PERCENT,
@@ -141,22 +152,25 @@ impl RhythmFormation for RhythmCircleFormation {
     }
 }
 
-impl RhythmCircleFormation {
-    pub fn new(center: Vec2, radius: f32, capacity: usize) -> Self {
+impl RhythmLinesFormation {
+    pub fn new(center: Vec2, width: f32, length: f32, capacity: usize) -> Self {
         Self {
             center,
-            radius,
+            width,
+            length,
             capacity,
             elements: HashMap::new(),
         }
     }
 
-    fn initialize_positions(radius: f32, capacity: usize) -> HashMap<usize, Vec2> {
+    fn initialize_positions(center: Vec2, width: f32, capacity: usize) -> HashMap<usize, Vec2> {
+        let start = center.x - width / 2.0;
+        let delta = width / ((capacity - 1) as f32);
+
         let mut positions = HashMap::new();
         for i in 0..capacity {
-            let angle = (i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
-            let x = radius * angle.cos();
-            let y = radius * angle.sin();
+            let x = start + i as f32 * delta;
+            let y = center.y;
             positions.insert(i, Vec2::new(x, y));
         }
         positions
@@ -164,7 +178,7 @@ impl RhythmCircleFormation {
 }
 
 #[derive(Debug)]
-pub struct RhythmRect {
+pub struct RhythmLine {
     /// Screen position
     pub(crate) pos: Vec2,
     /// Width and Length
@@ -177,7 +191,7 @@ pub struct RhythmRect {
     pub(crate) last_update_time: f32,
 }
 
-impl RhythmElement for RhythmRect {
+impl RhythmElement for RhythmLine {
     fn position(&self) -> Vec2 {
         self.pos
     }
@@ -199,7 +213,7 @@ impl RhythmElement for RhythmRect {
     }
 }
 
-impl RhythmRect {
+impl RhythmLine {
     pub fn new_with_pos(pos: Vec2) -> Self {
         Self {
             pos,
@@ -208,13 +222,13 @@ impl RhythmRect {
     }
 }
 
-impl Default for RhythmRect {
+impl Default for RhythmLine {
     fn default() -> Self {
         Self {
             pos: Vec2::new(0.0, 0.0),
-            dims: Vec2::new(RECT_DEFAULT_WIDTH, RECT_DEFAULT_HEIGHT),
-            color: Rgb::new(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
-            alpha: RECT_DEFAULT_A,
+            dims: Vec2::new(LINE_DEFAULT_WIDTH, LINE_DEFAULT_HEIGHT),
+            color: Rgb::new(LINE_DEFAULT_R, LINE_DEFAULT_G, LINE_DEFAULT_B),
+            alpha: LINE_DEFAULT_A,
             last_update_time: 0.0,
         }
     }

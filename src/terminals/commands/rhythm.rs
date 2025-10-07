@@ -291,9 +291,9 @@ impl RhythmConfig {
         };
 
         let (default_length_range, default_velocity_range, default_pitch_range) = match voice {
-            VoiceId::Voice1 => (RangeSize::M, RangeSize::M, RangeSize::M), // Voice2: Fast, simple rhythm
-            VoiceId::Voice3 => (RangeSize::M, RangeSize::M, RangeSize::M), // Voice3: Longer, more complex rhythm
-            _ => (RangeSize::M, RangeSize::M, RangeSize::M),               // Fallback
+            VoiceId::Voice1 => (RangeSize::XL, RangeSize::L, RangeSize::L), // Voice2: Fast, simple rhythm
+            VoiceId::Voice3 => (RangeSize::XL, RangeSize::L, RangeSize::L), // Voice3: Longer, more complex rhythm
+            _ => (RangeSize::M, RangeSize::M, RangeSize::M),                // Fallback
         };
 
         Self {
