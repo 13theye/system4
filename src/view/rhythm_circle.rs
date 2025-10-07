@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::{
     groups::rhythm::RhythmParams,
+    utils::tween,
     view::{RhythmElement, RhythmFormation, RhythmViewUpdateParams},
 };
 
@@ -10,6 +11,10 @@ const RECT_DEFAULT_R: f32 = 0.7;
 const RECT_DEFAULT_G: f32 = 0.7;
 const RECT_DEFAULT_B: f32 = 0.7;
 const RECT_DEFAULT_A: f32 = 1.0;
+const RECT_HIGH_R: f32 = 1.0;
+const RECT_HIGH_G: f32 = 0.0;
+const RECT_HIGH_B: f32 = 0.0;
+const RECT_HIGH_A: f32 = 1.0;
 const RECT_DEFAULT_WIDTH: f32 = 16.0;
 const RECT_DEFAULT_HEIGHT: f32 = 20.0;
 const RECT_MAX_WIDTH: f32 = 80.0;
@@ -64,11 +69,21 @@ impl RhythmFormation for RhythmCircleFormation {
                 }
             }
 
-            // Calculate the interpolation factor
-            let factor = ((update_params.subdivision.multiplier() / 2.0)
+            // Calculate the interpolation duration
+            let wing_duration = ((update_params.subdivision.multiplier() / 2.0)
                 * (60.0 / update_params.tempo)) as f32;
 
-            rect.color = interpolate_color(time, rect.last_update_time, factor);
+            rect.color = tween::interpolate_color(
+                rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
+                rgb(RECT_HIGH_R, RECT_HIGH_G, RECT_HIGH_B),
+                wing_duration,
+                RAMP_UP_PERCENT,
+                DWELL_PERCENT,
+                RAMP_CURVE_EXPONENT,
+                FADE_CURVE_EXPONENT,
+                time,
+                rect.last_update_time,
+            );
 
             // Get slot parameters for scaling
             let slot = rhythm_params.slots.get(*wing);
@@ -82,20 +97,28 @@ impl RhythmFormation for RhythmCircleFormation {
             };
 
             // Interpolate dims with slot parameter scaling
-            let width = interpolate_dimension(
+            let width = tween::interpolate_dimension(
                 base_width * (2.0 + length_scale),
                 base_width,
+                wing_duration,
+                RAMP_UP_PERCENT,
+                DWELL_PERCENT,
+                RAMP_CURVE_EXPONENT,
+                FADE_CURVE_EXPONENT,
                 time,
                 rect.last_update_time,
-                factor,
             );
 
-            let height = interpolate_dimension(
+            let height = tween::interpolate_dimension(
                 base_height + (2.0 + velocity_scale),
                 base_height,
+                wing_duration,
+                RAMP_UP_PERCENT,
+                DWELL_PERCENT,
+                RAMP_CURVE_EXPONENT,
+                FADE_CURVE_EXPONENT,
                 time,
                 rect.last_update_time,
-                factor,
             );
 
             rect.dims = Vec2::new(width, height);
@@ -199,105 +222,4 @@ impl Default for RhythmRect {
 
 fn scale_dims(dims: Vec2, length: f32, velocity: f32) -> Vec2 {
     vec2(dims.x * length, dims.y * velocity)
-}
-
-pub enum InterpolationPhase {
-    RampUp(f32),   // curved t value for ramping up
-    Dwell,         // holding at max
-    FadeDown(f32), // curved t value for fading down
-}
-
-pub fn get_interpolation_phase(
-    current_time: f32,
-    last_update_time: f32,
-    fade_duration: f32,
-    ramp_curve: f32,
-    fade_curve: f32,
-) -> InterpolationPhase {
-    let elapsed = (current_time - last_update_time).max(0.0);
-    let ramp_up_duration = fade_duration * RAMP_UP_PERCENT;
-    let dwell_duration = fade_duration * DWELL_PERCENT;
-    let dwell_end = ramp_up_duration + dwell_duration;
-
-    if elapsed < ramp_up_duration {
-        let t = (elapsed / ramp_up_duration).clamp(0.0, 1.0);
-        let t_curved = t.powf(ramp_curve);
-        InterpolationPhase::RampUp(t_curved)
-    } else if elapsed < dwell_end {
-        InterpolationPhase::Dwell
-    } else {
-        let t = ((elapsed - dwell_end) / (fade_duration - dwell_end)).clamp(0.0, 1.0);
-        let t_curved = t.powf(fade_curve);
-        InterpolationPhase::FadeDown(t_curved)
-    }
-}
-
-pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a * (1.0 - t) + b * t
-}
-
-pub fn interpolate_color(current_time: f32, last_update_time: f32, fade_duration: f32) -> Rgb {
-    // Convert RGB constants to HSV
-    let max_hsv = Hsv::from(rgb(1.0, 0.0, 0.0)); // Red
-    let default_hsv = Hsv::from(rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B)); // Gray
-
-    let phase = get_interpolation_phase(
-        current_time,
-        last_update_time,
-        fade_duration,
-        RAMP_CURVE_EXPONENT,
-        FADE_CURVE_EXPONENT,
-    );
-
-    let (h, s, v) = match phase {
-        InterpolationPhase::RampUp(t) => {
-            let h = lerp(
-                default_hsv.hue.to_positive_radians(),
-                max_hsv.hue.to_positive_radians(),
-                t,
-            );
-            let s = lerp(default_hsv.saturation, max_hsv.saturation, t);
-            let v = lerp(default_hsv.value, max_hsv.value, t);
-            (h, s, v)
-        }
-        InterpolationPhase::Dwell => (
-            max_hsv.hue.to_positive_radians(),
-            max_hsv.saturation,
-            max_hsv.value,
-        ),
-        InterpolationPhase::FadeDown(t) => {
-            let h = lerp(
-                max_hsv.hue.to_positive_radians(),
-                default_hsv.hue.to_positive_radians(),
-                t,
-            );
-            let s = lerp(max_hsv.saturation, default_hsv.saturation, t);
-            let v = lerp(max_hsv.value, default_hsv.value, t);
-            (h, s, v)
-        }
-    };
-
-    Rgb::from(hsv(h, s, v))
-}
-
-pub fn interpolate_dimension(
-    max: f32,
-    min: f32,
-    current_time: f32,
-    last_update_time: f32,
-    fade_duration: f32,
-) -> f32 {
-    let phase = get_interpolation_phase(
-        current_time,
-        last_update_time,
-        fade_duration,
-        RAMP_CURVE_EXPONENT,
-        FADE_CURVE_EXPONENT,
-    );
-
-    match phase {
-        InterpolationPhase::RampUp(t) => lerp(min, max, t),
-        InterpolationPhase::Dwell => max,
-        InterpolationPhase::FadeDown(t) => lerp(max, min, t),
-    }
 }
