@@ -12,7 +12,7 @@ use crate::{
         Model,
     },
     terminals::commands::{drone::DroneConfig, rhythm::RhythmConfig},
-    view::rhythm_view::RhythmView,
+    view::RhythmFormationType,
 };
 use nannou::{
     prelude::*,
@@ -428,10 +428,12 @@ impl Model {
                         rhythm.set_sequencer_data_rx(data_rx);
                     }
 
-                    // Create the RhythmView
-                    let mut view = RhythmView::new(vec2(0.0, 0.0), 200.0);
-                    view.set_capacity(rhythm.get_capacity());
-                    self.rhythm_views.insert(voice_id, view);
+                    // Create the RhythmRectFormation
+                    self.rhythm_view.add_formation(
+                        voice_id,
+                        RhythmFormationType::Circle,
+                        rhythm.get_params(),
+                    );
 
                     // Insert rhythm before applying parameters so validation can find it
                     self.rhythms.insert(voice_id, rhythm);

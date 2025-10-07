@@ -10,7 +10,7 @@ use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
 use prat::clockservice::{ClockService};
-use system4::view::rhythm_view::RhythmViewUpdateParams;
+use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -377,7 +377,7 @@ fn model(app: &App) -> Model {
         particle_system,
         voices: HashMap::new(),
         rhythms: HashMap::new(),
-        rhythm_views: HashMap::new(),
+        rhythm_view: RhythmView::new(),
         clock,
         sequencer_service,
         osc,
@@ -466,10 +466,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update Rhythm logical groups & views
     for (voice_id, rhythm) in model.rhythms.iter_mut() {
-        let Some(rhythm_view) = model.rhythm_views.get_mut(voice_id) else {
-            continue;
-        };
-
         let current_wing = rhythm.update();
 
 
@@ -479,7 +475,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             subdivision: rhythm.get_subdivision().to_owned(),
         };
 
-        rhythm_view.update(rhythm.get_params(), update_params, app.time);
+        model.rhythm_view.update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
 
     }
 
@@ -563,11 +559,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         
         // Draw all rhythm views
-        for rhythm_view in model.rhythm_views.values() {
-            rhythm_view.draw(&rendering.draw);
-        }
-         
-
+        model.rhythm_view.draw_all(&rendering.draw);
+        
         // Update and draw terminal view as overlay on top of post-processed texture
         if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {
             terminal_view.update(&rendering.draw);
