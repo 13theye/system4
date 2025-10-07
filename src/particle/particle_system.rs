@@ -14,6 +14,7 @@ use crate::{
     groups::{Voice, VoiceId},
     model::{GpuParticleBuffer, GpuSegmentBuffer},
     particle::Particle,
+    utils::tween,
 };
 
 pub const EMPTY_GPU_PARTICLE_BUFFER: GpuParticleBuffer = Vec::new();
@@ -21,9 +22,23 @@ pub const EMPTY_GPU_SEGMENT_BUFFER: GpuSegmentBuffer = Vec::new();
 const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position offset in pixels
 const MAX_SPAWN_RATE: f32 = 80.0;
 
+const HIGH_R: f32 = 1.0;
+const HIGH_G: f32 = 0.0;
+const HIGH_B: f32 = 0.0;
+
+// Animation timing constants
+const FADE_DURATION: f32 = 0.5;
+const RAMP_UP_PERCENT: f32 = 0.1;
+const DWELL_PERCENT: f32 = 0.3;
+const RAMP_CURVE_EXPONENT: f32 = 3.0;
+const FADE_CURVE_EXPONENT: f32 = 1.5;
+
 pub struct ParticleSystem {
     // Particles
     pub particles: HashMap<VoiceId, Vec<Particle>>,
+
+    // experimental
+    pub last_event_time: f32,
 
     // forces
     pub forces: ForceFields,
@@ -78,6 +93,8 @@ impl ParticleSystem {
             // Initialize mass variation parameters
             mass_variation_enabled: true,
             mass_variation_amount: 0.05, // 5% variation by default
+
+            last_event_time: 0.0,
         }
     }
 
@@ -90,6 +107,8 @@ impl ParticleSystem {
         rng: &mut ThreadRng,
         gpu_particle_buffer: &mut GpuParticleBuffer,
         gpu_segment_buffers: &mut HashMap<VoiceId, GpuSegmentBuffer>,
+        event: bool,
+        time: f32,
     ) {
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
@@ -129,6 +148,22 @@ impl ParticleSystem {
                 alpha_limit.unwrap(),
                 segment_length.unwrap(),
                 segment_line_width.unwrap(),
+            );
+
+            if event {
+                self.last_event_time = time;
+            }
+
+            let color = tween::interpolate_color(
+                color_limit,
+                rgb(HIGH_R, HIGH_G, HIGH_B),
+                FADE_DURATION,
+                RAMP_UP_PERCENT,
+                DWELL_PERCENT,
+                RAMP_CURVE_EXPONENT,
+                FADE_CURVE_EXPONENT,
+                time,
+                self.last_event_time,
             );
 
             // Ensure buffer exists for this voice
@@ -184,7 +219,7 @@ impl ParticleSystem {
                         };
 
                         // Update particle with the calculated offset for feedback recording
-                        particle.update(color_limit, alpha_limit, offset);
+                        particle.update(color, alpha_limit, offset);
 
                         if particle.is_out_of_bounds(self.bounds_rect) {
                             particle.kill();

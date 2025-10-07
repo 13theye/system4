@@ -464,9 +464,19 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update feedback render params
     controller::update_feedback(model, device, queue);
 
+    let mut events = Vec::new();
+
     // Update Rhythm logical groups & views
     for (voice_id, rhythm) in model.rhythms.iter_mut() {
         let current_wing = rhythm.update();
+
+        let params = rhythm.get_params();
+        if let Some(current_wing) = current_wing {
+            if params.wings.contains(&current_wing) {
+            events.push(true);
+            }
+        }
+
 
 
         let update_params = RhythmViewUpdateParams {
@@ -476,13 +486,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         };
 
         model.rhythm_view.update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
-
     }
+
+    let event = events.iter().any(|e| *e);
 
     // Update particle system
     model
         .particle_system
-        .update(&mut model.voices, &mut model.rng, &mut model.gpu_particle_buffer, &mut model.gpu_segment_buffers);
+        .update(&mut model.voices, &mut model.rng, &mut model.gpu_particle_buffer, &mut model.gpu_segment_buffers, event, app.time);
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
