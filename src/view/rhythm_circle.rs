@@ -17,8 +17,8 @@ const RECT_HIGH_B: f32 = 0.0;
 const RECT_HIGH_A: f32 = 1.0;
 const RECT_DEFAULT_WIDTH: f32 = 16.0;
 const RECT_DEFAULT_HEIGHT: f32 = 20.0;
-const RECT_MAX_WIDTH: f32 = 80.0;
-const RECT_MAX_HEIGHT: f32 = 100.0;
+const RECT_MAX_WIDTH: f32 = 50.0;
+const RECT_MAX_HEIGHT: f32 = 50.0;
 
 // Animation timing constants
 const RAMP_UP_PERCENT: f32 = 0.1;
@@ -98,7 +98,7 @@ impl RhythmFormation for RhythmCircleFormation {
 
             // Interpolate dims with slot parameter scaling
             let width = tween::interpolate_dimension(
-                base_width * (2.0 + length_scale),
+                base_width * (2.0 * length_scale),
                 base_width,
                 wing_duration,
                 RAMP_UP_PERCENT,
@@ -110,7 +110,7 @@ impl RhythmFormation for RhythmCircleFormation {
             );
 
             let height = tween::interpolate_dimension(
-                base_height * (2.0 + velocity_scale),
+                base_height * (2.0 * velocity_scale),
                 base_height,
                 wing_duration,
                 RAMP_UP_PERCENT,

@@ -40,7 +40,7 @@ impl RhythmView {
         let mut formation: Box<dyn RhythmFormation> = match typ {
             RhythmFormationType::Circle => Box::new(RhythmCircleFormation::new(
                 vec2(0.0, 0.0),
-                200.0,
+                900.0,
                 rhythm_params.capacity,
             )),
             RhythmFormationType::Lines => Box::new(RhythmLinesFormation::new(

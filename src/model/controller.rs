@@ -431,7 +431,7 @@ impl Model {
                     // Create the RhythmRectFormation
                     self.rhythm_view.add_formation(
                         voice_id,
-                        RhythmFormationType::Lines,
+                        RhythmFormationType::Circle,
                         rhythm.get_params(),
                     );
 
