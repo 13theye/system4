@@ -69,6 +69,13 @@ impl RhythmView {
         formation.reinitialize_rhythm(rhythm_params, time);
     }
 
+    pub fn clear_formation(&mut self, voice_id: VoiceId, time: f32) {
+        let Some(formation) = self.formations.get_mut(&voice_id) else {
+            return;
+        };
+        formation.clear_rhythm(time);
+    }
+
     pub fn update_voice(
         &mut self,
         voice_id: &VoiceId,
@@ -79,11 +86,17 @@ impl RhythmView {
         let Some(formation) = self.formations.get_mut(voice_id) else {
             return;
         };
-        formation.update(rhythm_params, update_params, time);
+        formation.update_active(rhythm_params, update_params, time);
+    }
+
+    pub fn update_all_transitions(&mut self, time: f32) {
+        for formation in self.formations.values_mut() {
+            formation.update_transitions(time);
+        }
     }
 
     pub fn draw_all(&self, draw: &Draw) {
-        for (_, formation) in self.formations.iter() {
+        for formation in self.formations.values() {
             formation.draw(draw);
         }
     }

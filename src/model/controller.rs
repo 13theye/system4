@@ -819,7 +819,10 @@ impl Model {
                     // Stop the sequencer before removing the rhythm
                     rhythm.stop_sequencer(&mut self.sequencer_service);
 
-                    // Remove the rhythm from the model
+                    // Trigger clearing animation in view
+                    self.rhythm_view.clear_formation(voice_id, time);
+
+                    // Remove the rhythm from the model (view continues animating)
                     self.rhythms.remove(&voice_id);
 
                     let status_message = format!(
@@ -872,14 +875,16 @@ impl Model {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.set_capacity(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
-                    self.rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), time);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
                 }
             }
             SimpleCommand::RhythmNumWings { voice_id, value } => {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.set_num_wings(value);
                     rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
-                    self.rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), time);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
                 }
             }
             SimpleCommand::RhythmSubdivision { voice_id, value } => {

@@ -488,6 +488,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.rhythm_view.update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
     }
 
+    // Update formations in transition states (including cleared/clearing ones)
+    model.rhythm_view.update_all_transitions(app.time);
+
     let event = events.iter().any(|e| *e);
 
     // Update particle system

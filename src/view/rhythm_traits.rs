@@ -9,6 +9,7 @@ pub enum RhythmFormationState {
     Initializing,
     Active,
     Reinitializing,
+    Clearing,
 }
 
 pub trait RhythmFormation {
@@ -17,7 +18,10 @@ pub trait RhythmFormation {
 
     fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32);
     fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32);
-    fn update(
+    fn clear_rhythm(&mut self, time: f32);
+
+    fn update_transitions(&mut self, time: f32);
+    fn update_active(
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,

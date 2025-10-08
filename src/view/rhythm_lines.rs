@@ -62,7 +62,18 @@ impl RhythmFormation for RhythmLinesFormation {
         self.initialize_rhythm(rhythm_params, time);
     }
 
-    fn update(
+    fn clear_rhythm(&mut self, _time: f32) {
+        // TODO: Implement clearing animation for RhythmLinesFormation
+        // For now, just clear elements immediately
+        self.elements.clear();
+    }
+
+    fn update_transitions(&mut self, _time: f32) {
+        // TODO: Implement state-based animations for RhythmLinesFormation
+        // Currently this formation has no state transitions
+    }
+
+    fn update_active(
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
