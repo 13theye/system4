@@ -44,7 +44,7 @@ impl RhythmFormation for RhythmLinesFormation {
         self.capacity
     }
 
-    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams) {
+    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, _time: f32) {
         self.capacity = rhythm_params.capacity;
         let positions = Self::initialize_positions(self.center, self.width, self.capacity);
 
@@ -54,6 +54,12 @@ impl RhythmFormation for RhythmLinesFormation {
             };
             self.elements.insert(i, RhythmLine::new_with_pos(*pos));
         }
+    }
+
+    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32) {
+        // TODO: Implement state-based animation for RhythmLinesFormation
+        // For now, just re-initialize
+        self.initialize_rhythm(rhythm_params, time);
     }
 
     fn update(
@@ -179,8 +185,12 @@ impl RhythmLinesFormation {
 
 #[derive(Debug)]
 pub struct RhythmLine {
-    /// Screen position
+    /// Current animated screen position
     pub(crate) pos: Vec2,
+    /// Target position for animation
+    pub(crate) target_pos: Vec2,
+    /// Start position for animation
+    pub(crate) start_pos: Vec2,
     /// Width and Length
     pub(crate) dims: Vec2,
     /// Color in Nannou Rgb
@@ -194,6 +204,23 @@ pub struct RhythmLine {
 impl RhythmElement for RhythmLine {
     fn position(&self) -> Vec2 {
         self.pos
+    }
+
+    fn target_position(&self) -> Vec2 {
+        self.target_pos
+    }
+
+    fn start_position(&self) -> Vec2 {
+        self.start_pos
+    }
+
+    fn set_position(&mut self, pos: Vec2) {
+        self.pos = pos;
+    }
+
+    fn set_animation_positions(&mut self, start: Vec2, target: Vec2) {
+        self.start_pos = start;
+        self.target_pos = target;
     }
 
     fn dims(&self) -> Vec2 {
@@ -217,6 +244,8 @@ impl RhythmLine {
     pub fn new_with_pos(pos: Vec2) -> Self {
         Self {
             pos,
+            start_pos: pos,
+            target_pos: pos,
             ..Default::default()
         }
     }
@@ -226,6 +255,8 @@ impl Default for RhythmLine {
     fn default() -> Self {
         Self {
             pos: Vec2::new(0.0, 0.0),
+            target_pos: Vec2::new(0.0, 0.0),
+            start_pos: Vec2::new(0.0, 0.0),
             dims: Vec2::new(LINE_DEFAULT_WIDTH, LINE_DEFAULT_HEIGHT),
             color: Rgb::new(LINE_DEFAULT_R, LINE_DEFAULT_G, LINE_DEFAULT_B),
             alpha: LINE_DEFAULT_A,

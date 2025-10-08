@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     groups::rhythm::RhythmParams,
     utils::tween,
-    view::{RhythmElement, RhythmFormation, RhythmViewUpdateParams},
+    view::{RhythmElement, RhythmFormation, RhythmFormationState, RhythmViewUpdateParams},
 };
 
 const RECT_DEFAULT_R: f32 = 0.7;
@@ -26,12 +26,18 @@ const DWELL_PERCENT: f32 = 0.3;
 const RAMP_CURVE_EXPONENT: f32 = 3.0;
 const FADE_CURVE_EXPONENT: f32 = 1.5;
 
+// Formation state animation durations (in seconds)
+const INIT_ANIMATION_DURATION: f32 = 1.0;
+const REINIT_ANIMATION_DURATION: f32 = 0.8;
+
 #[derive(Debug)]
 pub struct RhythmCircleFormation {
     pub center: Vec2,
     pub capacity: usize,
     pub radius: f32,
     pub elements: HashMap<usize, RhythmRect>, // HashMap<wing, <RhythmRect>,
+    state: RhythmFormationState,
+    last_state_change: f32,
 }
 
 impl RhythmFormation for RhythmCircleFormation {
@@ -43,16 +49,23 @@ impl RhythmFormation for RhythmCircleFormation {
         self.capacity
     }
 
-    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams) {
+    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32) {
         self.capacity = rhythm_params.capacity;
         let positions = Self::initialize_positions(self.radius, self.capacity);
 
         for i in 0..self.capacity {
-            let Some(pos) = positions.get(&i) else {
+            let Some(target_pos) = positions.get(&i) else {
                 continue;
             };
-            self.elements.insert(i, RhythmRect::new_with_pos(*pos));
+            // Elements start at center and animate to their circle positions
+            self.elements.insert(i, RhythmRect::new_with_animation(self.center, *target_pos));
         }
+
+        self.change_state(RhythmFormationState::Initializing, time);
+    }
+
+    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32) {
+        self.reinitialize(rhythm_params, time);
     }
 
     fn update(
@@ -61,71 +74,126 @@ impl RhythmFormation for RhythmCircleFormation {
         update_params: &RhythmViewUpdateParams,
         time: f32,
     ) {
-        for (wing, rect) in self.elements.iter_mut() {
-            // Update last update time of the current wing's Rect
-            if let Some(current_wing) = update_params.current_wing {
-                if *wing == current_wing {
-                    rect.last_update_time = time;
+        // Early return if inactive
+        if matches!(self.state, RhythmFormationState::Inactive) {
+            return;
+        }
+
+        // Handle state-specific animations
+        match self.state {
+            RhythmFormationState::Inactive => {
+                // Already returned above
+            }
+            RhythmFormationState::Initializing => {
+                let progress = ((time - self.last_state_change) / INIT_ANIMATION_DURATION).min(1.0);
+
+                // Animate elements from center to their target positions
+                for rect in self.elements.values_mut() {
+                    let start = rect.start_position();
+                    let target = rect.target_position();
+                    // Use cubic ease-out for smooth deceleration
+                    let eased_progress = 1.0 - (1.0 - progress).powi(3);
+                    let new_pos = start + (target - start) * eased_progress;
+                    rect.set_position(new_pos);
+                }
+
+                // Transition to Active when animation completes
+                if progress >= 1.0 {
+                    self.change_state(RhythmFormationState::Active, time);
                 }
             }
+            RhythmFormationState::Reinitializing => {
+                let progress = ((time - self.last_state_change) / REINIT_ANIMATION_DURATION).min(1.0);
 
-            // Calculate the interpolation duration
-            let wing_duration = ((update_params.subdivision.multiplier() / 2.0)
-                * (60.0 / update_params.tempo)) as f32;
+                // Animate elements to their new target positions
+                for rect in self.elements.values_mut() {
+                    let start = rect.start_position();
+                    let target = rect.target_position();
+                    // Use cubic ease-out for smooth deceleration
+                    let eased_progress = 1.0 - (1.0 - progress).powi(3);
+                    let new_pos = start + (target - start) * eased_progress;
+                    rect.set_position(new_pos);
+                }
 
-            rect.color = tween::interpolate_color(
-                rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
-                rgb(RECT_HIGH_R, RECT_HIGH_G, RECT_HIGH_B),
-                wing_duration,
-                RAMP_UP_PERCENT,
-                DWELL_PERCENT,
-                RAMP_CURVE_EXPONENT,
-                FADE_CURVE_EXPONENT,
-                time,
-                rect.last_update_time,
-            );
+                // Transition to Active when animation completes
+                if progress >= 1.0 {
+                    self.change_state(RhythmFormationState::Active, time);
+                }
+            }
+            RhythmFormationState::Active => {
+                // Active state: standard beat-based animation
+                for (wing, rect) in self.elements.iter_mut() {
+                    // Update last update time of the current wing's Rect
+                    if let Some(current_wing) = update_params.current_wing {
+                        if *wing == current_wing {
+                            rect.last_update_time = time;
+                        }
+                    }
 
-            // Get slot parameters for scaling
-            let slot = rhythm_params.slots.get(*wing);
-            let length_scale = slot.map(|s| s.length).unwrap_or(1.0);
-            let velocity_scale = slot.map(|s| s.velocity).unwrap_or(1.0);
+                    // Calculate the interpolation duration
+                    let wing_duration = ((update_params.subdivision.multiplier() / 2.0)
+                        * (60.0 / update_params.tempo)) as f32;
 
-            let (base_width, base_height) = if rhythm_params.wings.contains(wing) {
-                (RECT_MAX_WIDTH, RECT_MAX_HEIGHT)
-            } else {
-                (RECT_DEFAULT_WIDTH, RECT_MAX_HEIGHT)
-            };
+                    rect.color = tween::interpolate_color(
+                        rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
+                        rgb(RECT_HIGH_R, RECT_HIGH_G, RECT_HIGH_B),
+                        wing_duration,
+                        RAMP_UP_PERCENT,
+                        DWELL_PERCENT,
+                        RAMP_CURVE_EXPONENT,
+                        FADE_CURVE_EXPONENT,
+                        time,
+                        rect.last_update_time,
+                    );
 
-            // Interpolate dims with slot parameter scaling
-            let width = tween::interpolate_dimension(
-                base_width * (2.0 * length_scale),
-                base_width,
-                wing_duration,
-                RAMP_UP_PERCENT,
-                DWELL_PERCENT,
-                RAMP_CURVE_EXPONENT,
-                FADE_CURVE_EXPONENT,
-                time,
-                rect.last_update_time,
-            );
+                    // Get slot parameters for scaling
+                    let slot = rhythm_params.slots.get(*wing);
+                    let length_scale = slot.map(|s| s.length).unwrap_or(1.0);
+                    let velocity_scale = slot.map(|s| s.velocity).unwrap_or(1.0);
 
-            let height = tween::interpolate_dimension(
-                base_height * (2.0 * velocity_scale),
-                base_height,
-                wing_duration,
-                RAMP_UP_PERCENT,
-                DWELL_PERCENT,
-                RAMP_CURVE_EXPONENT,
-                FADE_CURVE_EXPONENT,
-                time,
-                rect.last_update_time,
-            );
+                    let (base_width, base_height) = if rhythm_params.wings.contains(wing) {
+                        (RECT_MAX_WIDTH, RECT_MAX_HEIGHT)
+                    } else {
+                        (RECT_DEFAULT_WIDTH, RECT_MAX_HEIGHT)
+                    };
 
-            rect.dims = Vec2::new(width, height);
+                    // Interpolate dims with slot parameter scaling
+                    let width = tween::interpolate_dimension(
+                        base_width * (2.0 * length_scale),
+                        base_width,
+                        wing_duration,
+                        RAMP_UP_PERCENT,
+                        DWELL_PERCENT,
+                        RAMP_CURVE_EXPONENT,
+                        FADE_CURVE_EXPONENT,
+                        time,
+                        rect.last_update_time,
+                    );
+
+                    let height = tween::interpolate_dimension(
+                        base_height * (2.0 * velocity_scale),
+                        base_height,
+                        wing_duration,
+                        RAMP_UP_PERCENT,
+                        DWELL_PERCENT,
+                        RAMP_CURVE_EXPONENT,
+                        FADE_CURVE_EXPONENT,
+                        time,
+                        rect.last_update_time,
+                    );
+
+                    rect.dims = Vec2::new(width, height);
+                }
+            }
         }
     }
 
     fn draw(&self, draw: &Draw) {
+        // Don't draw if inactive
+        if matches!(self.state, RhythmFormationState::Inactive) {
+            return;
+        }
+
         for (_, rect) in self.elements.iter() {
             let pos = rect.pos;
             draw.rect()
@@ -142,12 +210,14 @@ impl RhythmFormation for RhythmCircleFormation {
 }
 
 impl RhythmCircleFormation {
-    pub fn new(center: Vec2, radius: f32, capacity: usize) -> Self {
+    pub fn new(center: Vec2, radius: f32, capacity: usize, time: f32) -> Self {
         Self {
             center,
             radius,
             capacity,
             elements: HashMap::new(),
+            state: RhythmFormationState::Inactive,
+            last_state_change: time,
         }
     }
 
@@ -161,12 +231,59 @@ impl RhythmCircleFormation {
         }
         positions
     }
+
+    fn change_state(&mut self, state: RhythmFormationState, time: f32) {
+        self.state = state;
+        self.last_state_change = time;
+    }
+
+    pub fn reinitialize(&mut self, rhythm_params: &RhythmParams, time: f32) {
+        let new_capacity = rhythm_params.capacity;
+        let old_capacity = self.capacity;
+
+        // Calculate new target positions for the new capacity
+        let new_positions = Self::initialize_positions(self.radius, new_capacity);
+
+        // Update capacity
+        self.capacity = new_capacity;
+
+        if new_capacity > old_capacity {
+            // Add new elements: they start at center and move to circle positions
+            for i in old_capacity..new_capacity {
+                if let Some(&target_pos) = new_positions.get(&i) {
+                    self.elements.insert(i, RhythmRect::new_with_animation(self.center, target_pos));
+                }
+            }
+        } else if new_capacity < old_capacity {
+            // Remove excess elements
+            for i in new_capacity..old_capacity {
+                self.elements.remove(&i);
+            }
+        }
+
+        // For existing elements, update their target positions and set start to current position
+        for i in 0..new_capacity.min(old_capacity) {
+            if let Some(rect) = self.elements.get_mut(&i) {
+                if let Some(&new_target) = new_positions.get(&i) {
+                    let current_pos = rect.position();
+                    rect.set_animation_positions(current_pos, new_target);
+                }
+            }
+        }
+
+        // Transition to Reinitializing state
+        self.change_state(RhythmFormationState::Reinitializing, time);
+    }
 }
 
 #[derive(Debug)]
 pub struct RhythmRect {
-    /// Screen position
+    /// Current animated screen position
     pub(crate) pos: Vec2,
+    /// Target position for animation
+    pub(crate) target_pos: Vec2,
+    /// Start position for animation
+    pub(crate) start_pos: Vec2,
     /// Width and Length
     pub(crate) dims: Vec2,
     /// Color in Nannou Rgb
@@ -180,6 +297,23 @@ pub struct RhythmRect {
 impl RhythmElement for RhythmRect {
     fn position(&self) -> Vec2 {
         self.pos
+    }
+
+    fn target_position(&self) -> Vec2 {
+        self.target_pos
+    }
+
+    fn start_position(&self) -> Vec2 {
+        self.start_pos
+    }
+
+    fn set_position(&mut self, pos: Vec2) {
+        self.pos = pos;
+    }
+
+    fn set_animation_positions(&mut self, start: Vec2, target: Vec2) {
+        self.start_pos = start;
+        self.target_pos = target;
     }
 
     fn dims(&self) -> Vec2 {
@@ -200,9 +334,21 @@ impl RhythmElement for RhythmRect {
 }
 
 impl RhythmRect {
+    pub fn new_with_animation(start: Vec2, target: Vec2) -> Self {
+        Self {
+            pos: start,
+            start_pos: start,
+            target_pos: target,
+            ..Default::default()
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn new_with_pos(pos: Vec2) -> Self {
         Self {
             pos,
+            start_pos: pos,
+            target_pos: pos,
             ..Default::default()
         }
     }
@@ -212,6 +358,8 @@ impl Default for RhythmRect {
     fn default() -> Self {
         Self {
             pos: Vec2::new(0.0, 0.0),
+            target_pos: Vec2::new(0.0, 0.0),
+            start_pos: Vec2::new(0.0, 0.0),
             dims: Vec2::new(RECT_DEFAULT_WIDTH, RECT_DEFAULT_HEIGHT),
             color: Rgb::new(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
             alpha: RECT_DEFAULT_A,

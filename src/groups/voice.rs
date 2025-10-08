@@ -21,6 +21,7 @@ pub struct VoiceParams {
     pub vibration: f32,
     pub segment_length: f32,
     pub segment_line_width: f32,
+    pub emitter_position: f32,
 }
 
 impl Default for VoiceParams {
@@ -35,6 +36,7 @@ impl Default for VoiceParams {
             vibration: 0.0,
             segment_length: 1.0,
             segment_line_width: 2.0,
+            emitter_position: 0.0,
         }
     }
 }
@@ -147,18 +149,30 @@ impl Voice {
     }
 
     fn add_linear_emitters(&mut self) {
+        let p = self.params.emitter_position;
+        let center_y = self.bounds_rect.y();
+        let offset = self.bounds_rect.h() / 2.0 - 100.0;
+
+        // Left emitter (slides downward as p increases)
+        let left_start = vec2(self.bounds_rect.left(), center_y + offset * (1.0 - p));
+        let left_end = vec2(self.bounds_rect.left(), center_y - offset * p);
+
+        // Right emitter (slides upward as p increases)
+        let right_start = vec2(self.bounds_rect.right(), center_y + offset * p);
+        let right_end = vec2(self.bounds_rect.right(), center_y - offset * (1.0 - p));
+
         let emitter_left = LinearEmitter::new(
             self.id,
-            self.bounds_rect.top_left() - vec2(0.0, 100.0),
-            self.bounds_rect.mid_left(),
+            left_start,
+            left_end,
             EmitDirection::East,
             self.params.default_spawn_rate,
         );
 
         let emitter_right = LinearEmitter::new(
             self.id,
-            self.bounds_rect.mid_right(),
-            self.bounds_rect.bottom_right() + vec2(0.0, 100.0),
+            right_start,
+            right_end,
             EmitDirection::West,
             self.params.default_spawn_rate,
         );
@@ -202,6 +216,11 @@ impl Voice {
 
     pub fn set_segment_line_width(&mut self, value: f32) {
         self.params.segment_line_width = value;
+    }
+
+    pub fn set_emitter_position(&mut self, value: f32) {
+        self.params.emitter_position = value.clamp(0.0, 1.0);
+        self.recalculate_emitters();
     }
 
     fn recalculate_emitters(&mut self) {

@@ -298,6 +298,18 @@ impl OscController {
                             ));
                         }
                     }
+                    "/sys4/voice/emitters" => {
+                        if let [osc::Type::Int(id), osc::Type::Float(val)] = &message.args[..] {
+                            let voice = VoiceId::from_i32(*id);
+                            commands.push(Command::new(
+                                CommandInner::Simple(SimpleCommand::MoveEmitters {
+                                    voice_id: voice,
+                                    value: *val,
+                                }),
+                                CommandSource::Osc,
+                            ));
+                        }
+                    }
                     _ => {}
                 }
             }

@@ -50,6 +50,10 @@ pub enum SimpleCommand {
         voice_id: VoiceId,
         value: f32,
     },
+    MoveEmitters {
+        voice_id: VoiceId,
+        value: f32,
+    },
     OuterRadius {
         voice_id: VoiceId,
         circle_id: usize,
@@ -229,6 +233,9 @@ fn get_command_key(command: &Command) -> String {
             SimpleCommand::Vibration {
                 voice_id: voice, ..
             } => format!("Vibration_{:?}", voice),
+            SimpleCommand::MoveEmitters {
+                voice_id: voice, ..
+            } => format!("MoveEmitters_{:?}", voice),
             SimpleCommand::OuterRadius {
                 voice_id: voice, ..
             } => format!("OuterRadius_{:?}", voice),
@@ -310,7 +317,7 @@ impl Model {
     }
 
     /// Process all queued commands with priority resolution (Terminal > OSC > UI)
-    pub fn process_command_queue(&mut self) {
+    pub fn process_command_queue(&mut self, time: f32) {
         if self.command_queue.is_empty() {
             return;
         }
@@ -346,12 +353,12 @@ impl Model {
         // Execute all final commands
         // (display updates happen automatically in execute_command)
         for command in final_commands {
-            self.execute_command(command);
+            self.execute_command(command, time);
         }
     }
 
     /// Apply a command immediately without queueing
-    pub fn execute_command(&mut self, command: Command) {
+    pub fn execute_command(&mut self, command: Command, time: f32) {
         // Send all commands to terminal display for visualization
         self.terminal_manager.borrow_mut().process_command(&command);
 
@@ -428,11 +435,12 @@ impl Model {
                         rhythm.set_sequencer_data_rx(data_rx);
                     }
 
-                    // Create the RhythmRectFormation
+                    // Create the RhythmFormation
                     self.rhythm_view.add_formation(
                         voice_id,
                         RhythmFormationType::Circle,
                         rhythm.get_params(),
+                        time,
                     );
 
                     // Insert rhythm before applying parameters so validation can find it
@@ -588,13 +596,13 @@ impl Model {
             },
 
             CommandInner::Simple(atomic) => {
-                self.execute_simple_command(atomic);
+                self.execute_simple_command(atomic, time);
             }
         }
     }
 
     /// Execute atomic parameter commands without display updates (used internally)
-    fn execute_simple_command(&mut self, simple: SimpleCommand) {
+    fn execute_simple_command(&mut self, simple: SimpleCommand, time: f32) {
         match simple {
             // Voice-level atomic commands
             SimpleCommand::Alpha { voice_id, value } => {
@@ -635,6 +643,16 @@ impl Model {
 
                 if let Some(voice) = self.voices.get_mut(&voice_id) {
                     voice.set_vibration(value);
+                }
+            }
+            SimpleCommand::MoveEmitters { voice_id, value } => {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "MoveEmitters") {
+                    return;
+                }
+
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_emitter_position(value);
                 }
             }
             // Circle-level atomic commands
@@ -854,12 +872,14 @@ impl Model {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.set_capacity(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+                    self.rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), time);
                 }
             }
             SimpleCommand::RhythmNumWings { voice_id, value } => {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.set_num_wings(value);
                     rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
+                    self.rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), time);
                 }
             }
             SimpleCommand::RhythmSubdivision { voice_id, value } => {
@@ -973,6 +993,14 @@ impl Model {
         };
 
         voice.params.vibration
+    }
+
+    pub fn get_emitter_position(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice.params.emitter_position
     }
 
     pub fn get_volume(&self, voice: VoiceId) -> f32 {

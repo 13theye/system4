@@ -6,7 +6,7 @@ use nannou::prelude::*;
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 const PARTICLE_MASS: f32 = 11.0;
-const PARTICLE_LIFE_SPAN: f32 = 900.0;
+const PARTICLE_LIFE_SPAN: f32 = 1800.0;
 const FADE_IN_DURATION: f32 = 180.0; // frames to fade in
 const FADE_OUT_DURATION: f32 = 100.0;
 const FEEDBACK_POSITIONS: usize = 128;
@@ -276,7 +276,11 @@ impl Particle {
             }
 
             if let Some(feedback_color) = self.feedback_colors[ring_index] {
-                colors[i + 1] = [feedback_color.red, feedback_color.green, feedback_color.blue];
+                colors[i + 1] = [
+                    feedback_color.red,
+                    feedback_color.green,
+                    feedback_color.blue,
+                ];
             } else {
                 // If no feedback color, default to black
                 colors[i + 1] = [0.0, 0.0, 0.0];

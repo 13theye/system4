@@ -459,7 +459,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.command_queue.append(&mut commands);
 
     // Process unified command queue with priority resolution
-    model.process_command_queue();
+    model.process_command_queue(app.time);
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -720,6 +720,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice0_volume = model.get_volume(VoiceId::Voice0);
     let voice0_feedback = model.get_feedback(VoiceId::Voice0);
     let voice0_vibration_offset = model.get_vibration(VoiceId::Voice0);
+    let voice0_emitter_position = model.get_emitter_position(VoiceId::Voice0);
 
     // Voice 3 parameters
     let voice3_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
@@ -733,6 +734,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice3_volume = model.get_volume(VoiceId::Voice3);
     let voice3_feedback = model.get_feedback(VoiceId::Voice3);
     let voice3_vibration_offset = model.get_vibration(VoiceId::Voice3);
+    let voice3_emitter_position = model.get_emitter_position(VoiceId::Voice3);
 
     let ctx = model.egui.begin_frame();
 
@@ -887,6 +889,24 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
                                                     voice_id: VoiceId::Voice0,
                                                     value: feedback,
+                                                }), CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Emitter Position slider
+                                        let mut emitter_position = voice0_emitter_position;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut emitter_position, 0.0..=1.0)
+                                                    .text("Emitter Pos")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Simple(SimpleCommand::MoveEmitters {
+                                                    voice_id: VoiceId::Voice0,
+                                                    value: emitter_position,
                                                 }), CommandSource::Ui),
                                             );
                                         }
@@ -1169,6 +1189,24 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
                                                     voice_id: VoiceId::Voice3,
                                                     value: feedback,
+                                                }), CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Emitter Position slider
+                                        let mut emitter_position = voice3_emitter_position;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut emitter_position, 0.0..=1.0)
+                                                    .text("Emitter Pos")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Simple(SimpleCommand::MoveEmitters {
+                                                    voice_id: VoiceId::Voice3,
+                                                    value: emitter_position,
                                                 }), CommandSource::Ui),
                                             );
                                         }

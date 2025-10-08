@@ -36,12 +36,14 @@ impl RhythmView {
         voice_id: VoiceId,
         typ: RhythmFormationType,
         rhythm_params: &RhythmParams,
+        time: f32,
     ) {
         let mut formation: Box<dyn RhythmFormation> = match typ {
             RhythmFormationType::Circle => Box::new(RhythmCircleFormation::new(
                 vec2(0.0, 0.0),
                 900.0,
                 rhythm_params.capacity,
+                time,
             )),
             RhythmFormationType::Lines => Box::new(RhythmLinesFormation::new(
                 vec2(-960.0, 0.0),
@@ -51,8 +53,20 @@ impl RhythmView {
             )),
         };
 
-        formation.initialize_rhythm(rhythm_params);
+        formation.initialize_rhythm(rhythm_params, time);
         self.formations.insert(voice_id, formation);
+    }
+
+    pub fn reinitialize_formation(
+        &mut self,
+        voice_id: VoiceId,
+        rhythm_params: &RhythmParams,
+        time: f32,
+    ) {
+        let Some(formation) = self.formations.get_mut(&voice_id) else {
+            return;
+        };
+        formation.reinitialize_rhythm(rhythm_params, time);
     }
 
     pub fn update_voice(
