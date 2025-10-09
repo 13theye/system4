@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub enum RhythmFormationType {
-    Circle,
+    Circle { radius: f32 },
     Lines,
 }
 
@@ -40,9 +40,9 @@ impl RhythmView {
         time: f32,
     ) {
         let mut formation: Box<dyn RhythmFormation> = match typ {
-            RhythmFormationType::Circle => Box::new(RhythmCircleFormation::new(
+            RhythmFormationType::Circle { radius } => Box::new(RhythmCircleFormation::new(
                 vec2(0.0, 0.0),
-                900.0,
+                radius,
                 rhythm_params.capacity,
                 time,
             )),

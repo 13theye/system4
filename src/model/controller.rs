@@ -435,10 +435,16 @@ impl Model {
                         rhythm.set_sequencer_data_rx(data_rx);
                     }
 
+                    let radius = if voice_id == VoiceId::Voice1 {
+                        800.0
+                    } else {
+                        500.0
+                    };
+
                     // Create the RhythmFormation
                     self.rhythm_view.add_formation(
                         voice_id,
-                        RhythmFormationType::Circle,
+                        RhythmFormationType::Circle { radius },
                         rhythm.get_params(),
                         time,
                     );
