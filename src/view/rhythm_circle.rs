@@ -14,7 +14,9 @@ const RECT_DEFAULT_A: f32 = 1.0;
 const RECT_HIGH_R: f32 = 1.0;
 const RECT_HIGH_G: f32 = 0.0;
 const RECT_HIGH_B: f32 = 0.0;
-const RECT_HIGH_A: f32 = 1.0;
+const RECT_LOW_R: f32 = 0.2;
+const RECT_LOW_G: f32 = 0.2;
+const RECT_LOW_B: f32 = 0.2;
 const RECT_DEFAULT_WIDTH: f32 = 10.0;
 const RECT_DEFAULT_HEIGHT: f32 = 10.0;
 const RECT_MAX_WIDTH: f32 = 50.0;
@@ -31,10 +33,6 @@ const INIT_ANIMATION_DURATION: f32 = 1.0;
 const REINIT_ANIMATION_DURATION: f32 = 0.8;
 const CLEAR_ANIMATION_DURATION: f32 = 1.0;
 
-// Beat indicator constants
-const INDICATOR_ARC_SPAN: f32 = 0.15; // Angular span in radians (~8.5 degrees)
-const INDICATOR_STROKE_WEIGHT: f32 = 4.0;
-
 pub struct RhythmCircleFormation {
     pub center: Vec2,
     pub capacity: usize,
@@ -42,13 +40,6 @@ pub struct RhythmCircleFormation {
     pub elements: HashMap<usize, Box<dyn RhythmElement>>, // HashMap<wing, <RhythmRect>,
     state: RhythmFormationState,
     last_state_change: f32,
-    // Beat indicator tracking
-    next_beat_wing: Option<usize>,
-    next_beat_time: f32,
-    next_beat_angle: f32,
-    sub_duration: f32,
-    indicator_angle: f32,
-    last_update_time: f32,
 }
 
 impl RhythmFormation for RhythmCircleFormation {
@@ -68,10 +59,15 @@ impl RhythmFormation for RhythmCircleFormation {
             let Some(target_pos) = positions.get(&i) else {
                 continue;
             };
+            let is_wing = rhythm_params.wings.contains(&i);
             // Elements start at center and animate to their circle positions
             self.elements.insert(
                 i,
-                Box::new(RhythmRect::new_with_animation(self.center, *target_pos)),
+                Box::new(RhythmRect::new_with_animation(
+                    is_wing,
+                    self.center,
+                    *target_pos,
+                )),
             );
         }
 
@@ -92,9 +88,14 @@ impl RhythmFormation for RhythmCircleFormation {
             // Add new elements: they start at center and move to circle positions
             for i in old_capacity..new_capacity {
                 if let Some(&target_pos) = new_positions.get(&i) {
+                    let is_wing = rhythm_params.wings.contains(&i);
                     self.elements.insert(
                         i,
-                        Box::new(RhythmRect::new_with_animation(self.center, target_pos)),
+                        Box::new(RhythmRect::new_with_animation(
+                            is_wing,
+                            self.center,
+                            target_pos,
+                        )),
                     );
                 }
             }
@@ -132,46 +133,6 @@ impl RhythmFormation for RhythmCircleFormation {
     }
 
     fn update_transitions(&mut self, time: f32) {
-        // Update indicator during transition states (rhythm continues playing)
-        if !matches!(
-            self.state,
-            RhythmFormationState::Inactive | RhythmFormationState::Active
-        ) {
-            // Advance indicator using velocity-based approach
-            let dt = time - self.last_update_time;
-            if let Some(_next_wing) = self.next_beat_wing {
-                let time_remaining = self.next_beat_time - time;
-                if time_remaining > 0.001 {
-                    // Calculate angle distance and ensure clockwise (negative) direction
-                    let mut angle_distance = self.next_beat_angle - self.indicator_angle;
-                    if angle_distance > 0.0 {
-                        angle_distance -= 2.0 * std::f32::consts::PI;
-                    }
-                    let velocity = angle_distance / time_remaining;
-                    self.indicator_angle += velocity * dt;
-                } else {
-                    // Fallback to constant velocity
-                    let angular_velocity =
-                        -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
-                    self.indicator_angle += angular_velocity * dt;
-                }
-            } else {
-                // No next beat - use constant velocity
-                let angular_velocity =
-                    -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
-                self.indicator_angle += angular_velocity * dt;
-            }
-
-            // Normalize indicator_angle to stay in range (-2π, 0]
-            let two_pi = 2.0 * std::f32::consts::PI;
-            self.indicator_angle = self.indicator_angle % two_pi;
-            if self.indicator_angle > 0.0 {
-                self.indicator_angle -= two_pi;
-            }
-
-            self.last_update_time = time;
-        }
-
         // Handle state transition animations (Initializing, Reinitializing, Clearing)
         match self.state {
             RhythmFormationState::Inactive | RhythmFormationState::Active => {
@@ -247,12 +208,9 @@ impl RhythmFormation for RhythmCircleFormation {
             return;
         }
 
-        // Update beat indicator
-        self.update_indicator(update_params, time);
-
         // Update elements
-        for (wing, element) in self.elements.iter_mut() {
-            element.update(rhythm_params, update_params, *wing, time);
+        for (slot, element) in self.elements.iter_mut() {
+            element.update(rhythm_params, update_params, *slot, time);
         }
     }
 
@@ -266,25 +224,6 @@ impl RhythmFormation for RhythmCircleFormation {
         for element in self.elements.values() {
             element.draw(draw);
         }
-
-        // Draw beat indicator arc (always visible)
-        let num_points = 20;
-        let half_span = INDICATOR_ARC_SPAN / 2.0;
-
-        let points: Vec<Vec2> = (0..num_points)
-            .map(|i| {
-                let t = i as f32 / (num_points - 1) as f32;
-                let angle = self.indicator_angle - half_span + (INDICATOR_ARC_SPAN * t);
-                let x = self.center.x + self.radius * angle.cos();
-                let y = self.center.y + self.radius * angle.sin();
-                pt2(x, y)
-            })
-            .collect();
-
-        draw.polyline()
-            .weight(INDICATOR_STROKE_WEIGHT)
-            .points(points)
-            .color(WHITE);
     }
 }
 
@@ -297,76 +236,18 @@ impl RhythmCircleFormation {
             elements: HashMap::new(),
             state: RhythmFormationState::Inactive,
             last_state_change: time,
-            next_beat_wing: None,
-            next_beat_time: time,
-            next_beat_angle: 0.0,
-            sub_duration: 1.0,
-            indicator_angle: 0.0,
-            last_update_time: time,
         }
     }
 
     fn initialize_positions(radius: f32, capacity: usize) -> HashMap<usize, Vec2> {
         let mut positions = HashMap::new();
         for i in 0..capacity {
-            let angle = -(i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
+            let angle = std::f32::consts::FRAC_PI_2 - (i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
             let x = radius * angle.cos();
             let y = radius * angle.sin();
             positions.insert(i, Vec2::new(x, y));
         }
         positions
-    }
-
-    fn update_indicator(&mut self, update_params: &RhythmViewUpdateParams, time: f32) {
-        // Calculate beat duration
-        self.sub_duration =
-            ((60.0 / update_params.tempo) / update_params.subdivision.multiplier()) as f32;
-
-        // Detect beat changes and update next beat target
-        if update_params.current_wing != self.next_beat_wing {
-            if let Some(current_wing) = update_params.current_wing {
-                // Calculate next beat position
-                let next_wing = (current_wing + 1) % self.capacity;
-                self.next_beat_wing = Some(next_wing);
-                self.next_beat_time = time + self.sub_duration;
-                self.next_beat_angle =
-                    -(next_wing as f32) * 2.0 * std::f32::consts::PI / (self.capacity as f32);
-            }
-        }
-
-        // Calculate velocity to reach next beat on time
-        let dt = time - self.last_update_time;
-        if let Some(_next_wing) = self.next_beat_wing {
-            let time_remaining = self.next_beat_time - time;
-            if time_remaining > 0.001 {
-                // Calculate angle distance and ensure clockwise (negative) direction
-                let mut angle_distance = self.next_beat_angle - self.indicator_angle;
-                if angle_distance > 0.0 {
-                    angle_distance -= 2.0 * std::f32::consts::PI;
-                }
-                let velocity = angle_distance / time_remaining;
-                self.indicator_angle += velocity * dt;
-            } else {
-                // Very close to or past beat time - just use constant velocity as fallback
-                let angular_velocity =
-                    -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
-                self.indicator_angle += angular_velocity * dt;
-            }
-        } else {
-            // No next beat yet - use constant velocity
-            let angular_velocity =
-                -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
-            self.indicator_angle += angular_velocity * dt;
-        }
-
-        // Normalize indicator_angle to stay in range (-2π, 0]
-        let two_pi = 2.0 * std::f32::consts::PI;
-        self.indicator_angle = self.indicator_angle % two_pi;
-        if self.indicator_angle > 0.0 {
-            self.indicator_angle -= two_pi;
-        }
-
-        self.last_update_time = time;
     }
 
     fn change_state(&mut self, state: RhythmFormationState, time: f32) {
@@ -377,6 +258,8 @@ impl RhythmCircleFormation {
 
 #[derive(Debug)]
 pub struct RhythmRect {
+    /// Whether the element is an activated wing
+    pub(crate) is_wing: bool,
     /// Current animated screen position
     pub(crate) pos: Vec2,
     /// Target position for animation
@@ -427,12 +310,12 @@ impl RhythmElement for RhythmRect {
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
-        wing: usize,
+        slot: usize,
         time: f32,
     ) {
         // Update last active time of the current wing's Rect
-        if let Some(current_wing) = update_params.current_wing {
-            if wing == current_wing {
+        if let Some(current_slot) = update_params.current_slot {
+            if slot == current_slot {
                 self.last_active_time = time;
             }
         }
@@ -441,9 +324,24 @@ impl RhythmElement for RhythmRect {
         let wing_duration =
             ((60.0 / update_params.tempo) / update_params.subdivision.multiplier()) as f32;
 
+        // Determine color range based on whether this is a wing or not
+        let (start_color, end_color) = if self.is_wing {
+            // Wings: flash from default to high (medium gray to red)
+            (
+                rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
+                rgb(RECT_HIGH_R, RECT_HIGH_G, RECT_HIGH_B),
+            )
+        } else {
+            // Non-wings: flash from low to default (dark gray to medium gray)
+            (
+                rgb(RECT_LOW_R, RECT_LOW_G, RECT_LOW_B),
+                rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
+            )
+        };
+
         self.color = tween::interpolate_color(
-            rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
-            rgb(RECT_HIGH_R, RECT_HIGH_G, RECT_HIGH_B),
+            start_color,
+            end_color,
             wing_duration,
             RAMP_UP_PERCENT,
             DWELL_PERCENT,
@@ -454,19 +352,28 @@ impl RhythmElement for RhythmRect {
         );
 
         // Get slot parameters for scaling
-        let slot = rhythm_params.slots.get(wing);
-        let length_scale = slot.map(|s| s.length).unwrap_or(1.0);
-        let velocity_scale = slot.map(|s| s.velocity).unwrap_or(1.0);
+        let rhythm_slot = rhythm_params.slots.get(slot);
+        let length_scale = rhythm_slot.map(|s| s.length).unwrap_or(1.0);
+        let velocity_scale = rhythm_slot.map(|s| s.velocity).unwrap_or(1.0);
 
-        let (base_width, base_height) = if rhythm_params.wings.contains(&wing) {
+        let (base_width, base_height) = if self.is_wing {
             (RECT_MAX_WIDTH, RECT_MAX_HEIGHT)
         } else {
             (RECT_DEFAULT_WIDTH, RECT_DEFAULT_HEIGHT)
         };
 
+        let (mod_width, mod_height) = if self.is_wing {
+            (
+                (base_width * (2.0 * length_scale)),
+                base_height * (2.0 * velocity_scale),
+            )
+        } else {
+            (base_width, base_height)
+        };
+
         // Interpolate dims with slot parameter scaling
         let width = tween::interpolate_dimension(
-            base_width * (2.0 * length_scale),
+            mod_width,
             base_width,
             wing_duration,
             RAMP_UP_PERCENT,
@@ -478,7 +385,7 @@ impl RhythmElement for RhythmRect {
         );
 
         let height = tween::interpolate_dimension(
-            base_height * (2.0 * velocity_scale),
+            mod_height,
             base_height,
             wing_duration,
             RAMP_UP_PERCENT,
@@ -506,21 +413,12 @@ impl RhythmElement for RhythmRect {
 }
 
 impl RhythmRect {
-    pub fn new_with_animation(start: Vec2, target: Vec2) -> Self {
+    pub fn new_with_animation(is_wing: bool, start: Vec2, target: Vec2) -> Self {
         Self {
+            is_wing,
             pos: start,
             start_pos: start,
             target_pos: target,
-            ..Default::default()
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn new_with_pos(pos: Vec2) -> Self {
-        Self {
-            pos,
-            start_pos: pos,
-            target_pos: pos,
             ..Default::default()
         }
     }
@@ -529,11 +427,12 @@ impl RhythmRect {
 impl Default for RhythmRect {
     fn default() -> Self {
         Self {
+            is_wing: false,
             pos: Vec2::new(0.0, 0.0),
             target_pos: Vec2::new(0.0, 0.0),
             start_pos: Vec2::new(0.0, 0.0),
             dims: Vec2::new(RECT_DEFAULT_WIDTH, RECT_DEFAULT_HEIGHT),
-            color: Rgb::new(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),
+            color: Rgb::new(RECT_LOW_R, RECT_LOW_G, RECT_LOW_B),
             alpha: RECT_DEFAULT_A,
             last_active_time: 0.0,
         }

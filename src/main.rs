@@ -105,7 +105,7 @@ fn model(app: &App) -> Model {
     particle_system.set_mass_variation_amount(0.5);
 
     // Create RhythmView
-    let mut rhythm_view = RhythmView::new();
+    let rhythm_view = RhythmView::new();
 
     // Create window
     let audience_window_id = app
@@ -471,7 +471,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update Rhythm logical groups & views
     for (voice_id, rhythm) in model.rhythms.iter_mut() {
-        let current_wing = rhythm.update();
+        let (current_slot, current_wing) = rhythm.update();
 
         let params = rhythm.get_params();
         if let Some(current_wing) = current_wing {
@@ -481,6 +481,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         }
 
         let update_params = RhythmViewUpdateParams {
+            current_slot,
             current_wing,
             tempo: model.clock.tempo(),
             subdivision: rhythm.get_subdivision().to_owned(),

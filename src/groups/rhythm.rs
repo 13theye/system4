@@ -103,8 +103,10 @@ impl Rhythm {
         }
     }
 
-    pub fn update(&mut self) -> Option<usize> {
-        self.receive_beat().filter(|&beat| self.wing_has_beat(beat))
+    pub fn update(&mut self) -> (Option<usize>, Option<usize>) {
+        let slot = self.receive_beat();
+        let wing = slot.filter(|&beat| self.wing_has_beat(beat));
+        (slot, wing)
     }
 
     fn receive_beat(&mut self) -> Option<usize> {

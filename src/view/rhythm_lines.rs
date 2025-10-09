@@ -83,7 +83,7 @@ impl RhythmFormation for RhythmLinesFormation {
             // Update last update time of the current wing's Rect
 
             let mut active_wing = false;
-            if let Some(current_wing) = update_params.current_wing {
+            if let Some(current_wing) = update_params.current_slot {
                 if *wing == current_wing {
                     rect.last_update_time = time;
                     active_wing = true;

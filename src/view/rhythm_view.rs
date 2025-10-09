@@ -14,6 +14,7 @@ pub enum RhythmFormationType {
 
 #[derive(Debug, Clone, Copy)]
 pub struct RhythmViewUpdateParams {
+    pub current_slot: Option<usize>,
     pub current_wing: Option<usize>,
     pub tempo: f64,
     pub subdivision: BeatSubdivision,

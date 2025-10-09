@@ -45,7 +45,7 @@ pub trait RhythmElement {
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
-        wing: usize,
+        slot: usize,
         time: f32,
     );
     fn draw(&self, draw: &Draw);
