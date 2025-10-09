@@ -104,6 +104,9 @@ fn model(app: &App) -> Model {
     particle_system.set_mass_variation_enabled(true);
     particle_system.set_mass_variation_amount(0.5);
 
+    // Create RhythmView
+    let mut rhythm_view = RhythmView::new();
+
     // Create window
     let audience_window_id = app
         .new_window()
@@ -377,7 +380,7 @@ fn model(app: &App) -> Model {
         particle_system,
         voices: HashMap::new(),
         rhythms: HashMap::new(),
-        rhythm_view: RhythmView::new(),
+        rhythm_view,
         clock,
         sequencer_service,
         osc,
@@ -476,8 +479,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             events.push(true);
             }
         }
-
-
 
         let update_params = RhythmViewUpdateParams {
             current_wing,

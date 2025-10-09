@@ -229,7 +229,7 @@ impl RhythmCircleFormation {
     fn initialize_positions(radius: f32, capacity: usize) -> HashMap<usize, Vec2> {
         let mut positions = HashMap::new();
         for i in 0..capacity {
-            let angle = (i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
+            let angle = -(i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
             let x = radius * angle.cos();
             let y = radius * angle.sin();
             positions.insert(i, Vec2::new(x, y));
