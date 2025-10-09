@@ -31,6 +31,10 @@ const INIT_ANIMATION_DURATION: f32 = 1.0;
 const REINIT_ANIMATION_DURATION: f32 = 0.8;
 const CLEAR_ANIMATION_DURATION: f32 = 1.0;
 
+// Beat indicator constants
+const INDICATOR_ARC_SPAN: f32 = 0.15; // Angular span in radians (~8.5 degrees)
+const INDICATOR_STROKE_WEIGHT: f32 = 4.0;
+
 pub struct RhythmCircleFormation {
     pub center: Vec2,
     pub capacity: usize,
@@ -38,6 +42,13 @@ pub struct RhythmCircleFormation {
     pub elements: HashMap<usize, Box<dyn RhythmElement>>, // HashMap<wing, <RhythmRect>,
     state: RhythmFormationState,
     last_state_change: f32,
+    // Beat indicator tracking
+    next_beat_wing: Option<usize>,
+    next_beat_time: f32,
+    next_beat_angle: f32,
+    sub_duration: f32,
+    indicator_angle: f32,
+    last_update_time: f32,
 }
 
 impl RhythmFormation for RhythmCircleFormation {
@@ -121,6 +132,46 @@ impl RhythmFormation for RhythmCircleFormation {
     }
 
     fn update_transitions(&mut self, time: f32) {
+        // Update indicator during transition states (rhythm continues playing)
+        if !matches!(
+            self.state,
+            RhythmFormationState::Inactive | RhythmFormationState::Active
+        ) {
+            // Advance indicator using velocity-based approach
+            let dt = time - self.last_update_time;
+            if let Some(_next_wing) = self.next_beat_wing {
+                let time_remaining = self.next_beat_time - time;
+                if time_remaining > 0.001 {
+                    // Calculate angle distance and ensure clockwise (negative) direction
+                    let mut angle_distance = self.next_beat_angle - self.indicator_angle;
+                    if angle_distance > 0.0 {
+                        angle_distance -= 2.0 * std::f32::consts::PI;
+                    }
+                    let velocity = angle_distance / time_remaining;
+                    self.indicator_angle += velocity * dt;
+                } else {
+                    // Fallback to constant velocity
+                    let angular_velocity =
+                        -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
+                    self.indicator_angle += angular_velocity * dt;
+                }
+            } else {
+                // No next beat - use constant velocity
+                let angular_velocity =
+                    -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
+                self.indicator_angle += angular_velocity * dt;
+            }
+
+            // Normalize indicator_angle to stay in range (-2π, 0]
+            let two_pi = 2.0 * std::f32::consts::PI;
+            self.indicator_angle = self.indicator_angle % two_pi;
+            if self.indicator_angle > 0.0 {
+                self.indicator_angle -= two_pi;
+            }
+
+            self.last_update_time = time;
+        }
+
         // Handle state transition animations (Initializing, Reinitializing, Clearing)
         match self.state {
             RhythmFormationState::Inactive | RhythmFormationState::Active => {
@@ -196,7 +247,10 @@ impl RhythmFormation for RhythmCircleFormation {
             return;
         }
 
-        // Active state: standard beat-based animation
+        // Update beat indicator
+        self.update_indicator(update_params, time);
+
+        // Update elements
         for (wing, element) in self.elements.iter_mut() {
             element.update(rhythm_params, update_params, *wing, time);
         }
@@ -208,9 +262,29 @@ impl RhythmFormation for RhythmCircleFormation {
             return;
         }
 
+        // Draw elements
         for element in self.elements.values() {
             element.draw(draw);
         }
+
+        // Draw beat indicator arc (always visible)
+        let num_points = 20;
+        let half_span = INDICATOR_ARC_SPAN / 2.0;
+
+        let points: Vec<Vec2> = (0..num_points)
+            .map(|i| {
+                let t = i as f32 / (num_points - 1) as f32;
+                let angle = self.indicator_angle - half_span + (INDICATOR_ARC_SPAN * t);
+                let x = self.center.x + self.radius * angle.cos();
+                let y = self.center.y + self.radius * angle.sin();
+                pt2(x, y)
+            })
+            .collect();
+
+        draw.polyline()
+            .weight(INDICATOR_STROKE_WEIGHT)
+            .points(points)
+            .color(WHITE);
     }
 }
 
@@ -223,6 +297,12 @@ impl RhythmCircleFormation {
             elements: HashMap::new(),
             state: RhythmFormationState::Inactive,
             last_state_change: time,
+            next_beat_wing: None,
+            next_beat_time: time,
+            next_beat_angle: 0.0,
+            sub_duration: 1.0,
+            indicator_angle: 0.0,
+            last_update_time: time,
         }
     }
 
@@ -235,6 +315,58 @@ impl RhythmCircleFormation {
             positions.insert(i, Vec2::new(x, y));
         }
         positions
+    }
+
+    fn update_indicator(&mut self, update_params: &RhythmViewUpdateParams, time: f32) {
+        // Calculate beat duration
+        self.sub_duration =
+            ((60.0 / update_params.tempo) / update_params.subdivision.multiplier()) as f32;
+
+        // Detect beat changes and update next beat target
+        if update_params.current_wing != self.next_beat_wing {
+            if let Some(current_wing) = update_params.current_wing {
+                // Calculate next beat position
+                let next_wing = (current_wing + 1) % self.capacity;
+                self.next_beat_wing = Some(next_wing);
+                self.next_beat_time = time + self.sub_duration;
+                self.next_beat_angle =
+                    -(next_wing as f32) * 2.0 * std::f32::consts::PI / (self.capacity as f32);
+            }
+        }
+
+        // Calculate velocity to reach next beat on time
+        let dt = time - self.last_update_time;
+        if let Some(_next_wing) = self.next_beat_wing {
+            let time_remaining = self.next_beat_time - time;
+            if time_remaining > 0.001 {
+                // Calculate angle distance and ensure clockwise (negative) direction
+                let mut angle_distance = self.next_beat_angle - self.indicator_angle;
+                if angle_distance > 0.0 {
+                    angle_distance -= 2.0 * std::f32::consts::PI;
+                }
+                let velocity = angle_distance / time_remaining;
+                self.indicator_angle += velocity * dt;
+            } else {
+                // Very close to or past beat time - just use constant velocity as fallback
+                let angular_velocity =
+                    -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
+                self.indicator_angle += angular_velocity * dt;
+            }
+        } else {
+            // No next beat yet - use constant velocity
+            let angular_velocity =
+                -2.0 * std::f32::consts::PI / (self.capacity as f32 * self.sub_duration);
+            self.indicator_angle += angular_velocity * dt;
+        }
+
+        // Normalize indicator_angle to stay in range (-2π, 0]
+        let two_pi = 2.0 * std::f32::consts::PI;
+        self.indicator_angle = self.indicator_angle % two_pi;
+        if self.indicator_angle > 0.0 {
+            self.indicator_angle -= two_pi;
+        }
+
+        self.last_update_time = time;
     }
 
     fn change_state(&mut self, state: RhythmFormationState, time: f32) {
@@ -307,7 +439,7 @@ impl RhythmElement for RhythmRect {
 
         // Calculate the interpolation duration
         let wing_duration =
-            ((2.0 / update_params.subdivision.multiplier()) * (60.0 / update_params.tempo)) as f32;
+            ((60.0 / update_params.tempo) / update_params.subdivision.multiplier()) as f32;
 
         self.color = tween::interpolate_color(
             rgb(RECT_DEFAULT_R, RECT_DEFAULT_G, RECT_DEFAULT_B),

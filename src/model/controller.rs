@@ -872,6 +872,10 @@ impl Model {
             }
             // Rhythm structure parameters
             SimpleCommand::RhythmCapacity { voice_id, value } => {
+                if value < 1 {
+                    return;
+                }
+
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.set_capacity(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
