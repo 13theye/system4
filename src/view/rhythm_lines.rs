@@ -213,6 +213,10 @@ pub struct RhythmLine {
 }
 
 impl RhythmElement for RhythmLine {
+    fn set_position(&mut self, pos: Vec2) {
+        self.pos = pos;
+    }
+
     fn position(&self) -> Vec2 {
         self.pos
     }
@@ -225,29 +229,39 @@ impl RhythmElement for RhythmLine {
         self.start_pos
     }
 
-    fn set_position(&mut self, pos: Vec2) {
-        self.pos = pos;
-    }
-
     fn set_animation_positions(&mut self, start: Vec2, target: Vec2) {
         self.start_pos = start;
         self.target_pos = target;
     }
 
-    fn dims(&self) -> Vec2 {
-        self.dims
-    }
-
-    fn color(&self) -> Rgb {
-        self.color
-    }
-
-    fn alpha(&self) -> f32 {
-        self.alpha
+    fn set_last_active_time(&mut self, time: f32) {
+        self.last_update_time = time;
     }
 
     fn last_update_time(&self) -> f32 {
         self.last_update_time
+    }
+
+    fn update(
+        &mut self,
+        _rhythm_params: &RhythmParams,
+        _update_params: &RhythmViewUpdateParams,
+        _wing: usize,
+        time: f32,
+    ) {
+        self.last_update_time = time;
+    }
+
+    fn draw(&self, draw: &Draw) {
+        draw.rect()
+            .x_y(self.pos.x, self.pos.y)
+            .w_h(self.dims.x, self.dims.y)
+            .color(rgba(
+                self.color.red,
+                self.color.green,
+                self.color.blue,
+                self.alpha,
+            ));
     }
 }
 
