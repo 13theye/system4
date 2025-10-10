@@ -266,36 +266,48 @@ impl Rhythm {
 
     /// Randomize all slots' length within a range
     pub fn randomize_all_slots_length(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        for slot in &mut self.params.slots {
-            slot.length = rng.random_range(range.to_range_inclusive());
-        }
-    }
+        let skew_params = range.to_skew_distribution_params();
+        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+            for slot in &mut self.params.slots {
+                slot.length = skew_normal.sample(rng);
+            }
+        } else {
+            for slot in &mut self.params.slots {
+                println!("failed at skew");
 
-    pub fn generate_skew_normal_value(
-        &mut self,
-        skew_normal_params: (f32, f32, f32),
-        rng: &mut ThreadRng,
-    ) -> Option<f32> {
-        let skew_normal = SkewNormal::new(
-            skew_normal_params.0,
-            skew_normal_params.1,
-            skew_normal_params.2,
-        )
-        .ok()?;
-        Some(skew_normal.sample(rng))
+                slot.length = rng.random_range(range.to_range_inclusive());
+            }
+        }
     }
 
     /// Randomize all slots' velocity within a range
     pub fn randomize_all_slots_velocity(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        for slot in &mut self.params.slots {
-            slot.velocity = rng.random_range(range.to_range_inclusive());
+        let skew_params = range.to_skew_distribution_params();
+        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+            for slot in &mut self.params.slots {
+                slot.velocity = skew_normal.sample(rng);
+            }
+        } else {
+            for slot in &mut self.params.slots {
+                println!("failed at skew");
+
+                slot.velocity = rng.random_range(range.to_range_inclusive());
+            }
         }
     }
 
     /// Randomize all slots' cutoff within a range
     pub fn randomize_all_slots_cutoff(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        for slot in &mut self.params.slots {
-            slot.cutoff = rng.random_range(range.to_range_inclusive());
+        let skew_params = range.to_skew_distribution_params();
+        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+            for slot in &mut self.params.slots {
+                slot.cutoff = skew_normal.sample(rng);
+            }
+        } else {
+            for slot in &mut self.params.slots {
+                println!("failed at skew");
+                slot.cutoff = rng.random_range(range.to_range_inclusive());
+            }
         }
     }
 

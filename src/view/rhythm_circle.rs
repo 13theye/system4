@@ -19,8 +19,8 @@ const RECT_LOW_G: f32 = 0.2;
 const RECT_LOW_B: f32 = 0.2;
 const RECT_DEFAULT_WIDTH: f32 = 10.0;
 const RECT_DEFAULT_HEIGHT: f32 = 10.0;
-const RECT_MAX_WIDTH: f32 = 50.0;
-const RECT_MAX_HEIGHT: f32 = 50.0;
+const RECT_MAX_WIDTH: f32 = 200.0;
+const RECT_MAX_HEIGHT: f32 = 100.0;
 
 // Animation timing constants
 const RAMP_UP_PERCENT: f32 = 0.1;
@@ -352,16 +352,16 @@ impl RhythmElement for RhythmRect {
         let velocity_scale = rhythm_slot.map(|s| s.velocity).unwrap_or(1.0);
 
         let (base_width, base_height) = if self.is_wing {
-            (RECT_MAX_WIDTH, RECT_MAX_HEIGHT)
+            (
+                RECT_MAX_WIDTH * length_scale,
+                RECT_MAX_HEIGHT * velocity_scale,
+            )
         } else {
             (RECT_DEFAULT_WIDTH, RECT_DEFAULT_HEIGHT)
         };
 
         let (mod_width, mod_height) = if self.is_wing {
-            (
-                (base_width * (2.0 * length_scale)),
-                base_height * (2.0 * velocity_scale),
-            )
+            ((base_width * 2.0), (base_height * 2.0))
         } else {
             (base_width, base_height)
         };

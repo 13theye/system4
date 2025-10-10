@@ -39,13 +39,17 @@ impl RangeSize {
 
     /// converts the named range to parameters for SkewNormal.
     /// returns (location, scale, shape)
+    /// All ranges produce values in [0.0, 1.0] with different skew:
+    /// - XS, S: skewed toward 0.0
+    /// - M: normal distribution (no skew)
+    /// - L, XL: skewed toward 1.0
     pub fn to_skew_distribution_params(&self) -> (f32, f32, f32) {
         match self {
-            RangeSize::XS => (0.1, 1.0, 2.0),
-            RangeSize::S => (0.3, 1.0, 1.5),
-            RangeSize::M => (0.5, 1.0, 0.0),
-            RangeSize::L => (1.0, 1.0, -1.5),
-            RangeSize::XL => (1.0, 1.0, -5.0),
+            RangeSize::XS => (0.0, 0.25, 8.0),
+            RangeSize::S => (0.0, 0.25, 5.0),
+            RangeSize::M => (0.5, 0.25, 0.0),
+            RangeSize::L => (0.9, 0.25, -5.0),
+            RangeSize::XL => (0.9, 0.25, -8.0),
         }
     }
 }
@@ -303,8 +307,8 @@ impl RhythmConfig {
         };
 
         let (default_length_range, default_velocity_range, default_pitch_range) = match voice {
-            VoiceId::Voice1 => (RangeSize::XL, RangeSize::L, RangeSize::L),
-            VoiceId::Voice2 => (RangeSize::XL, RangeSize::L, RangeSize::L),
+            VoiceId::Voice1 => (RangeSize::M, RangeSize::M, RangeSize::M),
+            VoiceId::Voice2 => (RangeSize::M, RangeSize::M, RangeSize::M),
             _ => (RangeSize::M, RangeSize::M, RangeSize::M), // Fallback
         };
 
