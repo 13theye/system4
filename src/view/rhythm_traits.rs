@@ -41,6 +41,7 @@ pub trait RhythmElement {
     fn set_animation_positions(&mut self, start: Vec2, target: Vec2);
     fn set_last_active_time(&mut self, time: f32);
     fn last_update_time(&self) -> f32;
+    fn set_is_wing(&mut self, is_wing: bool);
     fn update(
         &mut self,
         rhythm_params: &RhythmParams,

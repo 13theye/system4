@@ -105,12 +105,8 @@ impl Sequencer {
             return;
         };
 
-        self.beat_count += 1;
-
-        // Send the beat to the data callback channel
-        self.send_callback(beat);
-
         // Advance the beat
+        self.beat_count += 1;
         beat += 1;
 
         // Wrap around if necessary
@@ -476,11 +472,20 @@ impl SequencerThread {
                         .subdivisions
                         .contains(sequencer.subscribed_to_subdivision())
                     {
+                        if sequencer.is_sending() {
+                            // Send OSC commands
+                            sequencer.send_commands(&self.osc_sender);
+
+                            // Send current beat to callback
+                            let Some(beat) = sequencer.next_beat else {
+                                continue;
+                            };
+                            sequencer.send_callback(beat);
+                        }
+
+                        // Advance the beat counts and next beat
                         if sequencer.is_advancing() {
                             sequencer.increment();
-                        }
-                        if sequencer.is_sending() {
-                            sequencer.send_commands(&self.osc_sender);
                         }
                     }
                 }

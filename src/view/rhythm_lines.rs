@@ -242,6 +242,10 @@ impl RhythmElement for RhythmLine {
         self.last_update_time
     }
 
+    fn set_is_wing(&mut self, _is_wing: bool) {
+        // RhythmLine doesn't store wing status, no-op
+    }
+
     fn update(
         &mut self,
         _rhythm_params: &RhythmParams,

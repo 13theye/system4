@@ -223,8 +223,8 @@ impl DroneConfig {
     /// Get default values for a specific voice
     pub fn get_defaults_for_voice(voice: VoiceId) -> Self {
         let (default_center_x, default_center_y) = match voice {
-            VoiceId::Voice0 => (-1280.0, 0.0),
-            VoiceId::Voice3 => (1280.0, 0.0),
+            VoiceId::Voice0 => (-1080.0, 0.0),
+            VoiceId::Voice3 => (1080.0, 0.0),
             _ => (0.0, 0.0),
         };
 

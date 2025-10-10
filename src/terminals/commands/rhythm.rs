@@ -33,7 +33,7 @@ impl RangeSize {
             RangeSize::S => 0.2..=0.45,
             RangeSize::M => 0.4..=0.66,
             RangeSize::L => 0.5..=0.88,
-            RangeSize::XL => 0.75..=1.0,
+            RangeSize::XL => 0.5..=1.0,
         }
     }
 }
@@ -285,15 +285,15 @@ impl RhythmConfig {
     /// Get default values for a specific voice
     pub fn get_defaults_for_voice(voice: VoiceId) -> Self {
         let (default_capacity, default_num_wings, default_subdivision) = match voice {
-            VoiceId::Voice1 => (8, 3, BeatSubdivision::Eighth), // Voice2: Fast, simple rhythm
-            VoiceId::Voice3 => (16, 5, BeatSubdivision::Quarter), // Voice3: Longer, more complex rhythm
-            _ => (8, 4, BeatSubdivision::Eighth),                 // Fallback
+            VoiceId::Voice1 => (12, 5, BeatSubdivision::Eighth),
+            VoiceId::Voice2 => (8, 3, BeatSubdivision::Quarter),
+            _ => (8, 4, BeatSubdivision::Eighth), // Fallback
         };
 
         let (default_length_range, default_velocity_range, default_pitch_range) = match voice {
-            VoiceId::Voice1 => (RangeSize::XL, RangeSize::L, RangeSize::L), // Voice2: Fast, simple rhythm
-            VoiceId::Voice3 => (RangeSize::XL, RangeSize::L, RangeSize::L), // Voice3: Longer, more complex rhythm
-            _ => (RangeSize::M, RangeSize::M, RangeSize::M),                // Fallback
+            VoiceId::Voice1 => (RangeSize::XL, RangeSize::L, RangeSize::L),
+            VoiceId::Voice2 => (RangeSize::XL, RangeSize::L, RangeSize::L),
+            _ => (RangeSize::M, RangeSize::M, RangeSize::M), // Fallback
         };
 
         Self {

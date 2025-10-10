@@ -780,6 +780,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.add_wings(count, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
 
                     let status_message = format!(
                         "Voice {} - Added {} wings (total: {})",
@@ -801,6 +803,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.remove_wings(count);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
 
                     let status_message = format!(
                         "Voice {} - Removed {} wings (total: {})",

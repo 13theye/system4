@@ -59,16 +59,12 @@ impl RhythmFormation for RhythmCircleFormation {
             let Some(target_pos) = positions.get(&i) else {
                 continue;
             };
-            let is_wing = rhythm_params.wings.contains(&i);
+            let mut new_element = RhythmRect::new();
             // Elements start at center and animate to their circle positions
-            self.elements.insert(
-                i,
-                Box::new(RhythmRect::new_with_animation(
-                    is_wing,
-                    self.center,
-                    *target_pos,
-                )),
-            );
+            new_element.set_animation_positions(self.center, *target_pos);
+            new_element.set_is_wing(rhythm_params.wings.contains(&i));
+            // Add element to the RhythmCircleFormation
+            self.elements.insert(i, Box::new(new_element));
         }
 
         self.change_state(RhythmFormationState::Initializing, time);
@@ -84,20 +80,11 @@ impl RhythmFormation for RhythmCircleFormation {
         // Update capacity
         self.capacity = new_capacity;
 
+        // Add or remove elements
         if new_capacity > old_capacity {
-            // Add new elements: they start at center and move to circle positions
+            // Add new elements
             for i in old_capacity..new_capacity {
-                if let Some(&target_pos) = new_positions.get(&i) {
-                    let is_wing = rhythm_params.wings.contains(&i);
-                    self.elements.insert(
-                        i,
-                        Box::new(RhythmRect::new_with_animation(
-                            is_wing,
-                            self.center,
-                            target_pos,
-                        )),
-                    );
-                }
+                self.elements.insert(i, Box::new(RhythmRect::new()));
             }
         } else if new_capacity < old_capacity {
             // Remove excess elements
@@ -106,12 +93,15 @@ impl RhythmFormation for RhythmCircleFormation {
             }
         }
 
-        // For existing elements, update their target positions and set start to current position
-        for i in 0..new_capacity.min(old_capacity) {
-            if let Some(rect) = self.elements.get_mut(&i) {
+        // For all elements, update their target positions and set start to current position
+        // and update wing status
+        for i in 0..new_capacity {
+            if let Some(element) = self.elements.get_mut(&i) {
+                element.set_is_wing(rhythm_params.wings.contains(&i));
+
                 if let Some(&new_target) = new_positions.get(&i) {
-                    let current_pos = rect.position();
-                    rect.set_animation_positions(current_pos, new_target);
+                    let current_pos = element.position();
+                    element.set_animation_positions(current_pos, new_target);
                 }
             }
         }
@@ -203,8 +193,8 @@ impl RhythmFormation for RhythmCircleFormation {
         update_params: &RhythmViewUpdateParams,
         time: f32,
     ) {
-        // Only update if in Active state
-        if !matches!(self.state, RhythmFormationState::Active) {
+        // Don't run this if Inactive
+        if matches!(self.state, RhythmFormationState::Inactive) {
             return;
         }
 
@@ -242,7 +232,8 @@ impl RhythmCircleFormation {
     fn initialize_positions(radius: f32, capacity: usize) -> HashMap<usize, Vec2> {
         let mut positions = HashMap::new();
         for i in 0..capacity {
-            let angle = std::f32::consts::FRAC_PI_2 - (i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
+            let angle = std::f32::consts::FRAC_PI_2
+                - (i as f32) * 2.0 * std::f32::consts::PI / (capacity as f32);
             let x = radius * angle.cos();
             let y = radius * angle.sin();
             positions.insert(i, Vec2::new(x, y));
@@ -304,6 +295,10 @@ impl RhythmElement for RhythmRect {
 
     fn last_update_time(&self) -> f32 {
         self.last_active_time
+    }
+
+    fn set_is_wing(&mut self, is_wing: bool) {
+        self.is_wing = is_wing;
     }
 
     fn update(
@@ -413,12 +408,8 @@ impl RhythmElement for RhythmRect {
 }
 
 impl RhythmRect {
-    pub fn new_with_animation(is_wing: bool, start: Vec2, target: Vec2) -> Self {
+    pub fn new() -> Self {
         Self {
-            is_wing,
-            pos: start,
-            start_pos: start,
-            target_pos: target,
             ..Default::default()
         }
     }
