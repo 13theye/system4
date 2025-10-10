@@ -14,10 +14,7 @@ use crate::{
     terminals::commands::{drone::DroneConfig, rhythm::RhythmConfig},
     view::RhythmFormationType,
 };
-use nannou::{
-    prelude::*,
-    wgpu::{Device, Queue},
-};
+use nannou::wgpu::{Device, Queue};
 
 #[derive(Debug, Clone)]
 pub enum CommandSource {

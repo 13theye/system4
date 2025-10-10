@@ -127,7 +127,7 @@ impl Sequencer {
     }
 
     /// Via OSC sender, send Voice_id, capacity, wings, and current beat
-    fn send_commands(&self, osc_sender: &OscSender) {
+    fn send_osc(&self, osc_sender: &OscSender) {
         // Don't send if the self flag is false
         if !self.state.is_sending || self.next_beat.is_none() {
             return;
@@ -474,7 +474,7 @@ impl SequencerThread {
                     {
                         if sequencer.is_sending() {
                             // Send OSC commands
-                            sequencer.send_commands(&self.osc_sender);
+                            sequencer.send_osc(&self.osc_sender);
 
                             // Send current beat to callback
                             let Some(beat) = sequencer.next_beat else {

@@ -3,7 +3,7 @@
 /// The thing that spits out particles
 use crate::{groups::VoiceId, particle::Particle};
 use nannou::prelude::*;
-use nannou::rand::{rngs::ThreadRng, Rng};
+use rand::{rngs::ThreadRng, Rng};
 
 /// The Emitter trait is implemented by different shapes of emitters.
 pub trait Emitter {
@@ -53,15 +53,15 @@ impl Emitter for FullScreenRandomEmitter {
 
         for _ in 0..adjusted_rate as usize {
             let spawn_pos = vec2(
-                rng.gen_range(self.spawn_area.left()..self.spawn_area.right()),
-                rng.gen_range(self.spawn_area.bottom()..self.spawn_area.top()),
+                rng.random_range(self.spawn_area.left()..self.spawn_area.right()),
+                rng.random_range(self.spawn_area.bottom()..self.spawn_area.top()),
             );
 
             // override nominal velocity
             let velocity = 2.0;
             let velocity = vec2(
-                rng.gen_range(-velocity..velocity),
-                rng.gen_range(-velocity..velocity),
+                rng.random_range(-velocity..velocity),
+                rng.random_range(-velocity..velocity),
             ) / velocity;
 
             particles.push(Particle::new(spawn_pos, size, color).with_velocity(velocity));
@@ -127,17 +127,17 @@ impl Emitter for PointEmitter {
 
         for _ in 0..adjusted_rate as usize {
             // Generate random angle for velocity direction
-            let angle = rng.gen_range(0.0..std::f32::consts::TAU);
+            let angle = rng.random_range(0.0..std::f32::consts::TAU);
 
             // Add speed variation to make particles less uniform
-            let speed_variation = rng.gen_range(0.7..1.3);
+            let speed_variation = rng.random_range(0.7..1.3);
             let varied_speed = speed * speed_variation;
             let velocity = vec2(angle.cos() * varied_speed, angle.sin() * varied_speed);
 
             // Add random offset to spawn position to avoid exact point emission
             let spawn_offset_radius = 8.0;
-            let offset_angle = rng.gen_range(0.0..std::f32::consts::TAU);
-            let offset_distance = rng.gen_range(0.0..spawn_offset_radius);
+            let offset_angle = rng.random_range(0.0..std::f32::consts::TAU);
+            let offset_distance = rng.random_range(0.0..spawn_offset_radius);
             let spawn_position = self.origin
                 + vec2(
                     offset_angle.cos() * offset_distance,
@@ -230,16 +230,16 @@ impl Emitter for LinearEmitter {
             EmitDirection::East => vec2(speed, 0.0),
         };
         let length = self.end.distance(self.start) - 4.0;
-        let gen_range = -length / 2.0..length / 2.0;
+        let random_range = -length / 2.0..length / 2.0;
 
         let mut particles = Vec::with_capacity(adjusted_rate as usize);
 
         for _ in 0..adjusted_rate as usize {
             // Add speed variation to make particles less uniform
-            let speed_variation = rng.gen_range(0.95..1.05);
+            let speed_variation = rng.random_range(0.95..1.05);
             let velocity = base_velocity * speed_variation;
 
-            let var_pos = rng.gen_range(gen_range.clone());
+            let var_pos = rng.random_range(random_range.clone());
 
             let base_position = match self.direction {
                 EmitDirection::North => vec2(var_pos + self.midpoint.x, self.midpoint.y),
@@ -249,7 +249,7 @@ impl Emitter for LinearEmitter {
             };
 
             // Add small random offset perpendicular to emission direction
-            let offset_magnitude = rng.gen_range(-3.0..3.0);
+            let offset_magnitude = rng.random_range(-3.0..3.0);
             let position = match self.direction {
                 EmitDirection::North | EmitDirection::South => {
                     base_position + vec2(offset_magnitude, 0.0)

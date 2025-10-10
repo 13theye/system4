@@ -17,13 +17,14 @@ use crate::{
     utils::IdGenerator,
     view::RhythmView,
 };
-use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
+use nannou::{prelude::*, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::renderers::{
     HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
 };
 use nnpipe::*;
 use prat::clockservice::ClockService;
+use rand::rngs::ThreadRng;
 
 use std::{cell::RefCell, collections::HashMap};
 

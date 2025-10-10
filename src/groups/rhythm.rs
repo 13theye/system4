@@ -1,8 +1,10 @@
 // src/groups/rhythm.rs
 
 use crossbeam_channel as channel;
-use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
+//use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
+use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
+use rand_distr::{Distribution, SkewNormal};
 
 use crate::{
     groups::{VoiceId, VoiceParams},
@@ -234,9 +236,9 @@ impl Rhythm {
     }
 
     pub fn roll_slot(&mut self, rng: &mut ThreadRng) -> RhythmSlot {
-        let length = rng.gen_range(self.params.length_range.to_range_inclusive());
-        let velocity = rng.gen_range(self.params.velocity_range.to_range_inclusive());
-        let pitch = rng.gen_range(self.params.pitch_range.to_range_inclusive());
+        let length = rng.random_range(self.params.length_range.to_range_inclusive());
+        let velocity = rng.random_range(self.params.velocity_range.to_range_inclusive());
+        let pitch = rng.random_range(self.params.pitch_range.to_range_inclusive());
         RhythmSlot {
             length,
             velocity,
@@ -265,21 +267,35 @@ impl Rhythm {
     /// Randomize all slots' length within a range
     pub fn randomize_all_slots_length(&mut self, range: RangeSize, rng: &mut ThreadRng) {
         for slot in &mut self.params.slots {
-            slot.length = rng.gen_range(range.to_range_inclusive());
+            slot.length = rng.random_range(range.to_range_inclusive());
         }
+    }
+
+    pub fn generate_skew_normal_value(
+        &mut self,
+        skew_normal_params: (f32, f32, f32),
+        rng: &mut ThreadRng,
+    ) -> Option<f32> {
+        let skew_normal = SkewNormal::new(
+            skew_normal_params.0,
+            skew_normal_params.1,
+            skew_normal_params.2,
+        )
+        .ok()?;
+        Some(skew_normal.sample(rng))
     }
 
     /// Randomize all slots' velocity within a range
     pub fn randomize_all_slots_velocity(&mut self, range: RangeSize, rng: &mut ThreadRng) {
         for slot in &mut self.params.slots {
-            slot.velocity = rng.gen_range(range.to_range_inclusive());
+            slot.velocity = rng.random_range(range.to_range_inclusive());
         }
     }
 
     /// Randomize all slots' cutoff within a range
     pub fn randomize_all_slots_cutoff(&mut self, range: RangeSize, rng: &mut ThreadRng) {
         for slot in &mut self.params.slots {
-            slot.cutoff = rng.gen_range(range.to_range_inclusive());
+            slot.cutoff = rng.random_range(range.to_range_inclusive());
         }
     }
 

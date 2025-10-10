@@ -64,7 +64,7 @@ impl ForceFields {
     pub fn update(
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
-        rng: &mut nannou::rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::ThreadRng,
     ) {
         let mut circle_noise_values: HashMap<u64, f32> = HashMap::new();
 
@@ -86,7 +86,7 @@ impl ForceFields {
     /// Update all Winds in this ForceField
     pub fn force_update_all(&mut self) {
         // Use a dummy RNG and empty variations for compatibility
-        let mut dummy_rng = nannou::rand::thread_rng();
+        let mut dummy_rng = rand::rng();
         let empty_variations = HashMap::new();
         self.wind_field
             .par_force_update_all(&mut dummy_rng, &empty_variations);

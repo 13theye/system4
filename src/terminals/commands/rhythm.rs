@@ -36,6 +36,18 @@ impl RangeSize {
             RangeSize::XL => 0.5..=1.0,
         }
     }
+
+    /// converts the named range to parameters for SkewNormal.
+    /// returns (location, scale, shape)
+    pub fn to_skew_distribution_params(&self) -> (f32, f32, f32) {
+        match self {
+            RangeSize::XS => (0.1, 1.0, 2.0),
+            RangeSize::S => (0.3, 1.0, 1.5),
+            RangeSize::M => (0.5, 1.0, 0.0),
+            RangeSize::L => (1.0, 1.0, -1.5),
+            RangeSize::XL => (1.0, 1.0, -5.0),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

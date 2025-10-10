@@ -249,10 +249,10 @@ impl WindField {
     /// Force a recalculation of all cells in the WindField in parallel with per-circle angle variations
     pub fn par_force_update_all(
         &mut self,
-        rng: &mut nannou::rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::ThreadRng,
         circle_noise_values: &HashMap<u64, f32>,
     ) {
-        use nannou::rand::Rng;
+        use rand::Rng;
 
         // Pre-compute random variations for all cells for each circle that has angle variation
         let mut cell_variations: HashMap<u64, Vec<f32>> = HashMap::new();
@@ -261,7 +261,7 @@ impl WindField {
                 let variations: Vec<f32> = self
                     .cells
                     .iter()
-                    .map(|_| rng.gen_range(-1.0..=1.0) * variation_factor)
+                    .map(|_| rng.random_range(-1.0..=1.0) * variation_factor)
                     .collect();
                 cell_variations.insert(hash_key, variations);
             }

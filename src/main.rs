@@ -5,11 +5,12 @@
 //
 // src/main.rs
 
-use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
+use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
 use nnpipe::*;
 use prat::clockservice::{ClockService};
+use rand::rngs::ThreadRng;
 use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 

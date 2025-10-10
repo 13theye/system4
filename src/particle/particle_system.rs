@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 
 use nannou::prelude::*;
-use nannou::rand::{rngs::ThreadRng, seq::SliceRandom};
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
+use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rayon::prelude::*;
 
 use crate::{
@@ -172,26 +172,25 @@ impl ParticleSystem {
                 .or_insert_with(|| EMPTY_GPU_SEGMENT_BUFFER);
 
             // Pre-compute mass variation factors for all particles in this voice
-            let mass_variations: Vec<f32> =
-                if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
-                    use nannou::rand::Rng;
-                    particles
-                        .iter()
-                        .map(|_| {
-                            rng.gen_range(-self.mass_variation_amount..=self.mass_variation_amount)
-                        })
-                        .collect()
-                } else {
-                    vec![0.0; particles.len()]
-                };
+            let mass_variations: Vec<f32> = if self.mass_variation_enabled
+                && self.mass_variation_amount > 0.0
+            {
+                particles
+                    .iter()
+                    .map(|_| {
+                        rng.random_range(-self.mass_variation_amount..=self.mass_variation_amount)
+                    })
+                    .collect()
+            } else {
+                vec![0.0; particles.len()]
+            };
 
             // Pre-compute position offset random signs for all particles in this voice
             let vibration = vibration_values.get(voice_id).copied().unwrap_or(0.0);
             let position_offsets: Vec<f32> = if vibration > 0.0 {
-                use nannou::rand::Rng;
                 particles
                     .iter()
-                    .map(|_| rng.gen_range(-vibration..vibration))
+                    .map(|_| rng.random_range(-vibration..vibration))
                     .collect()
             } else {
                 vec![0.0; particles.len()]
