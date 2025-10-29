@@ -435,7 +435,7 @@ impl Model {
                     let radius = if voice_id == VoiceId::Voice1 {
                         800.0
                     } else {
-                        500.0
+                        450.0
                     };
 
                     // Create the RhythmFormation

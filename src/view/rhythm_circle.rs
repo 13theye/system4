@@ -19,8 +19,8 @@ const RECT_LOW_G: f32 = 0.2;
 const RECT_LOW_B: f32 = 0.2;
 const RECT_DEFAULT_WIDTH: f32 = 10.0;
 const RECT_DEFAULT_HEIGHT: f32 = 10.0;
-const RECT_MAX_WIDTH: f32 = 200.0;
-const RECT_MAX_HEIGHT: f32 = 100.0;
+const RECT_MAX_WIDTH: f32 = 300.0;
+const RECT_MAX_HEIGHT: f32 = 97.0;
 
 // Animation timing constants
 const RAMP_UP_PERCENT: f32 = 0.1;
@@ -263,6 +263,8 @@ pub struct RhythmRect {
     pub(crate) color: Rgb,
     /// Alpha value
     pub(crate) alpha: f32,
+    /// Rotation angle in radians (counterclockwise)
+    pub(crate) rotation: f32,
     /// Last update time
     pub(crate) last_active_time: f32,
 }
@@ -392,12 +394,20 @@ impl RhythmElement for RhythmRect {
         );
 
         self.dims = Vec2::new(width, height);
+
+        // Calculate rotation: each element rotates counterclockwise at 1/4 the rate of the rhythm pattern
+        // Elements are synchronized to be horizontal/vertical when their slot becomes active
+        let capacity = rhythm_params.capacity as f32;
+        let angular_velocity = std::f32::consts::PI / (2.0 * wing_duration * capacity);
+        let slot_offset = -(slot as f32) * std::f32::consts::PI / (2.0 * capacity);
+        self.rotation = slot_offset + angular_velocity * time;
     }
 
     fn draw(&self, draw: &Draw) {
         draw.rect()
             .x_y(self.pos.x, self.pos.y)
             .w_h(self.dims.x, self.dims.y)
+            .rotate(self.rotation)
             .color(rgba(
                 self.color.red,
                 self.color.green,
@@ -425,6 +435,7 @@ impl Default for RhythmRect {
             dims: Vec2::new(RECT_DEFAULT_WIDTH, RECT_DEFAULT_HEIGHT),
             color: Rgb::new(RECT_LOW_R, RECT_LOW_G, RECT_LOW_B),
             alpha: RECT_DEFAULT_A,
+            rotation: 0.0,
             last_active_time: 0.0,
         }
     }

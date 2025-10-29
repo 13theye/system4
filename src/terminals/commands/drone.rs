@@ -236,10 +236,10 @@ impl DroneConfig {
 
         Self {
             voice,
-            brightness: Some(0.7),
-            volume: Some(0.5),
+            brightness: Some(0.0),
+            volume: Some(0.0),
             gravity: Some(gravity),
-            force: Some(10.0),
+            force: Some(0.0),
             feedback: Some(0.0),
             outer_radius: Some(800.0),
             inner_radius: Some(200.0),
