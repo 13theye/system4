@@ -13,7 +13,7 @@ use crate::{
     forces::ForceFields,
     groups::{Voice, VoiceId},
     model::{GpuParticleBuffer, GpuSegmentBuffer},
-    particle::Particle,
+    particle::{Particle, ParticleCore, ParticleFeedback, to_segment_gpu},
     utils::tween,
 };
 
@@ -34,7 +34,13 @@ const RAMP_CURVE_EXPONENT: f32 = 3.0;
 const FADE_CURVE_EXPONENT: f32 = 1.5;
 
 pub struct ParticleSystem {
-    // Particles
+    // Split particle storage for cache locality
+    // Core: hot data for physics updates (~100 bytes per particle)
+    pub particle_cores: HashMap<VoiceId, Vec<ParticleCore>>,
+    // Feedback: cold data for trail rendering (~3.4KB per particle)
+    pub particle_feedback: HashMap<VoiceId, Vec<ParticleFeedback>>,
+
+    // Legacy monolithic storage (will be removed)
     pub particles: HashMap<VoiceId, Vec<Particle>>,
 
     // experimental
@@ -79,7 +85,9 @@ impl ParticleSystem {
 
         Self {
             origin,
-            particles: HashMap::new(),
+            particle_cores: HashMap::new(),
+            particle_feedback: HashMap::new(),
+            particles: HashMap::new(), // Legacy, will be removed
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
             global_max_spawn_rate: MAX_SPAWN_RATE,
             bounds_size,
@@ -101,6 +109,7 @@ impl ParticleSystem {
     /********************* Update methods ********************************** */
 
     /// Emit particles, update forces, update particles, and cull particles - returns simple particles and accompanying trails
+    /// OPTIMIZED: Split storage for cache locality - physics updates only touch ~100B per particle
     pub fn update(
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
@@ -110,10 +119,16 @@ impl ParticleSystem {
         event: bool,
         time: f32,
     ) {
+        let start_total = std::time::Instant::now();
+
+        let start = std::time::Instant::now();
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
+        let emit_time = start.elapsed();
 
+        let start = std::time::Instant::now();
         self.forces.update(voices, rng);
+        let forces_time = start.elapsed();
 
         // Reuse existing buffer to avoid allocations
         for (_, s_gpu) in gpu_segment_buffers.iter_mut() {
@@ -127,7 +142,8 @@ impl ParticleSystem {
             .map(|voice| (voice.id, voice.params.vibration))
             .collect();
 
-        for (voice_id, particles) in self.particles.iter_mut() {
+        // NEW: Iterate over split storage for optimal cache locality
+        for (voice_id, cores) in self.particle_cores.iter_mut() {
             let voice = voices.get(voice_id);
             let color_limit = voice.map(|v| v.params.color_limit);
             let alpha_limit = voice.map(|v| v.params.alpha_limit);
@@ -175,72 +191,122 @@ impl ParticleSystem {
             let mass_variations: Vec<f32> = if self.mass_variation_enabled
                 && self.mass_variation_amount > 0.0
             {
-                particles
+                cores
                     .iter()
                     .map(|_| {
                         rng.random_range(-self.mass_variation_amount..=self.mass_variation_amount)
                     })
                     .collect()
             } else {
-                vec![0.0; particles.len()]
+                vec![0.0; cores.len()]
             };
 
             // Pre-compute position offset random signs for all particles in this voice
             let vibration = vibration_values.get(voice_id).copied().unwrap_or(0.0);
             let position_offsets: Vec<f32> = if vibration > 0.0 {
-                particles
+                cores
                     .iter()
                     .map(|_| rng.random_range(-vibration..vibration))
                     .collect()
             } else {
-                vec![0.0; particles.len()]
+                vec![0.0; cores.len()]
             };
 
-            // Parallel update, collect simple particle data and segments
+            // Get mutable reference to feedback array for this voice
+            let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
+
+            let start = std::time::Instant::now();
+            // OPTIMIZATION: Physics update only touches ParticleCore (~100B per particle)
+            // This is the hot path - Rayon threads have excellent cache locality
+            // We zip cores and feedback together to allow parallel mutation of both
+            cores.par_iter_mut()
+                .zip(feedback_array.par_iter_mut())
+                .enumerate()
+                .for_each(|(index, (core, feedback))| {
+                    let mass_variation_factor = mass_variations[index];
+                    self.forces.apply_forces_to_particle(core, mass_variation_factor);
+
+                    // Calculate position offset perpendicular to velocity BEFORE updating particle
+                    let offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0 {
+                        let normal = vec2(-core.velocity.y, core.velocity.x).normalize_or_zero();
+                        normal * MAX_POSITION_OFFSET * position_offsets[index]
+                    } else {
+                        vec2(0.0, 0.0)
+                    };
+
+                    // Record feedback position (this writes to separate cold data structure)
+                    let offset_position = if offset.length_squared() > 0.0 {
+                        core.position + offset
+                    } else {
+                        core.position
+                    };
+                    feedback.record(offset_position, color);
+
+                    // Update core particle (hot data only)
+                    core.update(color, alpha_limit);
+
+                    if core.is_out_of_bounds(self.bounds_rect) {
+                        core.kill();
+                    }
+                });
+            let physics_time = start.elapsed();
+
+            let start = std::time::Instant::now();
+            // Generate GPU data: Now we read both core (hot) and feedback (cold)
+            // This happens sequentially after physics update, so cache impact is minimal
             let (gpu_particle_group, gpu_segment_group): (Vec<ParticleGpu>, Vec<SegmentGpu>) =
-                particles
-                    .par_iter_mut()
+                cores
+                    .par_iter()
                     .enumerate()
-                    .filter_map(|(index, particle)| {
-                        let mass_variation_factor = mass_variations[index];
-                        self.forces
-                            .apply_forces_to_particle(particle, mass_variation_factor);
+                    .filter_map(|(index, core)| {
+                        if core.is_alive && core.is_activated {
+                            // Calculate offset again for GPU conversion
+                            let offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0 {
+                                let normal = vec2(-core.velocity.y, core.velocity.x).normalize_or_zero();
+                                normal * MAX_POSITION_OFFSET * position_offsets[index]
+                            } else {
+                                vec2(0.0, 0.0)
+                            };
 
-                        // Calculate position offset perpendicular to velocity BEFORE updating particle
-                        // This ensures we use the velocity from this frame for the offset calculation
-                        let offset = if vibration > 0.0 && particle.velocity.length_squared() > 0.0
-                        {
-                            let normal =
-                                vec2(-particle.velocity.y, particle.velocity.x).normalize_or_zero();
-                            normal * MAX_POSITION_OFFSET * position_offsets[index]
-                        } else {
-                            vec2(0.0, 0.0)
-                        };
-
-                        // Update particle with the calculated offset for feedback recording
-                        particle.update(color, alpha_limit, offset);
-
-                        if particle.is_out_of_bounds(self.bounds_rect) {
-                            particle.kill();
-                        }
-
-                        if particle.is_alive() && particle.is_activated() {
                             Some((
-                                particle.to_gpu(offset),
-                                particle.to_segment_gpu(offset, segment_length, segment_line_width),
+                                core.to_gpu(offset),
+                                to_segment_gpu(core, &feedback_array[index], offset, segment_length, segment_line_width),
                             ))
                         } else {
                             None
                         }
                     })
                     .unzip();
+            let gpu_gen_time = start.elapsed();
 
             // Append to buffers
             gpu_particle_buffer.extend(gpu_particle_group);
             sgpu_buf.extend(gpu_segment_group);
 
-            // Cull dead particles
-            particles.retain(|particle| particle.is_alive());
+            // Cull dead particles from both arrays (must maintain index sync!)
+            let mut write_index = 0;
+            for read_index in 0..cores.len() {
+                if cores[read_index].is_alive {
+                    if write_index != read_index {
+                        cores[write_index] = cores[read_index];
+                        feedback_array[write_index] = feedback_array[read_index].clone();
+                    }
+                    write_index += 1;
+                }
+            }
+            cores.truncate(write_index);
+            feedback_array.truncate(write_index);
+
+            if cores.len() > 100 {
+                println!("Voice {:?}: {} particles | Physics: {:.2}ms | GPU gen: {:.2}ms",
+                    voice_id, cores.len(), physics_time.as_secs_f32() * 1000.0, gpu_gen_time.as_secs_f32() * 1000.0);
+            }
+        }
+
+        let total_time = start_total.elapsed();
+        if self.get_particle_count() > 100 {
+            println!("TOTAL UPDATE: {:.2}ms | Emit: {:.2}ms | Forces: {:.2}ms",
+                total_time.as_secs_f32() * 1000.0, emit_time.as_secs_f32() * 1000.0, forces_time.as_secs_f32() * 1000.0);
         }
     }
 
@@ -256,8 +322,9 @@ impl ParticleSystem {
             for emitter in emitters.iter() {
                 if emitter.is_enabled() {
                     let parent_voice = emitter.parent_voice();
-                    let particle_vec = self.particles.entry(parent_voice).or_default();
-                    let current_count = particle_vec.len();
+                    let core_vec = self.particle_cores.entry(parent_voice).or_default();
+                    let feedback_vec = self.particle_feedback.entry(parent_voice).or_default();
+                    let current_count = core_vec.len();
 
                     // Calculate emission scaling based on how close we are to the limit
                     let voice_limit = voices
@@ -285,8 +352,15 @@ impl ParticleSystem {
                         rng,
                     );
 
-                    // Add particles to the voice's particle vector
-                    particle_vec.extend(new_particles);
+                    // Convert from legacy Particle to split storage
+                    for particle in new_particles {
+                        core_vec.push(ParticleCore::new(
+                            particle.position(),
+                            self.default_particle_size,
+                            rgba_from(color_limit, 0.0),
+                        ).with_velocity(particle.velocity));
+                        feedback_vec.push(ParticleFeedback::new());
+                    }
                 }
             }
         }
@@ -329,19 +403,19 @@ impl ParticleSystem {
 
     /// Sets the n oldest particles to fade out, where n is the number of particles above the limit
     fn cull_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
-        for (voice_id, particles) in self.particles.iter_mut() {
+        for (voice_id, cores) in self.particle_cores.iter_mut() {
             let limit = voices
                 .get(voice_id)
                 .map(|v| v.params.volume * v.params.particle_limit as f32)
                 .unwrap_or(self.default_particle_limit as f32);
 
             let mut active_particles = 0;
-            for particle in particles.iter_mut().rev() {
-                if particle.remaining_life_span > particle.fade_out_duration() {
+            for core in cores.iter_mut().rev() {
+                if core.remaining_life_span > core.fade_out_duration() {
                     active_particles += 1;
                     if active_particles > limit as usize {
                         // assumes that the oldest particles are at the beginning
-                        particle.set_to_fade_out();
+                        core.set_to_fade_out();
                     }
                 }
             }
@@ -405,9 +479,9 @@ impl ParticleSystem {
     }
 
     pub fn get_particle_count(&self) -> usize {
-        self.particles
+        self.particle_cores
             .values()
-            .map(|particles| particles.len())
+            .map(|cores| cores.len())
             .sum()
     }
 

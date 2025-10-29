@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 use crate::{
     forces::wind::WindField,
     groups::{Voice, VoiceId},
-    particle::Particle,
+    particle::{Particle, ParticleCore},
 };
 
 /// Create a unique hash from voice_id and circle_id for noise parameter indexing
@@ -93,9 +93,17 @@ impl ForceFields {
     }
 
     /// Apply all applicable forces to a particle with mass variation factor
-    pub fn apply_forces_to_particle(&self, particle: &mut Particle, mass_variation_factor: f32) {
+    /// OPTIMIZED: Now works with ParticleCore for better cache locality
+    pub fn apply_forces_to_particle(&self, particle: &mut ParticleCore, mass_variation_factor: f32) {
         // Apply wind with mass variation
         self.wind_field.apply(particle, mass_variation_factor);
+    }
+
+    /// Legacy method for backward compatibility
+    #[allow(dead_code)]
+    pub fn _apply_forces_to_particle_legacy(&self, particle: &mut Particle, mass_variation_factor: f32) {
+        // Apply wind with mass variation
+        self.wind_field._apply_legacy(particle, mass_variation_factor);
     }
 
     /// Recalculate all applicable forces in this ForceField
