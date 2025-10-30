@@ -441,6 +441,6 @@ impl Default for RhythmRect {
     }
 }
 
-fn scale_dims(dims: Vec2, length: f32, velocity: f32) -> Vec2 {
+pub fn scale_dims(dims: Vec2, length: f32, velocity: f32) -> Vec2 {
     vec2(dims.x * length, dims.y * velocity)
 }

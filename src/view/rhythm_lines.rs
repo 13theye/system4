@@ -14,7 +14,6 @@ const LINE_DEFAULT_A: f32 = 1.0;
 const LINE_HIGH_R: f32 = 1.0;
 const LINE_HIGH_G: f32 = 0.0;
 const LINE_HIGH_B: f32 = 0.0;
-const LINE_HIGH_A: f32 = 1.0;
 const LINE_DEFAULT_WIDTH: f32 = 5.0;
 const LINE_DEFAULT_HEIGHT: f32 = 50.0;
 const LINE_MAX_WIDTH: f32 = 5.0;
@@ -294,6 +293,6 @@ impl Default for RhythmLine {
     }
 }
 
-fn scale_dims(dims: Vec2, length: f32, velocity: f32) -> Vec2 {
+pub fn scale_dims(dims: Vec2, length: f32, velocity: f32) -> Vec2 {
     vec2(dims.x * length, dims.y * velocity)
 }

@@ -37,13 +37,19 @@ pub struct ParticleFeedback {
     pub current_index: usize,
 }
 
-impl ParticleFeedback {
-    pub fn new() -> Self {
+impl Default for ParticleFeedback {
+    fn default() -> Self {
         Self {
             positions: [None; FEEDBACK_POSITIONS],
             colors: [None; FEEDBACK_POSITIONS],
             current_index: 0,
         }
+    }
+}
+
+impl ParticleFeedback {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn record(&mut self, position: Point2, color: Rgb) {
@@ -172,15 +178,16 @@ pub fn to_segment_gpu(
     let mut colors = [[0.0f32; 3]; FEEDBACK_POSITIONS];
 
     // First point is current position
+
     points[0] = [core.position.x + offset.x, core.position.y + offset.y];
     colors[0] = [core.rgba.red, core.rgba.green, core.rgba.blue];
 
     // Fill remaining points and colors from feedback history (reading from ring buffer)
     let mut last_valid_pos = [core.position.x, core.position.y];
     for i in 0..(FEEDBACK_POSITIONS - 1) {
-        // Calculate ring buffer index: read backwards from most recent
-        let ring_index =
-            (feedback.current_index + FEEDBACK_POSITIONS - 1 - i) % FEEDBACK_POSITIONS;
+        // Calculate ring buffer index: read backwards from second most recent
+        // (because the most recent is the current position)
+        let ring_index = (feedback.current_index + FEEDBACK_POSITIONS - 2 - i) % FEEDBACK_POSITIONS;
 
         if let Some(feedback_pos) = feedback.positions[ring_index] {
             points[i + 1] = [feedback_pos.x, feedback_pos.y];

@@ -260,17 +260,6 @@ fn string_to_range_size(s: String) -> Result<RangeSize, ParseError> {
     }
 }
 
-/// Attempt to convert a string to a number
-fn string_to_number(s: String) -> Result<f32, ParseError> {
-    match s.parse::<f32>() {
-        Ok(n) => Ok(n),
-        Err(_) => Err(ParseError::UnexpectedToken {
-            expected: "number".to_string(),
-            found: s,
-        }),
-    }
-}
-
 /// Convert a number to BeatSubdivision following the user's expected mapping
 fn number_to_subdivision(n: i32) -> Result<BeatSubdivision, ParseError> {
     match n {

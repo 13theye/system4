@@ -2,7 +2,11 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, groups::VoiceId, particle::{Particle, ParticleCore}};
+use crate::{
+    forces::CellIdx,
+    groups::VoiceId,
+    particle::{Particle, ParticleCore},
+};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
@@ -417,7 +421,7 @@ impl WindField {
             let row = index / self.grid_cols;
 
             // Sample based on div_factor using deterministic pattern
-            if (col + row) % div_factor != 0 {
+            if !(col + row).is_multiple_of(div_factor) {
                 continue;
             }
 

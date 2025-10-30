@@ -1,9 +1,6 @@
 use nannou::prelude::*;
 
-use crate::{
-    groups::rhythm::{self, RhythmParams},
-    view::RhythmViewUpdateParams,
-};
+use crate::{groups::rhythm::RhythmParams, view::RhythmViewUpdateParams};
 
 #[derive(Debug)]
 pub enum RhythmFormationState {

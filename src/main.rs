@@ -7,7 +7,7 @@
 
 use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
-use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
+use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentRenderer};
 use nnpipe::*;
 use prat::clockservice::{ClockService};
 use rand::rngs::ThreadRng;
@@ -228,8 +228,7 @@ fn model(app: &App) -> Model {
 
 
     // Create particle renderer
-    let particle_renderer1: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
-    //let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
+    let particle_renderer: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
 
     // Create segment renderer
     let segment_renderer = SegmentRenderer::new(device, hi_config, 25000);
@@ -307,8 +306,8 @@ fn model(app: &App) -> Model {
     // Set up rng
     let rng = ThreadRng::default();
 
-    // --- Load Font for Nannou Draw (Hangul) ---
-    // Assumes "assets/gulim.ttf" exists relative to the executable
+    // --- Load Font for Nannou Draw  ---
+    // Assumes "assets/terminal_font.ttf" exists relative to the executable
     // or relative to the project root if running with `cargo run`
     let assets = app.assets_path().expect("Could not find assets directory");
     let font_path = assets.join("terminal_font.ttf");
@@ -404,10 +403,13 @@ fn model(app: &App) -> Model {
         gpu_segment_buffers,
         rendering: RefCell::new(rendering),
         heatmap_renderer,
-        particle_renderer1,
+        particle_renderer,
         //particle_renderer4,
 
         segment_renderer,
+
+        particle_count: 0,
+        segment_instance_count: 0,
 
         egui,
         rng,
@@ -442,6 +444,7 @@ fn main() {
         .run();
 }
 
+// TODO: refactor to use app.duration.since_prev_update or update.since_last
 fn update(app: &App, model: &mut Model, _update: Update) {
     // Increment frame counter
     model.frame_count += 1;
@@ -500,10 +503,26 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Particle flash turned off
     let event = false;
 
-    // Update particle system
-    model
+    // Update particle system with ZERO-COPY optimization
+    // Get GPU queue for direct staging memory writes
+    let window = app.main_window();
+    let queue = window.queue();
+
+    let (particles_written, segments_written) = model
         .particle_system
-        .update(&mut model.voices, &mut model.rng, &mut model.gpu_particle_buffer, &mut model.gpu_segment_buffers, event, app.time);
+        .update_zero_copy(
+            &mut model.voices,
+            &mut model.rng,
+            queue,
+            &model.particle_renderer,
+            &model.segment_renderer,
+            event,
+            app.time,
+        );
+
+    // Store counts for rendering
+    model.particle_count = particles_written;
+    model.segment_instance_count = segments_written;
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
@@ -528,38 +547,28 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Encode Nannou Draw
         rendering.encode_draw_commands(device, &mut encoder);
 
-        // Retrieve buffer or use empty buffer
-        let _empty_gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
-        let gpu_particle_buffer = &model.gpu_particle_buffer;
-
-        // Combine all segment buffers into a single vector
-        let mut combined_segment_buffer: Vec<SegmentGpu> = Vec::new();
-        for voice_buffer in model.gpu_segment_buffers.values() {
-            combined_segment_buffer.extend(voice_buffer.iter().cloned());
-        }
-
-
-        // Encode particles
-        model.particle_renderer1.encode_into(
+        // ZERO-COPY: Encode particles and segments without re-uploading
+        // Data was already written directly to GPU staging in update_zero_copy
+        model.particle_renderer.encode_only(
             &mut encoder,
-            queue,
-            gpu_particle_buffer,
+            model.particle_count,
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        model.segment_renderer.encode_into(
+        model.segment_renderer.encode_only(
             &mut encoder,
-            queue,
-            &combined_segment_buffer,
+            model.segment_instance_count,
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        // Encode heatmap
+        // Encode heatmap (still uses legacy buffer for now)
+        // will not work in the current ZERO-COPY implementation because buffer will
+        // remain empty.
         model.heatmap_renderer.encode_into(
             device,
             &mut encoder,
             queue,
-            gpu_particle_buffer,
+            &model.gpu_particle_buffer,
             model.render_rect,
             model.frame_count,
             rendering.get_named_texture("heatmap").unwrap(),

@@ -69,11 +69,14 @@ pub struct Model {
     pub gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
     pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
-    pub particle_renderer1: ParticleRenderer,
-    //pub particle_renderer4: ParticleRenderer,
+    pub particle_renderer: ParticleRenderer,
     pub segment_renderer: SegmentRenderer,
     pub dpi_scale: f32,
     pub font: Font,
+
+    // Zero-copy particle rendering counts
+    pub particle_count: usize,
+    pub segment_instance_count: usize,
 
     // Simple ID counter
     pub id_generator: IdGenerator,
