@@ -6,10 +6,13 @@ use crate::{
     forces::WindCircleParams,
     groups::{Rhythm, Voice, VoiceId},
     model::{
-        command_builder::{CommandBuilder, ValidationResult, VoiceValidator},
+        command_builder::{
+            DroneCommandBuilder, RhythmCommandBuilder, ValidationResult, VoiceValidator,
+        },
         Model,
     },
     terminals::commands::{drone::DroneConfig, rhythm::RhythmConfig},
+    view::RhythmFormationType,
 };
 use nannou::wgpu::{Device, Queue};
 
@@ -41,6 +44,10 @@ pub enum SimpleCommand {
         value: f32,
     },
     Vibration {
+        voice_id: VoiceId,
+        value: f32,
+    },
+    MoveEmitters {
         voice_id: VoiceId,
         value: f32,
     },
@@ -100,8 +107,44 @@ pub enum SimpleCommand {
         voice_id: VoiceId,
         circle_id: i32,
     },
-    CreateRhythm {
-        config: RhythmConfig,
+    // Rhythm structure parameters
+    RhythmCapacity {
+        voice_id: VoiceId,
+        value: usize,
+    },
+    RhythmNumWings {
+        voice_id: VoiceId,
+        value: usize,
+    },
+    RhythmSubdivision {
+        voice_id: VoiceId,
+        value: prat::BeatSubdivision,
+    },
+    // Slot range parameters (for creation)
+    RhythmLengthRange {
+        voice_id: VoiceId,
+        range: crate::terminals::commands::rhythm::RangeSize,
+    },
+    RhythmVelocityRange {
+        voice_id: VoiceId,
+        range: crate::terminals::commands::rhythm::RangeSize,
+    },
+    RhythmCutoffRange {
+        voice_id: VoiceId,
+        range: crate::terminals::commands::rhythm::RangeSize,
+    },
+    // Slot modification parameters (for editing)
+    RhythmModifyLength {
+        voice_id: VoiceId,
+        modification: crate::terminals::commands::rhythm::ParameterModification,
+    },
+    RhythmModifyVelocity {
+        voice_id: VoiceId,
+        modification: crate::terminals::commands::rhythm::ParameterModification,
+    },
+    RhythmModifyCutoff {
+        voice_id: VoiceId,
+        modification: crate::terminals::commands::rhythm::ParameterModification,
     },
 }
 
@@ -109,6 +152,9 @@ pub enum SimpleCommand {
 pub enum CompositeCommand {
     CreateDrone {
         config: DroneConfig,
+    },
+    CreateRhythm {
+        config: RhythmConfig,
     },
     ModifyDrone {
         voice_id: VoiceId,
@@ -155,6 +201,9 @@ fn get_command_key(command: &Command) -> String {
             CompositeCommand::CreateDrone { config } => {
                 format!("CreateDrone_{}", config.voice)
             }
+            CompositeCommand::CreateRhythm { config } => {
+                format!("CreateRhythm_{:?}", config.voice)
+            }
             CompositeCommand::ModifyDrone { voice_id, .. } => {
                 format!("ModifyDrone_{:?}", voice_id)
             }
@@ -181,6 +230,9 @@ fn get_command_key(command: &Command) -> String {
             SimpleCommand::Vibration {
                 voice_id: voice, ..
             } => format!("Vibration_{:?}", voice),
+            SimpleCommand::MoveEmitters {
+                voice_id: voice, ..
+            } => format!("MoveEmitters_{:?}", voice),
             SimpleCommand::OuterRadius {
                 voice_id: voice, ..
             } => format!("OuterRadius_{:?}", voice),
@@ -222,8 +274,33 @@ fn get_command_key(command: &Command) -> String {
                 circle_id,
                 ..
             } => format!("RemoveCircle_{:?}_{}", voice, circle_id),
-            SimpleCommand::CreateRhythm { config, .. } => {
-                format!("CreateSequencer_{:?}", config.voice)
+            // Rhythm parameter commands
+            SimpleCommand::RhythmCapacity { voice_id, .. } => {
+                format!("RhythmCapacity_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmNumWings { voice_id, .. } => {
+                format!("RhythmNumWings_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmSubdivision { voice_id, .. } => {
+                format!("RhythmSubdivision_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmLengthRange { voice_id, .. } => {
+                format!("RhythmLengthRange_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmVelocityRange { voice_id, .. } => {
+                format!("RhythmVelocityRange_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmCutoffRange { voice_id, .. } => {
+                format!("RhythmCutoffRange_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmModifyLength { voice_id, .. } => {
+                format!("RhythmModifyLength_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmModifyVelocity { voice_id, .. } => {
+                format!("RhythmModifyVelocity_{:?}", voice_id)
+            }
+            SimpleCommand::RhythmModifyCutoff { voice_id, .. } => {
+                format!("RhythmModifyCutoff_{:?}", voice_id)
             }
         },
     }
@@ -237,7 +314,7 @@ impl Model {
     }
 
     /// Process all queued commands with priority resolution (Terminal > OSC > UI)
-    pub fn process_command_queue(&mut self) {
+    pub fn process_command_queue(&mut self, time: f32) {
         if self.command_queue.is_empty() {
             return;
         }
@@ -273,12 +350,12 @@ impl Model {
         // Execute all final commands
         // (display updates happen automatically in execute_command)
         for command in final_commands {
-            self.execute_command(command);
+            self.execute_command(command, time);
         }
     }
 
     /// Apply a command immediately without queueing
-    pub fn execute_command(&mut self, command: Command) {
+    pub fn execute_command(&mut self, command: Command, time: f32) {
         // Send all commands to terminal display for visualization
         self.terminal_manager.borrow_mut().process_command(&command);
 
@@ -313,7 +390,9 @@ impl Model {
                     self.voices.insert(voice_id, voice);
 
                     // Phase 2: Apply parameters through the command pipeline
-                    let parameter_commands = CommandBuilder::generate_all_parameter_commands(
+                    // This is redundant until we make a default drone maker
+
+                    let parameter_commands = DroneCommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,
                         circle_id,
@@ -326,51 +405,87 @@ impl Model {
                         self.command_queue.push(param_cmd);
                     }
                 }
+                CompositeCommand::CreateRhythm { config } => {
+                    let voice_id = config.voice;
+
+                    if self.rhythms.contains_key(&voice_id) {
+                        println!("Controller: Rhythm for voice {} already exists", voice_id);
+                        return;
+                    }
+
+                    // Merge config with defaults
+                    let resolved_config = config.merge_with_defaults();
+
+                    // Phase 1: Create basic rhythm structure
+                    let params = resolved_config.to_rhythm_params();
+                    let mut rhythm = Rhythm::new_with_params(voice_id, params);
+
+                    // Initialize slots and wings
+                    rhythm.initialize_slots(&mut self.rng);
+                    rhythm.randomize_wings(&mut self.rng);
+
+                    // Start sequencer
+                    rhythm.add_sequencer(&mut self.sequencer_service);
+
+                    // Subscribe to sequencer callbacks
+                    if let Some(data_rx) = self.sequencer_service.get_data_rx(voice_id) {
+                        rhythm.set_sequencer_data_rx(data_rx);
+                    }
+
+                    let radius = if voice_id == VoiceId::Voice1 {
+                        800.0
+                    } else {
+                        450.0
+                    };
+
+                    // Create the RhythmFormation
+                    self.rhythm_view.add_formation(
+                        voice_id,
+                        RhythmFormationType::Circle { radius },
+                        rhythm.get_params(),
+                        time,
+                    );
+
+                    // Insert rhythm before applying parameters so validation can find it
+                    self.rhythms.insert(voice_id, rhythm);
+
+                    // Phase 2: Apply parameters through the command pipeline
+                    // This is redundant until we make a default rhythm maker
+                    let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
+                        &resolved_config,
+                        voice_id,
+                        command.source.clone(),
+                    );
+
+                    // Queue parameter commands to avoid recursive execution
+                    // They will be processed in the next command queue cycle
+                    for param_cmd in parameter_commands {
+                        self.command_queue.push(param_cmd);
+                    }
+
+                    // Phase 3: Start all sequencers to sync on the next beat
+                    self.sequencer_service.start_all();
+
+                    let status_message =
+                        format!("Voice {} - Created rhythm sequencer", voice_id.to_i32());
+                    println!("{}", status_message);
+                    self.command_input.set_success_message(status_message);
+                }
                 CompositeCommand::ModifyDrone { voice_id, config } => {
                     let validation = self.validate_voice(voice_id);
                     if !self.validate_and_handle_error(validation, "ModifyDrone") {
                         return;
                     }
 
-                    // Generate atomic commands for voice-level parameters only
-                    if let Some(brightness) = config.brightness {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Alpha {
-                                voice_id,
-                                value: brightness,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(volume) = config.volume {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Volume {
-                                voice_id,
-                                value: volume,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(feedback) = config.feedback {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Feedback {
-                                voice_id,
-                                value: feedback,
-                            }),
-                            command.source.clone(),
-                        );
-                        self.command_queue.push(cmd);
-                    }
-                    if let Some(vibration) = config.vibration {
-                        let cmd = Command::new(
-                            CommandInner::Simple(SimpleCommand::Vibration {
-                                voice_id,
-                                value: vibration,
-                            }),
-                            command.source.clone(),
-                        );
+                    // Generate atomic commands for voice-level parameters using DroneCommandBuilder
+                    let parameter_commands = DroneCommandBuilder::generate_voice_parameter_commands(
+                        &config,
+                        voice_id,
+                        command.source.clone(),
+                    );
+
+                    // Queue parameter commands
+                    for cmd in parameter_commands {
                         self.command_queue.push(cmd);
                     }
 
@@ -384,42 +499,23 @@ impl Model {
                     }
 
                     // Check if rhythm exists for this voice
-                    if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-                        // Update only the specified parameters, preserving existing values
-                        if let Some(capacity) = config.capacity {
-                            rhythm.set_capacity(capacity);
-                        }
-                        if let Some(num_wings) = config.num_wings {
-                            rhythm.set_num_wings(num_wings);
-                            rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
-                        }
-                        if let Some(subdivision) = config.subdivision {
-                            rhythm.set_subdivision(subdivision);
-                        }
-
-                        // Handle slot modifications
-                        if let Some(modification) = config.length_modification {
-                            rhythm.modify_all_slots_length(modification, &mut self.rng);
-                        }
-                        if let Some(modification) = config.velocity_modification {
-                            rhythm.modify_all_slots_velocity(modification, &mut self.rng);
-                        }
-                        if let Some(modification) = config.cutoff_modification {
-                            rhythm.modify_all_slots_cutoff(modification, &mut self.rng);
-                        }
-
-                        // Update the running sequencer with new parameters
-                        rhythm.update_sequencer(&mut self.sequencer_service);
-
-                        let status_message =
-                            format!("Voice {} - Updated rhythm parameters", voice_id.to_i32());
-                        println!("{}", status_message);
-                        self.command_input.set_success_message(status_message);
-                    } else {
+                    if !self.rhythms.contains_key(&voice_id) {
                         let error_message =
                             format!("Voice {} has no rhythm to modify", voice_id.to_i32());
                         println!("Error: {}", error_message);
                         self.command_input.set_error_message(error_message);
+                        return;
+                    }
+
+                    // Generate and queue parameter commands using RhythmCommandBuilder
+                    let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
+                        &config,
+                        voice_id,
+                        command.source.clone(),
+                    );
+
+                    for cmd in parameter_commands {
+                        self.command_queue.push(cmd);
                     }
                 }
                 CompositeCommand::NewCircle { voice_id, config } => {
@@ -460,12 +556,13 @@ impl Model {
                     voice.add_wind_circle(circle);
 
                     // Queue parameter update commands for processing after this command completes
-                    let parameter_commands = CommandBuilder::generate_circle_parameter_commands(
-                        &resolved_config,
-                        voice_id,
-                        circle_id,
-                        command.source.clone(),
-                    );
+                    let parameter_commands =
+                        DroneCommandBuilder::generate_circle_parameter_commands(
+                            &resolved_config,
+                            voice_id,
+                            circle_id,
+                            command.source.clone(),
+                        );
 
                     // Add commands to queue instead of executing recursively
                     self.command_queue.extend(parameter_commands);
@@ -502,13 +599,13 @@ impl Model {
             },
 
             CommandInner::Simple(atomic) => {
-                self.execute_simple_command(atomic);
+                self.execute_simple_command(atomic, time);
             }
         }
     }
 
     /// Execute atomic parameter commands without display updates (used internally)
-    fn execute_simple_command(&mut self, simple: SimpleCommand) {
+    fn execute_simple_command(&mut self, simple: SimpleCommand, time: f32) {
         match simple {
             // Voice-level atomic commands
             SimpleCommand::Alpha { voice_id, value } => {
@@ -549,6 +646,16 @@ impl Model {
 
                 if let Some(voice) = self.voices.get_mut(&voice_id) {
                     voice.set_vibration(value);
+                }
+            }
+            SimpleCommand::MoveEmitters { voice_id, value } => {
+                let validation = self.validate_voice(voice_id);
+                if !self.validate_and_handle_error(validation, "MoveEmitters") {
+                    return;
+                }
+
+                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                    voice.set_emitter_position(value);
                 }
             }
             // Circle-level atomic commands
@@ -670,6 +777,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.add_wings(count, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
 
                     let status_message = format!(
                         "Voice {} - Added {} wings (total: {})",
@@ -691,6 +800,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
                     rhythm.remove_wings(count);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
 
                     let status_message = format!(
                         "Voice {} - Removed {} wings (total: {})",
@@ -715,7 +826,10 @@ impl Model {
                     // Stop the sequencer before removing the rhythm
                     rhythm.stop_sequencer(&mut self.sequencer_service);
 
-                    // Remove the rhythm from the model
+                    // Trigger clearing animation in view
+                    self.rhythm_view.clear_formation(voice_id, time);
+
+                    // Remove the rhythm from the model (view continues animating)
                     self.rhythms.remove(&voice_id);
 
                     let status_message = format!(
@@ -763,41 +877,76 @@ impl Model {
                 println!("{}", status_message);
                 self.command_input.set_success_message(status_message);
             }
-            SimpleCommand::CreateRhythm { config } => {
-                // Convert RhythmConfig to RhythmParams
-                let voice_id = config.voice;
-                let config = config.merge_with_defaults();
-                let params = config.to_rhythm_params();
+            // Rhythm structure parameters
+            SimpleCommand::RhythmCapacity { voice_id, value } => {
+                if value < 1 {
+                    return;
+                }
 
-                // Create and configure Rhythm object
-                let mut rhythm = Rhythm::new_with_params(voice_id, params);
-
-                let params = rhythm.get_params();
-                let status_message = format!(
-                    "Voice {} - Created sequencer with capacity {}, {} wings, subdivision {:?}",
-                    voice_id.to_i32(),
-                    params.capacity,
-                    params.num_wings,
-                    params.subdivision
-                );
-
-                // Roll slot parameters
-                rhythm.initialized_slots(&mut self.rng);
-
-                // Roll wings
-                rhythm.randomize_wings(&mut self.rng);
-
-                // Start sequencer via Rhythm gateway method
-                rhythm.start_sequencer(&mut self.sequencer_service);
-
-                // Store the Rhythm object in the model (like voices)
-                self.rhythms.insert(voice_id, rhythm);
-
-                // Start all sequencers to sync on the next beat
-                self.sequencer_service.start_all();
-
-                println!("{}", status_message);
-                self.command_input.set_success_message(status_message);
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.set_capacity(value);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
+                }
+            }
+            SimpleCommand::RhythmNumWings { voice_id, value } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.set_num_wings(value);
+                    rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
+                    self.rhythm_view
+                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
+                }
+            }
+            SimpleCommand::RhythmSubdivision { voice_id, value } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.set_subdivision(value);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+                }
+            }
+            // Slot range parameters (for creation)
+            SimpleCommand::RhythmLengthRange { voice_id, range } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.set_length_range(range);
+                }
+            }
+            SimpleCommand::RhythmVelocityRange { voice_id, range } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.set_velocity_range(range);
+                }
+            }
+            SimpleCommand::RhythmCutoffRange { voice_id, range } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.set_cutoff_range(range);
+                }
+            }
+            // Slot modification parameters (for editing)
+            SimpleCommand::RhythmModifyLength {
+                voice_id,
+                modification,
+            } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.modify_all_slots_length(modification, &mut self.rng);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+                }
+            }
+            SimpleCommand::RhythmModifyVelocity {
+                voice_id,
+                modification,
+            } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.modify_all_slots_velocity(modification, &mut self.rng);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+                }
+            }
+            SimpleCommand::RhythmModifyCutoff {
+                voice_id,
+                modification,
+            } => {
+                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                    rhythm.modify_all_slots_cutoff(modification, &mut self.rng);
+                    rhythm.update_sequencer(&mut self.sequencer_service);
+                }
             }
         }
     }
@@ -860,6 +1009,14 @@ impl Model {
         };
 
         voice.params.vibration
+    }
+
+    pub fn get_emitter_position(&self, voice: VoiceId) -> f32 {
+        let Some(voice) = self.voices.get(&voice) else {
+            return 0.0;
+        };
+
+        voice.params.emitter_position
     }
 
     pub fn get_volume(&self, voice: VoiceId) -> f32 {

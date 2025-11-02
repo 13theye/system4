@@ -1,7 +1,10 @@
 // src/groups/rhythm.rs
 
-use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
+use crossbeam_channel as channel;
+//use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
+use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
+use rand_distr::{Distribution, SkewNormal};
 
 use crate::{
     groups::{VoiceId, VoiceParams},
@@ -76,6 +79,9 @@ pub struct Rhythm {
     params: RhythmParams,
     pub voice_params: VoiceParams,
     pub emitters: Vec<Box<dyn Emitter>>,
+
+    // Callback channel from the sequencer
+    pub sequencer_data_rx: Option<channel::Receiver<usize>>,
 }
 
 impl Rhythm {
@@ -85,6 +91,7 @@ impl Rhythm {
             params: RhythmParams::default(),
             voice_params: VoiceParams::default(),
             emitters: Vec::new(),
+            sequencer_data_rx: None,
         }
     }
 
@@ -94,7 +101,32 @@ impl Rhythm {
             params,
             voice_params: VoiceParams::default(),
             emitters: Vec::new(),
+            sequencer_data_rx: None,
         }
+    }
+
+    pub fn update(&mut self) -> (Option<usize>, Option<usize>) {
+        let slot = self.receive_beat();
+        let wing = slot.filter(|&beat| self.wing_has_beat(beat));
+        (slot, wing)
+    }
+
+    fn receive_beat(&mut self) -> Option<usize> {
+        let sequencer = self.sequencer_data_rx.as_ref()?;
+
+        let result = sequencer.try_recv();
+        result.ok()
+    }
+
+    /*************** Beat logic helpers *************************** */
+    fn wing_has_beat(&self, beat: usize) -> bool {
+        self.params.wings.contains(&beat)
+    }
+
+    /*************** Parameter setting ****************************** */
+
+    pub fn set_sequencer_data_rx(&mut self, rx: channel::Receiver<usize>) {
+        self.sequencer_data_rx = Some(rx);
     }
 
     pub fn clear_params(&mut self) {
@@ -113,12 +145,36 @@ impl Rhythm {
         self.params.capacity = capacity;
     }
 
+    pub fn get_capacity(&self) -> usize {
+        self.params.capacity
+    }
+
     pub fn set_num_wings(&mut self, num_wings: usize) {
         self.params.num_wings = num_wings;
     }
 
+    pub fn get_num_wings(&self) -> usize {
+        self.params.num_wings
+    }
+
     pub fn set_subdivision(&mut self, subdivision: BeatSubdivision) {
         self.params.subdivision = subdivision;
+    }
+
+    pub fn get_subdivision(&self) -> &BeatSubdivision {
+        &self.params.subdivision
+    }
+
+    pub fn set_length_range(&mut self, range: RangeSize) {
+        self.params.length_range = range;
+    }
+
+    pub fn set_velocity_range(&mut self, range: RangeSize) {
+        self.params.velocity_range = range;
+    }
+
+    pub fn set_cutoff_range(&mut self, range: RangeSize) {
+        self.params.pitch_range = range; // Note: cutoff maps to pitch_range internally
     }
 
     /// Add back wings from buffer, or generate additional wings as needed
@@ -165,7 +221,7 @@ impl Rhythm {
         self.params.wings = Rhythm::roll_wings(rng, self.params.capacity, self.params.num_wings);
     }
 
-    pub fn initialized_slots(&mut self, rng: &mut ThreadRng) {
+    pub fn initialize_slots(&mut self, rng: &mut ThreadRng) {
         for _ in 0..NUM_SLOTS {
             let slot = self.roll_slot(rng);
             self.params.slots.push(slot);
@@ -180,9 +236,9 @@ impl Rhythm {
     }
 
     pub fn roll_slot(&mut self, rng: &mut ThreadRng) -> RhythmSlot {
-        let length = rng.gen_range(self.params.length_range.to_range_inclusive());
-        let velocity = rng.gen_range(self.params.velocity_range.to_range_inclusive());
-        let pitch = rng.gen_range(self.params.pitch_range.to_range_inclusive());
+        let length = rng.random_range(self.params.length_range.to_range_inclusive());
+        let velocity = rng.random_range(self.params.velocity_range.to_range_inclusive());
+        let pitch = rng.random_range(self.params.pitch_range.to_range_inclusive());
         RhythmSlot {
             length,
             velocity,
@@ -210,22 +266,48 @@ impl Rhythm {
 
     /// Randomize all slots' length within a range
     pub fn randomize_all_slots_length(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        for slot in &mut self.params.slots {
-            slot.length = rng.gen_range(range.to_range_inclusive());
+        let skew_params = range.to_skew_distribution_params();
+        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+            for slot in &mut self.params.slots {
+                slot.length = skew_normal.sample(rng);
+            }
+        } else {
+            for slot in &mut self.params.slots {
+                println!("failed at skew");
+
+                slot.length = rng.random_range(range.to_range_inclusive());
+            }
         }
     }
 
     /// Randomize all slots' velocity within a range
     pub fn randomize_all_slots_velocity(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        for slot in &mut self.params.slots {
-            slot.velocity = rng.gen_range(range.to_range_inclusive());
+        let skew_params = range.to_skew_distribution_params();
+        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+            for slot in &mut self.params.slots {
+                slot.velocity = skew_normal.sample(rng);
+            }
+        } else {
+            for slot in &mut self.params.slots {
+                println!("failed at skew");
+
+                slot.velocity = rng.random_range(range.to_range_inclusive());
+            }
         }
     }
 
     /// Randomize all slots' cutoff within a range
     pub fn randomize_all_slots_cutoff(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        for slot in &mut self.params.slots {
-            slot.cutoff = rng.gen_range(range.to_range_inclusive());
+        let skew_params = range.to_skew_distribution_params();
+        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+            for slot in &mut self.params.slots {
+                slot.cutoff = skew_normal.sample(rng);
+            }
+        } else {
+            for slot in &mut self.params.slots {
+                println!("failed at skew");
+                slot.cutoff = rng.random_range(range.to_range_inclusive());
+            }
         }
     }
 
@@ -298,7 +380,7 @@ impl Rhythm {
     /********Gateway methods for SequencerService communication *********/
 
     /// Start the sequencer for this rhythm via SequencerService
-    pub fn start_sequencer(&self, sequencer_service: &mut SequencerService) {
+    pub fn add_sequencer(&self, sequencer_service: &mut SequencerService) {
         let params = self.params.clone();
         sequencer_service.add_sequencer(self.id, params);
     }

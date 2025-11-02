@@ -32,7 +32,7 @@ pub struct Sequencer {
 
     // Business Logic State
     beat_count: usize,
-    current_beat: Option<usize>,
+    next_beat: Option<usize>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -55,7 +55,7 @@ impl Sequencer {
             data_rx,
             state,
             beat_count: 0,
-            current_beat: None,
+            next_beat: None,
             debug,
         }
     }
@@ -65,7 +65,7 @@ impl Sequencer {
         if !self.state.is_advancing {
             self.state.is_advancing = true;
             self.state.is_sending = true;
-            self.current_beat = Some(0);
+            self.next_beat = Some(0);
 
             if self.debug {
                 println!("Sequencer: Started sequencer {}", self.id);
@@ -82,7 +82,7 @@ impl Sequencer {
     pub fn stop(&mut self) {
         self.state.is_advancing = false;
         self.state.is_sending = false;
-        self.current_beat = None;
+        self.next_beat = None;
     }
 
     /// Pause sending and advancing while maintaining the current column.
@@ -100,23 +100,26 @@ impl Sequencer {
     /// Advance the sequencer, called when the subscribed BeatEvent is received.
     fn increment(&mut self) {
         // if there is no current beat, it means the sequencer
-        // hasn't started or is not advancing, so do nothing.
-        let Some(mut beat) = self.current_beat else {
+        // hasn't started yet, so do nothing
+        let Some(mut beat) = self.next_beat else {
             return;
         };
 
+        // Advance the beat
         self.beat_count += 1;
-
         beat += 1;
 
-        // Wrap around
+        // Wrap around if necessary
         if beat > self.params.capacity - 1 {
             beat = 0;
         }
 
-        self.current_beat = Some(beat);
+        // Update next beat
+        self.next_beat = Some(beat);
+    }
 
-        // Send the beat to the data callback channel
+    /// Via callback channel, send the current beat
+    fn send_callback(&self, beat: usize) {
         let _ = self.data_tx.try_send(beat).or_else(|_| {
             let _ = self.data_rx.try_recv(); // clear the old data from the channel
             self.data_tx.try_send(beat)
@@ -124,14 +127,14 @@ impl Sequencer {
     }
 
     /// Via OSC sender, send Voice_id, capacity, wings, and current beat
-    fn send_commands(&self, osc_sender: &OscSender) {
+    fn send_osc(&self, osc_sender: &OscSender) {
         // Don't send if the self flag is false
-        if !self.state.is_sending || self.current_beat.is_none() {
+        if !self.state.is_sending || self.next_beat.is_none() {
             return;
         }
 
         // Don't send if sequencer has never incremented.
-        let Some(beat) = self.current_beat else {
+        let Some(beat) = self.next_beat else {
             return;
         };
 
@@ -327,12 +330,12 @@ impl SequencerService {
     /********************* Sequencer Communication Wiring **************************/
 
     /// Get the data channel to receive from a sequencer.
-    pub fn data_channel(&self, id: VoiceId) -> Option<channel::Receiver<usize>> {
+    pub fn get_data_rx(&self, id: VoiceId) -> Option<channel::Receiver<usize>> {
         self.data_rxs.get(&id).cloned()
     }
 
     /// Get the command channel for sending to the sequencer service.
-    pub fn command_channel(&self) -> channel::Sender<SequencerCommand> {
+    pub fn get_command_tx(&self) -> channel::Sender<SequencerCommand> {
         self.command_tx.clone()
     }
 }
@@ -469,11 +472,20 @@ impl SequencerThread {
                         .subdivisions
                         .contains(sequencer.subscribed_to_subdivision())
                     {
+                        if sequencer.is_sending() {
+                            // Send OSC commands
+                            sequencer.send_osc(&self.osc_sender);
+
+                            // Send current beat to callback
+                            let Some(beat) = sequencer.next_beat else {
+                                continue;
+                            };
+                            sequencer.send_callback(beat);
+                        }
+
+                        // Advance the beat counts and next beat
                         if sequencer.is_advancing() {
                             sequencer.increment();
-                        }
-                        if sequencer.is_sending() {
-                            sequencer.send_commands(&self.osc_sender);
                         }
                     }
                 }

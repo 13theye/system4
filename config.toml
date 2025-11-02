@@ -16,7 +16,7 @@ target_port = 50450
 
 [speed]
 # initial beats per minute (float)
-bpm = 120.0
+bpm = 125.0
 
 [rendering]
 texture_width = 3840
@@ -44,8 +44,6 @@ width = 1512
 height = 270
 
 [particles]
-# The limit of particles per mask area. (Int)
-# Global particle limit is the limit * number of masks.
 limit = 10000
 
 

@@ -15,14 +15,16 @@ use crate::{
     services::sequencer::SequencerService,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
+    view::RhythmView,
 };
-use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font, wgpu::TextureReshaper};
+use nannou::{prelude::*, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::renderers::{
     HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
 };
 use nnpipe::*;
 use prat::clockservice::ClockService;
+use rand::rngs::ThreadRng;
 
 use std::{cell::RefCell, collections::HashMap};
 
@@ -34,6 +36,7 @@ pub struct Model {
 
     pub voices: HashMap<VoiceId, Voice>,
     pub rhythms: HashMap<VoiceId, Rhythm>,
+    pub rhythm_view: RhythmView,
 
     // Clock and Sequencers
     pub clock: ClockService,
@@ -66,11 +69,14 @@ pub struct Model {
     pub gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
     pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
-    pub particle_renderer1: ParticleRenderer,
-    //pub particle_renderer4: ParticleRenderer,
+    pub particle_renderer: ParticleRenderer,
     pub segment_renderer: SegmentRenderer,
     pub dpi_scale: f32,
     pub font: Font,
+
+    // Zero-copy particle rendering counts
+    pub particle_count: usize,
+    pub segment_instance_count: usize,
 
     // Simple ID counter
     pub id_generator: IdGenerator,

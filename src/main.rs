@@ -5,11 +5,13 @@
 //
 // src/main.rs
 
-use nannou::{prelude::*, rand::rngs::ThreadRng, text::Font};
+use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
-use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentGpu, SegmentRenderer};
+use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentRenderer};
 use nnpipe::*;
-use prat::clockservice::ClockService;
+use prat::clockservice::{ClockService};
+use rand::rngs::ThreadRng;
+use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
 use std::cell::RefCell;
@@ -102,6 +104,9 @@ fn model(app: &App) -> Model {
 
     particle_system.set_mass_variation_enabled(true);
     particle_system.set_mass_variation_amount(0.5);
+
+    // Create RhythmView
+    let rhythm_view = RhythmView::new();
 
     // Create window
     let audience_window_id = app
@@ -223,8 +228,7 @@ fn model(app: &App) -> Model {
 
 
     // Create particle renderer
-    let particle_renderer1: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
-    //let particle_renderer4: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
+    let particle_renderer: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
 
     // Create segment renderer
     let segment_renderer = SegmentRenderer::new(device, hi_config, 25000);
@@ -287,8 +291,8 @@ fn model(app: &App) -> Model {
 
     let final_composite = PipelineBuilder::new()
         .name("Final overlay composite")
-        .input_textures(&["terminal", "post-processed"])
-        .simple_additive_composite(hi_config, 1.0)
+        .input_textures(&["post-processed", "terminal"])
+        .simple_over_composite(hi_config, 1.0)
         .build(device);
 
     if let Ok(effect) = final_composite {
@@ -302,8 +306,8 @@ fn model(app: &App) -> Model {
     // Set up rng
     let rng = ThreadRng::default();
 
-    // --- Load Font for Nannou Draw (Hangul) ---
-    // Assumes "assets/gulim.ttf" exists relative to the executable
+    // --- Load Font for Nannou Draw  ---
+    // Assumes "assets/terminal_font.ttf" exists relative to the executable
     // or relative to the project root if running with `cargo run`
     let assets = app.assets_path().expect("Could not find assets directory");
     let font_path = assets.join("terminal_font.ttf");
@@ -376,6 +380,7 @@ fn model(app: &App) -> Model {
         particle_system,
         voices: HashMap::new(),
         rhythms: HashMap::new(),
+        rhythm_view,
         clock,
         sequencer_service,
         osc,
@@ -398,10 +403,13 @@ fn model(app: &App) -> Model {
         gpu_segment_buffers,
         rendering: RefCell::new(rendering),
         heatmap_renderer,
-        particle_renderer1,
+        particle_renderer,
         //particle_renderer4,
 
         segment_renderer,
+
+        particle_count: 0,
+        segment_instance_count: 0,
 
         egui,
         rng,
@@ -436,6 +444,7 @@ fn main() {
         .run();
 }
 
+// TODO: refactor to use app.duration.since_prev_update or update.since_last
 fn update(app: &App, model: &mut Model, _update: Update) {
     // Increment frame counter
     model.frame_count += 1;
@@ -457,15 +466,63 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.command_queue.append(&mut commands);
 
     // Process unified command queue with priority resolution
-    model.process_command_queue();
+    model.process_command_queue(app.time);
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
 
-    // Update particle system
-    model
+    let mut events = Vec::new();
+
+    // Update Rhythm logical groups & views
+    for (voice_id, rhythm) in model.rhythms.iter_mut() {
+        let (current_slot, current_wing) = rhythm.update();
+
+        let params = rhythm.get_params();
+        if let Some(current_wing) = current_wing {
+            if params.wings.contains(&current_wing) {
+            events.push(true);
+            }
+        }
+
+        let update_params = RhythmViewUpdateParams {
+            current_slot,
+            current_wing,
+            tempo: model.clock.tempo(),
+            subdivision: rhythm.get_subdivision().to_owned(),
+        };
+
+        model.rhythm_view.update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
+    }
+
+    // Update formations in transition states (including cleared/clearing ones)
+    model.rhythm_view.update_all_transitions(app.time);
+
+    // This enables particles to flash with rhythm
+    //let event = events.iter().any(|e| *e);
+
+    // Particle flash turned off
+    let event = false;
+
+    // Update particle system with ZERO-COPY optimization
+    // Get GPU queue for direct staging memory writes
+    let window = app.main_window();
+    let queue = window.queue();
+
+    let (particles_written, segments_written) = model
         .particle_system
-        .update(&mut model.voices, &mut model.rng, &mut model.gpu_particle_buffer, &mut model.gpu_segment_buffers);
+        .update_zero_copy(
+            &mut model.voices,
+            &mut model.rng,
+            queue,
+            &model.particle_renderer,
+            &model.segment_renderer,
+            event,
+            app.time,
+        );
+
+    // Store counts for rendering
+    model.particle_count = particles_written;
+    model.segment_instance_count = segments_written;
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
@@ -484,44 +541,34 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         let queue = window.queue();
 
         // Clear all textures
-        rendering.draw.background().color(BLACK);
-        rendering.encode_clear_all_textures(&mut encoder, wgpu::Color::BLACK);
+        //rendering.draw.background().color(BLACK);
+        rendering.encode_clear_all_textures(&mut encoder, wgpu::Color::TRANSPARENT);
 
         // Encode Nannou Draw
         rendering.encode_draw_commands(device, &mut encoder);
 
-        // Retrieve buffer or use empty buffer
-        let _empty_gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
-        let gpu_particle_buffer = &model.gpu_particle_buffer;
-
-        // Combine all segment buffers into a single vector
-        let mut combined_segment_buffer: Vec<SegmentGpu> = Vec::new();
-        for voice_buffer in model.gpu_segment_buffers.values() {
-            combined_segment_buffer.extend(voice_buffer.iter().cloned());
-        }
-
-
-        // Encode particles
-        model.particle_renderer1.encode_into(
+        // ZERO-COPY: Encode particles and segments without re-uploading
+        // Data was already written directly to GPU staging in update_zero_copy
+        model.particle_renderer.encode_only(
             &mut encoder,
-            queue,
-            gpu_particle_buffer,
+            model.particle_count,
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        model.segment_renderer.encode_into(
+        model.segment_renderer.encode_only(
             &mut encoder,
-            queue,
-            &combined_segment_buffer,
+            model.segment_instance_count,
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        // Encode heatmap
+        // Encode heatmap (still uses legacy buffer for now)
+        // will not work in the current ZERO-COPY implementation because buffer will
+        // remain empty.
         model.heatmap_renderer.encode_into(
             device,
             &mut encoder,
             queue,
-            gpu_particle_buffer,
+            &model.gpu_particle_buffer,
             model.render_rect,
             model.frame_count,
             rendering.get_named_texture("heatmap").unwrap(),
@@ -540,6 +587,10 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
+        
+        // Draw all rhythm views
+        model.rhythm_view.draw_all(&rendering.draw);
+        
         // Update and draw terminal view as overlay on top of post-processed texture
         if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {
             terminal_view.update(&rendering.draw);
@@ -566,7 +617,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
-
     }
 
     // Draw over the texture
@@ -689,6 +739,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice0_volume = model.get_volume(VoiceId::Voice0);
     let voice0_feedback = model.get_feedback(VoiceId::Voice0);
     let voice0_vibration_offset = model.get_vibration(VoiceId::Voice0);
+    let voice0_emitter_position = model.get_emitter_position(VoiceId::Voice0);
 
     // Voice 3 parameters
     let voice3_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
@@ -702,6 +753,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice3_volume = model.get_volume(VoiceId::Voice3);
     let voice3_feedback = model.get_feedback(VoiceId::Voice3);
     let voice3_vibration_offset = model.get_vibration(VoiceId::Voice3);
+    let voice3_emitter_position = model.get_emitter_position(VoiceId::Voice3);
 
     let ctx = model.egui.begin_frame();
 
@@ -856,6 +908,24 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
                                                     voice_id: VoiceId::Voice0,
                                                     value: feedback,
+                                                }), CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Emitter Position slider
+                                        let mut emitter_position = voice0_emitter_position;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut emitter_position, 0.0..=1.0)
+                                                    .text("Emitter Pos")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Simple(SimpleCommand::MoveEmitters {
+                                                    voice_id: VoiceId::Voice0,
+                                                    value: emitter_position,
                                                 }), CommandSource::Ui),
                                             );
                                         }
@@ -1138,6 +1208,24 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
                                                     voice_id: VoiceId::Voice3,
                                                     value: feedback,
+                                                }), CommandSource::Ui),
+                                            );
+                                        }
+
+                                        // Emitter Position slider
+                                        let mut emitter_position = voice3_emitter_position;
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut emitter_position, 0.0..=1.0)
+                                                    .text("Emitter Pos")
+                                                    .custom_formatter(|n, _| format!("{:.3}", n)),
+                                            )
+                                            .changed()
+                                        {
+                                            command_queue.push(
+                                                Command::new(CommandInner::Simple(SimpleCommand::MoveEmitters {
+                                                    voice_id: VoiceId::Voice3,
+                                                    value: emitter_position,
                                                 }), CommandSource::Ui),
                                             );
                                         }
@@ -1450,15 +1538,16 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     ui.label("• Type commands and press Enter to add lines");
                                     ui.label("• Commands ending with ';' will execute");
                                     ui.label("• Backspace to edit, Escape to clear");
-                                    
+                                    /*
                                     ui.add_space(15.0);
                                     ui.heading("Syntax Guide");
                                     ui.add_space(5.0);
-                                    ui.label("• Create: makeDrone(voice).params().begin();");
-                                    ui.label("• Modify: drone(voice).params().set();");
+                                    ui.label("• Create: voice(0).makeDrone().params().begin();");
+                                    ui.label("• Modify: voice(0).params().set();");
                                     ui.label("• Parameters:brightness(), volume(), gravity(), etc");
                                     ui.label("• Values: strings in \"quotes\", numbers");
                                     ui.add_space(15.0);
+                                     */
 
                                     }); // end right column scroll area
                                 }); // end right column

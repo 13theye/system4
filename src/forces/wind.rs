@@ -2,7 +2,11 @@
 //
 // Grid-based wind force for particle system
 
-use crate::{forces::CellIdx, groups::VoiceId, particle::Particle};
+use crate::{
+    forces::CellIdx,
+    groups::VoiceId,
+    particle::{Particle, ParticleCore},
+};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
@@ -48,8 +52,10 @@ impl Wind {
         }
     }
 
-    /// Apply the Wind to a Particle with mass variation factor
-    pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
+    /// Apply the Wind to a ParticleCore with mass variation factor
+    /// OPTIMIZED: Works with ParticleCore for better cache locality
+    #[inline]
+    pub fn apply(&self, particle: &mut ParticleCore, mass_variation_factor: f32) {
         // Activate the particle
         particle.activate();
 
@@ -77,6 +83,25 @@ impl Wind {
         let inertia_factor = 1.0 / (1.0 + momentum_magnitude * inertia_coefficient);
 
         // Apply the force with inertial resistance using effective mass
+        let force = vec2(diff_x, diff_y) * inertia_factor;
+        particle.acceleration += force / effective_mass;
+    }
+
+    /// Legacy method for Particle (backward compatibility)
+    #[allow(dead_code)]
+    pub fn _apply_legacy(&self, particle: &mut Particle, mass_variation_factor: f32) {
+        particle.activate();
+        let particle_vx = particle.velocity.x;
+        let particle_vy = particle.velocity.y;
+        let wind_vx = self.direction.x * self.strength;
+        let wind_vy = self.direction.y * self.strength;
+        let diff_x = wind_vx - particle_vx;
+        let diff_y = wind_vy - particle_vy;
+        let effective_mass = particle.mass * (1.0 + mass_variation_factor);
+        let current_speed = particle.velocity.length();
+        let momentum_magnitude = effective_mass * current_speed;
+        let inertia_coefficient = 0.1;
+        let inertia_factor = 1.0 / (1.0 + momentum_magnitude * inertia_coefficient);
         let force = vec2(diff_x, diff_y) * inertia_factor;
         particle.acceleration += force / effective_mass;
     }
@@ -232,11 +257,22 @@ impl WindField {
     }
 
     /// Given a particle, determines the WindCell that contains the particle, and then applies the WindCell's Wind on that particle.
-    pub fn apply(&self, particle: &mut Particle, mass_variation_factor: f32) {
-        let Some(wind) = self.get_wind_at_pos(particle.position()) else {
+    /// OPTIMIZED: Works with ParticleCore for better cache locality
+    #[inline]
+    pub fn apply(&self, particle: &mut ParticleCore, mass_variation_factor: f32) {
+        let Some(wind) = self.get_wind_at_pos(particle.position) else {
             return;
         };
         wind.apply(particle, mass_variation_factor);
+    }
+
+    /// Legacy method for Particle (backward compatibility)
+    #[allow(dead_code)]
+    pub fn _apply_legacy(&self, particle: &mut Particle, mass_variation_factor: f32) {
+        let Some(wind) = self.get_wind_at_pos(particle.position()) else {
+            return;
+        };
+        wind._apply_legacy(particle, mass_variation_factor);
     }
 
     /// Force a recalculation of all cells in the WindField.
@@ -249,10 +285,10 @@ impl WindField {
     /// Force a recalculation of all cells in the WindField in parallel with per-circle angle variations
     pub fn par_force_update_all(
         &mut self,
-        rng: &mut nannou::rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::ThreadRng,
         circle_noise_values: &HashMap<u64, f32>,
     ) {
-        use nannou::rand::Rng;
+        use rand::Rng;
 
         // Pre-compute random variations for all cells for each circle that has angle variation
         let mut cell_variations: HashMap<u64, Vec<f32>> = HashMap::new();
@@ -261,7 +297,7 @@ impl WindField {
                 let variations: Vec<f32> = self
                     .cells
                     .iter()
-                    .map(|_| rng.gen_range(-1.0..=1.0) * variation_factor)
+                    .map(|_| rng.random_range(-1.0..=1.0) * variation_factor)
                     .collect();
                 cell_variations.insert(hash_key, variations);
             }
@@ -385,7 +421,7 @@ impl WindField {
             let row = index / self.grid_cols;
 
             // Sample based on div_factor using deterministic pattern
-            if (col + row) % div_factor != 0 {
+            if !(col + row).is_multiple_of(div_factor) {
                 continue;
             }
 

@@ -15,6 +15,8 @@ prat = { workspace = true }
 objc2-app-kit = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
+rand = "0.9"
+rand_distr = "0.5"
 rayon = {workspace = true}
 rusty_link = "0.4"
 thread-priority = "2"

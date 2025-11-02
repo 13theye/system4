@@ -4,7 +4,7 @@
 
 use super::TerminalCommandBuilder;
 use crate::groups::VoiceId;
-use crate::model::command_builder::CommandBuilder;
+use crate::model::command_builder::DroneCommandBuilder;
 use crate::model::controller::{Command, CommandInner, CommandSource, CompositeCommand};
 use crate::terminals::parsing::{ParameterValue, ParseError};
 use std::collections::HashMap;
@@ -223,8 +223,8 @@ impl DroneConfig {
     /// Get default values for a specific voice
     pub fn get_defaults_for_voice(voice: VoiceId) -> Self {
         let (default_center_x, default_center_y) = match voice {
-            VoiceId::Voice0 => (-1280.0, 0.0),
-            VoiceId::Voice3 => (1280.0, 0.0),
+            VoiceId::Voice0 => (-950.0, 0.0),
+            VoiceId::Voice3 => (950.0, 0.0),
             _ => (0.0, 0.0),
         };
 
@@ -236,10 +236,10 @@ impl DroneConfig {
 
         Self {
             voice,
-            brightness: Some(0.7),
-            volume: Some(0.5),
+            brightness: Some(0.0),
+            volume: Some(0.0),
             gravity: Some(gravity),
-            force: Some(10.0),
+            force: Some(0.0),
             feedback: Some(0.0),
             outer_radius: Some(800.0),
             inner_radius: Some(200.0),
@@ -279,7 +279,7 @@ impl DroneConfig {
         circle_id: usize,
         source: CommandSource,
     ) -> Vec<Command> {
-        CommandBuilder::generate_all_parameter_commands(self, voice_id, circle_id, source)
+        DroneCommandBuilder::generate_all_parameter_commands(self, voice_id, circle_id, source)
     }
 
     /// Generate only circle-specific parameter commands (for modifying existing circles)
@@ -289,7 +289,7 @@ impl DroneConfig {
         circle_id: usize,
         source: CommandSource,
     ) -> Vec<Command> {
-        CommandBuilder::generate_circle_parameter_commands(self, voice_id, circle_id, source)
+        DroneCommandBuilder::generate_circle_parameter_commands(self, voice_id, circle_id, source)
     }
 
     /// Convert this DroneConfig to a CreateDrone VoiceCommand
