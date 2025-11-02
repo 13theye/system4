@@ -35,7 +35,7 @@ impl Config {
     fn load_from_exe_dir() -> Option<Self> {
         let exe_path = std::env::current_exe().ok()?;
         let exe_dir = exe_path.parent()?;
-        let config_path = exe_dir.join("config.toml");
+        let config_path = exe_dir.join("system4-support/config.toml");
 
         if config_path.exists() {
             let content = fs::read_to_string(&config_path).ok()?;
