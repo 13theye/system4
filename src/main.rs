@@ -9,7 +9,7 @@ use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentRenderer};
 use nnpipe::*;
-use prat::clockservice::{ClockService};
+use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
@@ -24,13 +24,19 @@ use std::{
 use system4::{
     config::*,
     fps::FpsManager,
-    model::{Model, controller::{self, Command, CommandInner, CommandSource, SimpleCommand}},
+    groups::VoiceId,
+    model::{
+        controller::{self, Command, CommandInner, CommandSource, SimpleCommand},
+        Model,
+    },
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
     services::sequencer::SequencerService,
-    terminals::{command_input::CommandInput, terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification}},
+    terminals::{
+        command_input::CommandInput,
+        terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification},
+    },
     utils::IdGenerator,
-    groups::VoiceId,
 };
 
 // Import terminal processor to bring process_terminal_command method into scope
@@ -205,7 +211,6 @@ fn model(app: &App) -> Model {
     let performer_draw = nannou::Draw::new();
     let control_draw = nannou::Draw::new();
 
-
     // Set up effects pipeline
 
     let lo_config = TextureConfig {
@@ -225,7 +230,6 @@ fn model(app: &App) -> Model {
         height: config.rendering.texture_height,
         format: wgpu::TextureFormat::Rgba16Float,
     };
-
 
     // Create particle renderer
     let particle_renderer: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
@@ -297,7 +301,6 @@ fn model(app: &App) -> Model {
 
     if let Ok(effect) = final_composite {
         rendering.add_multi_pipeline("final composite", effect);
-
     }
 
     // Set up egui
@@ -326,7 +329,7 @@ fn model(app: &App) -> Model {
 
     // Create terminal view manager
     let mut terminal_manager = TerminalViewManager::new();
-    
+
     // Set up terminal parameters for command display
     let terminal_params = TerminalViewParams {
         origin: vec2(-500.0, 1000.0),
@@ -341,19 +344,19 @@ fn model(app: &App) -> Model {
         font_size: 32,
         justification: TerminalViewTextJustification::TopLeft,
     };
-    
+
     terminal_manager.new_terminal_view("main", VoiceId::Voice0, terminal_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
         origin: vec2(-1900.0, 1050.0),
-        num_lines: 50,              // Multiple lines for individual parameters
+        num_lines: 50, // Multiple lines for individual parameters
         width: 1000.0,
         line_spacing: 5.0,
         bright_color: rgba(0.7, 0.7, 0.7, 1.0),
         regular_color: rgba(0.3, 0.3, 0.3, 0.8),
         color_fade_secs: 1.5,
-        chars_per_second: 6.0,     // Faster typing for parameters
+        chars_per_second: 6.0, // Faster typing for parameters
         font: font.clone(),
         font_size: 22,
         justification: TerminalViewTextJustification::TopLeft,
@@ -405,7 +408,6 @@ fn model(app: &App) -> Model {
         heatmap_renderer,
         particle_renderer,
         //particle_renderer4,
-
         segment_renderer,
 
         particle_count: 0,
@@ -480,7 +482,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         let params = rhythm.get_params();
         if let Some(current_wing) = current_wing {
             if params.wings.contains(&current_wing) {
-            events.push(true);
+                events.push(true);
             }
         }
 
@@ -491,7 +493,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             subdivision: rhythm.get_subdivision().to_owned(),
         };
 
-        model.rhythm_view.update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
+        model
+            .rhythm_view
+            .update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
     }
 
     // Update formations in transition states (including cleared/clearing ones)
@@ -508,17 +512,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let window = app.main_window();
     let queue = window.queue();
 
-    let (particles_written, segments_written) = model
-        .particle_system
-        .update_zero_copy(
-            &mut model.voices,
-            &mut model.rng,
-            queue,
-            &model.particle_renderer,
-            &model.segment_renderer,
-            event,
-            app.time,
-        );
+    let (particles_written, segments_written) = model.particle_system.update_zero_copy(
+        &mut model.voices,
+        &mut model.rng,
+        queue,
+        &model.particle_renderer,
+        &model.segment_renderer,
+        event,
+        app.time,
+    );
 
     // Store counts for rendering
     model.particle_count = particles_written;
@@ -587,17 +589,23 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
-        
         // Draw all rhythm views
         model.rhythm_view.draw_all(&rendering.draw);
-        
+
         // Update and draw terminal view as overlay on top of post-processed texture
-        if let Some(terminal_view) = model.terminal_manager.borrow_mut().get_mut_terminal_view("main") {
+        if let Some(terminal_view) = model
+            .terminal_manager
+            .borrow_mut()
+            .get_mut_terminal_view("main")
+        {
             terminal_view.update(&rendering.draw);
         }
 
         // Update and draw drone parameter displays
-        model.terminal_manager.borrow_mut().update_drone_parameter_displays(&rendering.draw);
+        model
+            .terminal_manager
+            .borrow_mut()
+            .update_drone_parameter_displays(&rendering.draw);
 
         // Encode Nannou Draw
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
@@ -613,7 +621,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     }
     // End Rendering context
 
-
     // Show screen bounds if enabled
     if model.show_bounds {
         draw_bounds(app, model);
@@ -621,7 +628,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
     // Draw over the texture
     let _ = model.audience_draw.to_frame(app, &frame);
-
 }
 
 fn performer_view(app: &App, model: &Model, frame: Frame) {
@@ -649,7 +655,6 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
             .particle_system
             .draw_forces(&model.voices, &model.performer_draw, scale_x, scale_y);
     }
-
 
     // Then draw over the texture
     let _ = model.performer_draw.to_frame(app, &frame);
@@ -729,10 +734,17 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     // Voice 0 parameters
     let voice0_circle_ids = model.get_wind_circle_ids(VoiceId::Voice0);
-    let voice0_all_circle_params: Vec<(usize, _)> = voice0_circle_ids.iter()
-        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice0, id).cloned().map(|params| (id, params)))
+    let voice0_all_circle_params: Vec<(usize, _)> = voice0_circle_ids
+        .iter()
+        .filter_map(|&id| {
+            model
+                .get_wind_circle_params(VoiceId::Voice0, id)
+                .cloned()
+                .map(|params| (id, params))
+        })
         .collect();
-    let voice0_all_noise: Vec<(usize, f32)> = voice0_circle_ids.iter()
+    let voice0_all_noise: Vec<(usize, f32)> = voice0_circle_ids
+        .iter()
         .map(|&id| (id, model.get_noise(VoiceId::Voice0, id)))
         .collect();
     let voice0_alpha = model.get_alpha_limit(VoiceId::Voice0);
@@ -743,10 +755,17 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
     // Voice 3 parameters
     let voice3_circle_ids = model.get_wind_circle_ids(VoiceId::Voice3);
-    let voice3_all_circle_params: Vec<(usize, _)> = voice3_circle_ids.iter()
-        .filter_map(|&id| model.get_wind_circle_params(VoiceId::Voice3, id).cloned().map(|params| (id, params)))
+    let voice3_all_circle_params: Vec<(usize, _)> = voice3_circle_ids
+        .iter()
+        .filter_map(|&id| {
+            model
+                .get_wind_circle_params(VoiceId::Voice3, id)
+                .cloned()
+                .map(|params| (id, params))
+        })
         .collect();
-    let voice3_all_noise: Vec<(usize, f32)> = voice3_circle_ids.iter()
+    let voice3_all_noise: Vec<(usize, f32)> = voice3_circle_ids
+        .iter()
         .map(|&id| (id, model.get_noise(VoiceId::Voice3, id)))
         .collect();
     let voice3_alpha = model.get_alpha_limit(VoiceId::Voice3);
@@ -1123,7 +1142,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         .id_source("voice2_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
-                                        
+
                                         // Voice 3 rhythm controls placeholder
                                         ui.label("Rhythm controls");
                                         ui.label("coming soon...");
@@ -1418,7 +1437,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                     // Multi-line text input using TextBuffer implementation
                                     ui.label("Input:");
                                     ui.add_space(5.0);
-                                    
+
                                     // Editable text area using CommandInput as TextBuffer
                                     egui::Frame::none()
                                         .fill(egui::Color32::BLACK)
@@ -1427,7 +1446,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         .show(ui, |ui| {
                                             ui.set_min_size(egui::vec2(280.0, 150.0));
                                             ui.set_max_height(150.0);
-                    
+
                                             egui::ScrollArea::vertical()
                                                 .max_width(380.0)
                                                 .max_height(150.0)
@@ -1448,7 +1467,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                     if response.changed() {
                                                         model.terminal_manager.borrow_mut().update_from_command_input("main", &model.command_input);
                                                     }
-                                                    
+
                                                     // Handle Enter key press through egui input system
                                                     // Check for Enter key pressed while the text field has focus
                                                     if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
@@ -1466,17 +1485,17 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                 model.terminal_manager.borrow_mut().clear_terminal_view("main");
                                                             }
                                                         }
-                                                    
+
                                                 });
                                         });
 
                                     ui.add_space(10.0);
                                     ui.separator();
-                                    
+
                                     // Command status display
                                     ui.horizontal(|ui| {
                                         ui.label("Status:");
-                                        
+
                                         // Priority: Show execution results first
                                         if let Some(success) = model.command_input.last_success() {
                                             ui.colored_label(egui::Color32::GREEN, format!("✅ {}", success));
@@ -1490,12 +1509,12 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.colored_label(egui::Color32::YELLOW, "Add semicolon (;) to execute");
                                         }
                                     });
-                                    
+
                                     // Show formatted display preview
                                     ui.add_space(5.0);
                                     ui.label("Preview:");
                                     ui.add_space(2.0);
-                                    
+
                                     egui::Frame::none()
                                         .fill(egui::Color32::DARK_GRAY)
                                         .stroke(egui::Stroke::new(1.0, egui::Color32::GRAY))
@@ -1511,9 +1530,9 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
                                     }); // end left column scroll area
                                 }); // end left column
-                                
+
                                 ui.separator();
-                                
+
                                 // Right column: Examples and help - column with scrollable content
                                 ui.vertical(|ui| {
                                     ui.set_width(550.0);
@@ -1531,7 +1550,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.label(format!("• {}", example));
                                         ui.add_space(2.0);
                                     }
-                                    
+
                                     ui.add_space(20.0);
                                     ui.heading("Controls");
                                     ui.add_space(5.0);
@@ -1639,7 +1658,6 @@ fn draw_bounds(app: &App, model: &Model) {
 }
 
 // ************************ OSC   *************************************
-
 
 /*
 fn _erase_drone(model: &mut Model, id: i32) {
