@@ -1,0 +1,17 @@
+[package]
+name = "system4-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+crossbeam-channel = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.9"
+rand_distr = "0.5"
+rayon = "1.10"
+toml = "0.8"
+glam = "0.29"
+prat = { path = "../../13thlib/prat" }
+thread-priority = "2"
