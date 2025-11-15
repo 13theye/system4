@@ -77,6 +77,24 @@ pub fn app_particle_to_core(app_particle: &AppParticleCore) -> ParticleCore {
     }
 }
 
+/// Convert core ParticleCore to app ParticleCore
+#[inline]
+pub fn core_particle_to_app(core_particle: &ParticleCore) -> AppParticleCore {
+    AppParticleCore {
+        position: to_nannou_point2(core_particle.position),
+        velocity: to_nannou_vec2(core_particle.velocity),
+        acceleration: to_nannou_vec2(core_particle.acceleration),
+        age: core_particle.age,
+        remaining_life_span: core_particle.remaining_life_span,
+        age_per_tick: core_particle.age_per_tick,
+        is_alive: core_particle.is_alive,
+        is_activated: core_particle.is_activated,
+        size: core_particle.size,
+        mass: core_particle.mass,
+        rgba: to_nannou_rgba(core_particle.rgba),
+    }
+}
+
 /// Update app ParticleCore from core ParticleCore (for syncing after physics)
 #[inline]
 pub fn sync_app_particle_from_core(app_particle: &mut AppParticleCore, core_particle: &ParticleCore) {

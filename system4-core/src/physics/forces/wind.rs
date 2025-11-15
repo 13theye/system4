@@ -292,35 +292,46 @@ impl WindField {
     ) {
         use rand::Rng;
 
-        // Generate angle variations for each cell
-        let variations: Vec<f32> = self
-            .cells
-            .iter()
-            .map(|_| {
-                // Calculate angle variation from circle noise values
-                let mut total_noise = 0.0;
-                let mut count = 0;
-                for &noise in circle_noise_values.values() {
-                    total_noise += noise;
-                    count += 1;
+        // Pre-compute random variations for all cells for each circle that has angle variation
+        let mut cell_variations: HashMap<u64, Vec<f32>> = HashMap::new();
+        for (&hash_key, &variation_factor) in circle_noise_values.iter() {
+            if variation_factor > 0.0 {
+                let variations: Vec<f32> = self
+                    .cells
+                    .iter()
+                    .map(|_| rng.random_range(-1.0..=1.0) * variation_factor)
+                    .collect();
+                cell_variations.insert(hash_key, variations);
+            }
+        }
+
+        // Parallel update with pre-computed per-circle variations
+        self.cells
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, cell)| {
+                // Calculate combined angle variation for this cell based on all circles affecting it
+                let mut combined_variation = 0.0f32;
+                let mut variation_count = 0;
+
+                for &hash_key in cell.winds.keys() {
+                    // Use hash key directly to look up noise variations
+                    if let Some(variations) = cell_variations.get(&hash_key) {
+                        if let Some(&variation) = variations.get(index) {
+                            combined_variation += variation;
+                            variation_count += 1;
+                        }
+                    }
                 }
-                let avg_noise = if count > 0 {
-                    total_noise / count as f32
+
+                // Average the variations if multiple circles affect this cell
+                let final_variation = if variation_count > 0 {
+                    combined_variation / variation_count as f32
                 } else {
                     0.0
                 };
 
-                // Generate variation based on average noise
-                rng.gen_range(-avg_noise..avg_noise)
-            })
-            .collect();
-
-        // Update cells in parallel with their variations
-        self.cells
-            .par_iter_mut()
-            .zip(variations.par_iter())
-            .for_each(|(cell, &variation)| {
-                cell.get_updated_combined_wind(variation);
+                let _ = cell.get_updated_combined_wind(final_variation);
             });
     }
 
@@ -438,7 +449,8 @@ impl WindCircle {
     pub fn update(&mut self, field: &mut WindField) {
         if self.has_changes() {
             self.remove_from_field(field);
-            self.cell_idxs = self.apply_to_field(field);
+            let affected = self.apply_to_field(field);
+            self.cell_idxs = affected;
             self.clear_changes();
         }
     }

@@ -150,6 +150,8 @@ impl Voice {
     }
 
     fn add_linear_emitters(&mut self) {
+        use crate::physics_ext::to_core_vec2;
+
         let p = self.params.emitter_position;
         let center_y = self.bounds_rect.y();
         let offset = self.bounds_rect.h() / 2.0 - 100.0;
@@ -163,17 +165,17 @@ impl Voice {
         let right_end = vec2(self.bounds_rect.right(), center_y - offset * (1.0 - p));
 
         let emitter_left = LinearEmitter::new(
-            self.id,
-            left_start,
-            left_end,
+            self.id.to_core(),
+            to_core_vec2(left_start),
+            to_core_vec2(left_end),
             EmitDirection::East,
             self.params.default_spawn_rate,
         );
 
         let emitter_right = LinearEmitter::new(
-            self.id,
-            right_start,
-            right_end,
+            self.id.to_core(),
+            to_core_vec2(right_start),
+            to_core_vec2(right_end),
             EmitDirection::West,
             self.params.default_spawn_rate,
         );

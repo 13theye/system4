@@ -6,4 +6,5 @@ pub mod config;
 pub mod constants;
 pub mod parsing;
 pub mod physics;
+pub mod rhythm;
 pub mod utils;

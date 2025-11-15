@@ -574,7 +574,8 @@ impl ParticleSystem {
 
             for emitter in emitters.iter() {
                 if emitter.is_enabled() {
-                    let parent_voice = emitter.parent_voice();
+                    let core_parent_voice = emitter.parent_voice();
+                    let parent_voice = VoiceId::from_core(core_parent_voice);
                     let core_vec = self.particle_cores.entry(parent_voice).or_default();
                     let feedback_vec = self.particle_feedback.entry(parent_voice).or_default();
                     let current_count = core_vec.len();
@@ -597,24 +598,18 @@ impl ParticleSystem {
                         .map(|v| v.params.color_limit)
                         .unwrap_or(self.default_particle_color);
 
-                    let new_particles = emitter.emit(
+                    use crate::physics_ext::{core_particle_to_app, to_core_rgba};
+                    let new_core_particles = emitter.emit(
                         emission_scaling,
                         10.0,
                         self.default_particle_size,
-                        rgba_from(color_limit, 0.0),
+                        to_core_rgba(rgba_from(color_limit, 0.0)),
                         rng,
                     );
 
-                    // Convert from legacy Particle to split storage
-                    for particle in new_particles {
-                        core_vec.push(
-                            ParticleCore::new(
-                                particle.position(),
-                                self.default_particle_size,
-                                rgba_from(color_limit, 0.0),
-                            )
-                            .with_velocity(particle.velocity),
-                        );
+                    // Convert core particles to app particles and add to storage
+                    for core_particle in new_core_particles {
+                        core_vec.push(core_particle_to_app(&core_particle));
                         feedback_vec.push(ParticleFeedback::new());
                     }
                 }
@@ -802,12 +797,14 @@ impl ParticleSystem {
         scale_x: f32,
         scale_y: f32,
     ) {
+        use crate::particle::emitter::DynEmitterDrawExt;
+
         let mut emitters = Vec::new();
         for voice in voices.values() {
             emitters.extend(&voice.emitters);
         }
         for emitter in emitters.iter() {
-            emitter.draw(draw, scale_x, scale_y);
+            emitter.as_ref().draw_dyn(draw, scale_x, scale_y);
         }
     }
 }
