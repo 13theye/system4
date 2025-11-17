@@ -5,6 +5,7 @@
 //
 // src/main.rs
 
+use fps::FpsManager;
 use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
 use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentRenderer};
@@ -22,8 +23,6 @@ use std::{
 };
 
 use system4::{
-    config::*,
-    fps::FpsManager,
     groups::VoiceId,
     model::{
         controller::{self, Command, CommandInner, CommandSource, SimpleCommand},
@@ -32,6 +31,7 @@ use system4::{
     osc::{OscController, OscSender},
     particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
     services::sequencer::SequencerService,
+    settings::*,
     terminals::{
         command_input::CommandInput,
         terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification},
@@ -49,21 +49,21 @@ const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
 
 fn model(app: &App) -> Model {
     // Load config
-    let config = Config::load().expect("\nSystem 4: FAILED TO LOAD CONFIG.TOML\n");
+    let settings = Settings::load().expect("\nSystem 4: FAILED TO LOAD CONFIG.TOML\n");
 
     // Main game data elements
-    let particle_limit = config.particles.limit;
+    let particle_limit = settings.particles.limit;
 
     let render_size = vec2(
-        config.rendering.texture_width as f32,
-        config.rendering.texture_height as f32,
+        settings.rendering.texture_width as f32,
+        settings.rendering.texture_height as f32,
     );
 
     let render_rect = Rect::from_x_y_w_h(0.0, 0.0, render_size.x, render_size.y);
 
     // Init clock
     let mut clock = ClockService::with()
-        .tempo(config.speed.bpm as f64)
+        .tempo(settings.speed.bpm as f64)
         .quantum(4.0)
         .ppqn(24)
         .enable_ticks()
@@ -78,21 +78,21 @@ fn model(app: &App) -> Model {
         .start_clock()
         .expect("System4: fatal error: Failed to start clock");
 
-    let sequencer_service = SequencerService::with_clock_and_osc_config(&clock, &config.osc_send)
+    let sequencer_service = SequencerService::with_clock_and_osc_config(&clock, &settings.osc_send)
         .build()
         .expect("System4: fatal error: Failed to build sequencer service");
 
-    let osc = OscController::new(config.osc_receive.receive_port).unwrap();
-    let osc_send = OscSender::new(&config.osc_send).unwrap();
+    let osc = OscController::new(settings.osc_receive.receive_port).unwrap();
+    let osc_send = OscSender::new(&settings.osc_send).unwrap();
 
     let osc_loop_config = OscSendConfig {
-        target_addr: config.osc_loop.target_addr,
-        target_port: config.osc_loop.target_port,
+        target_addr: settings.osc_loop.target_addr,
+        target_port: settings.osc_loop.target_port,
     };
     let osc_loop = OscSender::new(&osc_loop_config).unwrap();
 
     // DPI scale is used to scale the size of draw objects to account for DPI scaling.
-    let dpi_scale = config.rendering.dpi_scale;
+    let dpi_scale = settings.rendering.dpi_scale;
 
     let mut particle_system = ParticleSystem::new(
         pt2(0.0, 0.0),
@@ -118,7 +118,10 @@ fn model(app: &App) -> Model {
     let audience_window_id = app
         .new_window()
         .title("Tacit Group: System_4 0.1.0")
-        .size(config.audience_window.width, config.audience_window.height)
+        .size(
+            settings.audience_window.width,
+            settings.audience_window.height,
+        )
         .msaa_samples(1)
         .view(audience_view)
         .build()
@@ -128,8 +131,8 @@ fn model(app: &App) -> Model {
         .new_window()
         .title("System_4 Performance Monitor v0.1.0")
         .size(
-            config.performer_window.width,
-            config.performer_window.height,
+            settings.performer_window.width,
+            settings.performer_window.height,
         )
         .msaa_samples(1)
         .view(performer_view)
@@ -139,7 +142,10 @@ fn model(app: &App) -> Model {
     let control_window_id = app
         .new_window()
         .title("System_4 Performer Control v0.1.0")
-        .size(config.control_window.width, config.control_window.height)
+        .size(
+            settings.control_window.width,
+            settings.control_window.height,
+        )
         .msaa_samples(1)
         .raw_event(raw_window_event)
         .view(control_view)
@@ -190,16 +196,16 @@ fn model(app: &App) -> Model {
 
     let mut rendering = Nnpipe::new(
         device,
-        config.rendering.texture_width,
-        config.rendering.texture_height,
-        config.rendering.texture_samples,
+        settings.rendering.texture_width,
+        settings.rendering.texture_height,
+        settings.rendering.texture_samples,
     );
 
     // Create heatmap renderer
     let heatmap_renderer = HeatmapRenderer::new(
         device,
-        config.rendering.texture_width,
-        config.rendering.texture_height,
+        settings.rendering.texture_width,
+        settings.rendering.texture_height,
         particle_limit as usize,
     );
 
@@ -214,20 +220,20 @@ fn model(app: &App) -> Model {
     // Set up effects pipeline
 
     let lo_config = TextureConfig {
-        width: config.rendering.texture_width / 2,
-        height: config.rendering.texture_height / 2,
+        width: settings.rendering.texture_width / 2,
+        height: settings.rendering.texture_height / 2,
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
     };
 
     let med_config = TextureConfig {
-        width: config.rendering.texture_width,
-        height: config.rendering.texture_height,
+        width: settings.rendering.texture_width,
+        height: settings.rendering.texture_height,
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
     };
 
     let hi_config = TextureConfig {
-        width: config.rendering.texture_width,
-        height: config.rendering.texture_height,
+        width: settings.rendering.texture_width,
+        height: settings.rendering.texture_height,
         format: wgpu::TextureFormat::Rgba16Float,
     };
 

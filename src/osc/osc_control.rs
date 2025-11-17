@@ -6,9 +6,9 @@ use nannou_osc as osc;
 use std::error::Error;
 
 use crate::{
-    config::OscSendConfig,
     groups::VoiceId,
     model::controller::{Command, CommandInner, CommandSource, SimpleCommand},
+    settings::OscSendConfig,
 };
 
 pub struct OscSender {

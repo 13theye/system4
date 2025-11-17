@@ -3,9 +3,9 @@
 //
 
 use crate::{
-    config::OscSendConfig,
     groups::{RhythmParams, VoiceId},
     osc::OscSender,
+    settings::OscSendConfig,
 };
 
 use crossbeam_channel as channel;

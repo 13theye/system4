@@ -7,7 +7,6 @@ pub mod controller;
 pub mod terminal_processor;
 
 use crate::{
-    fps::FpsManager,
     groups::{Rhythm, Voice, VoiceId},
     model::controller::Command,
     osc::{OscController, OscSender},
@@ -17,6 +16,8 @@ use crate::{
     utils::IdGenerator,
     view::RhythmView,
 };
+
+use fps::FpsManager;
 use nannou::{prelude::*, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
 use nnpipe::renderers::{

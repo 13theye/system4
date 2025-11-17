@@ -5,21 +5,26 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+config = "0.15"
 crossbeam-channel = "0.5"
 egui = "0.23"
+
 nannou = "0.19"
 nannou_osc = "0.19"
 nannou_egui = "0.19"
-nnpipe = { path = "../13thlib/nnpipe" }
-prat = { path = "../13thlib/prat" }
+
 objc2-app-kit = "0.3"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 rand = "0.9"
 rand_distr = "0.5"
 rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thread-priority = "2"
 toml = "0.8"
+
+fps = { path = "../13thlib/fps" }
+nnpipe = { path = "../13thlib/nnpipe" }
+prat = { path = "../13thlib/prat" }
 
 [lib]
 name = "system4"
