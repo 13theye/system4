@@ -1,8 +1,8 @@
-/target
-/frames
+target/
+frames/
 .DS_Store
 .code-workspace
-.claude
-.serena
-.vscode
+.claude/
+.serena/
+.vscode/
 profile*

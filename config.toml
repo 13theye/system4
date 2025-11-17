@@ -1,4 +1,5 @@
-# config.toml for System3
+# config.toml for System4
+# ALL FIELDS ARE REQUIRED
 
 [osc_send]
 # OSC receiver's IP address (String)

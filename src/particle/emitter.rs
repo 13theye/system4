@@ -1,7 +1,7 @@
 /// src/particle/emitter.rs
 ///
 /// The thing that spits out particles
-use crate::{groups::VoiceId, particle::Particle};
+use crate::{groups::VoiceId, particle::ParticleCore};
 use nannou::prelude::*;
 use rand::{rngs::ThreadRng, Rng};
 
@@ -14,7 +14,7 @@ pub trait Emitter {
         size: f32,
         color: Rgba,
         rng: &mut ThreadRng,
-    ) -> Vec<Particle>;
+    ) -> Vec<ParticleCore>;
     fn is_enabled(&self) -> bool;
     fn set_enabled(&mut self, is_enabled: bool);
     fn parent_voice(&self) -> VoiceId;
@@ -47,7 +47,7 @@ impl Emitter for FullScreenRandomEmitter {
         size: f32,
         color: Rgba,
         rng: &mut ThreadRng,
-    ) -> Vec<Particle> {
+    ) -> Vec<ParticleCore> {
         let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
         let mut particles = Vec::new();
 
@@ -64,7 +64,7 @@ impl Emitter for FullScreenRandomEmitter {
                 rng.random_range(-velocity..velocity),
             ) / velocity;
 
-            particles.push(Particle::new(spawn_pos, size, color).with_velocity(velocity));
+            particles.push(ParticleCore::new(spawn_pos, size, color).with_velocity(velocity));
         }
 
         particles
@@ -121,7 +121,7 @@ impl Emitter for PointEmitter {
         size: f32,
         color: Rgba,
         rng: &mut ThreadRng,
-    ) -> Vec<Particle> {
+    ) -> Vec<ParticleCore> {
         let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
         let mut particles = Vec::with_capacity(adjusted_rate as usize);
 
@@ -144,7 +144,7 @@ impl Emitter for PointEmitter {
                     offset_angle.sin() * offset_distance,
                 );
 
-            particles.push(Particle::new(spawn_position, size, color).with_velocity(velocity));
+            particles.push(ParticleCore::new(spawn_position, size, color).with_velocity(velocity));
         }
 
         particles
@@ -220,7 +220,7 @@ impl Emitter for LinearEmitter {
         size: f32,
         color: Rgba,
         rng: &mut ThreadRng,
-    ) -> Vec<Particle> {
+    ) -> Vec<ParticleCore> {
         let adjusted_rate = self.max_spawn_rate * spawn_rate_factor;
 
         let base_velocity = match self.direction {
@@ -259,7 +259,7 @@ impl Emitter for LinearEmitter {
                 }
             };
 
-            particles.push(Particle::new(position, size, color).with_velocity(velocity));
+            particles.push(ParticleCore::new(position, size, color).with_velocity(velocity));
         }
 
         particles

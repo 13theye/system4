@@ -1,5 +1,5 @@
-pub mod settings_types;
-pub use settings_types::*;
+pub mod types;
+pub use types::*;
 
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
