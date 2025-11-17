@@ -441,7 +441,7 @@ fn main() {
         );
     }
     nannou::app(model)
-        .loop_mode(nannou::LoopMode::rate_fps(60.0)) // Run at 120fps regardless of display refresh rate
+        .loop_mode(nannou::LoopMode::rate_fps(60.0)) // Run at __fps regardless of display refresh rate
         .update(update)
         .run();
 }
