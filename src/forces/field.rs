@@ -25,9 +25,6 @@ pub struct ForceFields {
     // Force fields
     pub wind_field: WindField,
 
-    // Force objects
-    //pub wind_circles: Vec<WindCircle>,
-
     // Origin in the World Coordinate Space
     // Kept for future use
     #[allow(dead_code)]
@@ -51,7 +48,6 @@ impl ForceFields {
 
         Self {
             wind_field: WindField::new(origin, bounds_size, grid_cols, grid_rows),
-            //wind_circles: Vec::new(),
             origin,
             bounds_size,
             grid_cols,
@@ -108,56 +104,6 @@ impl ForceFields {
         // Use the regular force_update_all for recalculation without variation
         self.force_update_all();
     }
-
-    /*
-    /// Add a WindCircle to this ForceField (replaces existing circle for same voice)
-    pub fn add_wind_circle(&mut self, circle: WindCircle) {
-        println!("Added wind circle for {:?}", circle.parent_voice);
-        // Remove existing circle for this voice if it exists
-        self.wind_circles
-            .retain(|c| c.parent_voice != circle.parent_voice);
-        // Add the new circle
-        self.wind_circles.push(circle);
-    }
-
-    /// Returns a BTreeMap of all WindCircleParams by Voice
-    pub fn get_wind_circle_params_all(&self) -> BTreeMap<VoiceId, WindCircleParams> {
-        self.wind_circles
-            .iter()
-            .map(|circle| (circle.parent_voice, circle.params().clone()))
-            .collect()
-    }
-
-    /// Returns WindCircleParams for a given Voice (if it exists)
-    pub fn get_wind_circle_params(&self, voice: VoiceId) -> Option<&WindCircleParams> {
-        self.wind_circles
-            .iter()
-            .find(|circle| circle.parent_voice == voice)
-            .map(|circle| circle.params())
-    }
-
-    /// Returns a mutable ref to WindCircleParams for a given Voice (if it exists)
-    pub fn get_wind_circle_params_mut(&mut self, voice: VoiceId) -> Option<&mut WindCircleParams> {
-        self.wind_circles
-            .iter_mut()
-            .find(|circle| circle.parent_voice == voice)
-            .map(|circle| circle.params_mut())
-    }
-
-    /// Returns a mutable reference to WindCircle for a given Voice (if it exists)
-    pub fn get_wind_circle_mut(&mut self, voice: VoiceId) -> Option<&mut WindCircle> {
-        self.wind_circles
-            .iter_mut()
-            .find(|circle| circle.parent_voice == voice)
-    }
-
-    /// Returns true if a WindCircle exists for the given Voice
-    pub fn has_circle_for_voice(&self, voice: &VoiceId) -> bool {
-        self.wind_circles
-            .iter()
-            .any(|circle| circle.parent_voice == *voice)
-    }
-     */
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

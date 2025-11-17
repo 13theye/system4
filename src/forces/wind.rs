@@ -92,11 +92,11 @@ pub struct WindCell {
     winds: HashMap<u64, Wind>,
     combined_wind: Option<Wind>,
     origin: Vec2,
+    dirty: bool,
 
     #[allow(dead_code)]
     // rect is used for debugging
     rect: Rect,
-    needs_update: bool,
 }
 
 impl WindCell {
@@ -108,25 +108,25 @@ impl WindCell {
             combined_wind: None,
             origin,
             rect,
-            needs_update: false,
+            dirty: false,
         }
     }
 
     /// Add a Wind to this WindCell.
     pub fn add_wind(&mut self, source_id: u64, wind: Wind) {
         self.winds.insert(source_id, wind);
-        self.needs_update = true;
+        self.dirty = true;
     }
 
     /// Remove a Wind from this WindCell.
     pub fn remove_wind(&mut self, id: u64) {
         self.winds.remove(&id);
-        self.needs_update = true;
+        self.dirty = true;
     }
 
     /// Get the sum of all Winds in this WindCell, recalculating if necessary.
     pub fn get_updated_combined_wind(&mut self, angle_variation: f32) -> Option<Wind> {
-        if self.needs_update || angle_variation != 0.0 {
+        if self.dirty || angle_variation != 0.0 {
             self.calculate_combined_wind(angle_variation);
         }
         self.combined_wind
@@ -172,7 +172,7 @@ impl WindCell {
         }
 
         self.combined_wind = Some(Wind::new_with(combined_direction, combined_strength));
-        self.needs_update = false;
+        self.dirty = false;
     }
 }
 
