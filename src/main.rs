@@ -105,7 +105,6 @@ fn model(app: &App) -> Model {
             DEFAULT_PARTICLE_RGB.2,
         ),
         particle_limit,
-        dpi_scale,
     );
 
     particle_system.set_mass_variation_enabled(true);

@@ -5,11 +5,7 @@
 use nannou::prelude::*;
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
-const PARTICLE_MASS: f32 = 11.0;
-const PARTICLE_LIFE_SPAN: f32 = 1800.0;
-const FADE_IN_DURATION: f32 = 180.0; // frames to fade in
-const FADE_OUT_DURATION: f32 = 100.0;
-pub const FEEDBACK_POSITIONS: usize = 128;
+use super::constants::*;
 
 /// Core particle data for physics updates (~100 bytes)
 /// This is the "hot" data that gets accessed every frame during physics calculations
@@ -96,8 +92,8 @@ impl ParticleCore {
         }
 
         // Calculate fade-in factor based on natural age
-        let fade_in_factor = if self.age < FADE_IN_DURATION {
-            self.age / FADE_IN_DURATION
+        let fade_in_factor = if self.age < PARTICLE_FADE_IN_DURATION {
+            self.age / PARTICLE_FADE_IN_DURATION
         } else {
             1.0
         };
@@ -106,8 +102,8 @@ impl ParticleCore {
         let max_alpha_reached = alpha_limit * fade_in_factor.powi(3);
 
         // Calculate life-based alpha fade-out using remaining life span
-        let end_of_life_alpha = if self.remaining_life_span <= FADE_OUT_DURATION {
-            self.remaining_life_span / FADE_OUT_DURATION
+        let end_of_life_alpha = if self.remaining_life_span <= PARTICLE_FADE_OUT_DURATION {
+            self.remaining_life_span / PARTICLE_FADE_OUT_DURATION
         } else {
             1.0
         };
@@ -128,7 +124,7 @@ impl ParticleCore {
 
     #[inline]
     pub fn is_out_of_bounds(&self, bounds_rect: Rect) -> bool {
-        let buffer = 1500.0;
+        let buffer = OOB_BUFFER;
         self.position.x < bounds_rect.left() - buffer
             || self.position.x > bounds_rect.right() + buffer
             || self.position.y < bounds_rect.bottom() - buffer
@@ -143,7 +139,7 @@ impl ParticleCore {
 
     #[inline]
     pub fn set_to_fade_out(&mut self) {
-        self.remaining_life_span = FADE_OUT_DURATION;
+        self.remaining_life_span = PARTICLE_FADE_OUT_DURATION;
     }
 
     #[inline]
@@ -162,7 +158,7 @@ impl ParticleCore {
     }
 
     pub fn fade_out_duration(&self) -> f32 {
-        FADE_OUT_DURATION
+        PARTICLE_FADE_OUT_DURATION
     }
 }
 

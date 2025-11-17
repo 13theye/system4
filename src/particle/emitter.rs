@@ -43,7 +43,7 @@ impl Emitter for FullScreenRandomEmitter {
     fn emit(
         &self,
         spawn_rate_factor: f32,
-        _velocity: f32,
+        _speed: f32,
         size: f32,
         color: Rgba,
         rng: &mut ThreadRng,
@@ -57,12 +57,12 @@ impl Emitter for FullScreenRandomEmitter {
                 rng.random_range(self.spawn_area.bottom()..self.spawn_area.top()),
             );
 
-            // override nominal velocity
-            let velocity = 2.0;
+            // override nominal speed
+            let speed = 2.0;
             let velocity = vec2(
-                rng.random_range(-velocity..velocity),
-                rng.random_range(-velocity..velocity),
-            ) / velocity;
+                rng.random_range(-speed..speed),
+                rng.random_range(-speed..speed),
+            ) / speed;
 
             particles.push(ParticleCore::new(spawn_pos, size, color).with_velocity(velocity));
         }

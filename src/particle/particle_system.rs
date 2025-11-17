@@ -5,34 +5,18 @@
 use std::collections::HashMap;
 
 use nannou::prelude::*;
-use nnpipe::renderers::{ParticleGpu, SegmentGpu};
+use nnpipe::renderers::{ParticleRenderer, SegmentRenderer};
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rayon::prelude::*;
 
 use crate::{
     forces::ForceFields,
     groups::{Voice, VoiceId},
-    model::{GpuParticleBuffer, GpuSegmentBuffer},
     particle::{to_segment_gpu, ParticleCore, ParticleFeedback},
     utils::tween,
 };
-use nnpipe::renderers::{ParticleRenderer, SegmentRenderer};
 
-pub const EMPTY_GPU_PARTICLE_BUFFER: GpuParticleBuffer = Vec::new();
-pub const EMPTY_GPU_SEGMENT_BUFFER: GpuSegmentBuffer = Vec::new();
-const MAX_POSITION_OFFSET: f32 = 10.0; // Maximum screen distance for position offset in pixels
-const MAX_SPAWN_RATE: f32 = 80.0;
-
-const HIGH_R: f32 = 1.0;
-const HIGH_G: f32 = 1.0;
-const HIGH_B: f32 = 0.0;
-
-// Animation timing constants
-const FADE_DURATION: f32 = 1.0;
-const RAMP_UP_PERCENT: f32 = 0.1;
-const DWELL_PERCENT: f32 = 0.3;
-const RAMP_CURVE_EXPONENT: f32 = 3.0;
-const FADE_CURVE_EXPONENT: f32 = 1.5;
+use super::constants::*;
 
 pub struct ParticleSystem {
     // Split particle storage for cache locality
@@ -58,9 +42,6 @@ pub struct ParticleSystem {
     pub default_particle_color: Rgb,
     default_particle_size: f32,
 
-    // DPI scale
-    dpi_scale: f32,
-
     // Mass variation parameters
     pub mass_variation_enabled: bool,
     pub mass_variation_amount: f32, // percentage of base mass to vary (e.g., 0.1 = 10%)
@@ -74,7 +55,6 @@ impl ParticleSystem {
         default_particle_size: f32,
         default_particle_color: Rgb,
         default_particle_limit: u32,
-        dpi_scale: f32,
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
@@ -86,14 +66,12 @@ impl ParticleSystem {
             particle_cores: HashMap::new(),
             particle_feedback: HashMap::new(),
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
-            global_max_spawn_rate: MAX_SPAWN_RATE,
+            global_max_spawn_rate: PARTICLE_MAX_SPAWN_RATE,
             bounds_size,
             bounds_rect,
             default_particle_size,
             default_particle_color,
             default_particle_limit: default_particle_limit as usize,
-
-            dpi_scale,
 
             // Initialize mass variation parameters
             mass_variation_enabled: true,
@@ -155,7 +133,7 @@ impl ParticleSystem {
             // Interpolate color (same for all particles)
             let color = tween::interpolate_color(
                 color_limit,
-                rgb(HIGH_R, HIGH_G, HIGH_B),
+                rgb(PARTICLE_HIGH_R, PARTICLE_HIGH_G, PARTICLE_),
                 FADE_DURATION,
                 RAMP_UP_PERCENT,
                 DWELL_PERCENT,
@@ -213,7 +191,7 @@ impl ParticleSystem {
                     // Calculate and apply offset
                     let offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0 {
                         let normal = vec2(-core.velocity.y, core.velocity.x).normalize_or_zero();
-                        normal * MAX_POSITION_OFFSET * offset_factors[index]
+                        normal * PARTICLE_MAX_POSITION_OFFSET * offset_factors[index]
                     } else {
                         vec2(0.0, 0.0)
                     };
@@ -391,17 +369,18 @@ impl ParticleSystem {
                         .map(|v| v.params.color_limit)
                         .unwrap_or(self.default_particle_color);
 
-                    let new_particles = emitter.emit(
+                    let mut new_particles = emitter.emit(
                         emission_scaling,
                         10.0,
                         self.default_particle_size,
                         rgba_from(color_limit, 0.0),
                         rng,
                     );
+                    let new_particles_count = new_particles.len();
+                    let mut new_feedback = vec![ParticleFeedback::new(); new_particles_count];
 
-                    // Convert from legacy Particle to split storage
-                    core_vec.extend(new_particles);
-                    feedback_vec.push(ParticleFeedback::new());
+                    core_vec.append(&mut new_particles);
+                    feedback_vec.append(&mut new_feedback);
                 }
             }
         }
