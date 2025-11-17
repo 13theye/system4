@@ -29,23 +29,23 @@ impl Terminal {
 
         let test_commands = vec![
             // Create new drones with makeDrone
-            "voice(1).makeDrone().brightness(0.8).outerRadius(600.0).begin();",
-            "voice(4).brightness(0.1).volume(0.5).gravity(0.7).noise(0.2).set();",
-            "voice(1).makeDrone().force(15.5).feedback(0.8).innerRadius(150.0).begin();",
+            "voice(0).makeDrone().brightness(0.8).outerRadius(600.0).begin();",
+            "voice(3).brightness(0.1).volume(0.5).gravity(0.7).noise(0.2).set();",
+            "voice(0).makeDrone().force(15.5).feedback(0.8).innerRadius(150.0).begin();",
             "makeDrone().begin();", // Minimal command with defaults
             // Modify existing drones
-            "voice(1).brightness(0.2).centerX(200.0).centerY(-100.0).set();",
-            "voice(4).volume(0.8).vibration(0.3).set();",
+            "voice(0).brightness(0.2).centerX(200.0).centerY(-100.0).set();",
+            "voice(3).volume(0.8).vibration(0.3).set();",
             // List WindCircles for a drone
-            "voice(1).listCircles();",
-            "voice(4).listCircles();",
+            "voice(0).listCircles();",
+            "voice(3).listCircles();",
             // Add new WindCircles to existing drones
-            "voice(1).newCircle().gravity(1.0).force(25.0).add();",
-            "voice(4).newCircle().centerX(-500.0).centerY(200.0).add();",
-            "voice(1).newCircle().add();", // All defaults
+            "voice(0).newCircle().gravity(1.0).force(25.0).add();",
+            "voice(3).newCircle().centerX(-500.0).centerY(200.0).add();",
+            "voice(0).newCircle().add();", // All defaults
             // Modify specific circles
-            "voice(1).circle(1).centerX(-500.0).set();",
-            "voice(1).circle(0).gravity(2.0).force(15.0).set();",
+            "voice(0).circle(1).centerX(-500.0).set();",
+            "voice(0).circle(0).gravity(2.0).force(15.0).set();",
         ];
 
         for command in test_commands {
