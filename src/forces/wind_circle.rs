@@ -5,21 +5,12 @@
 use super::wind_new::{WindField, WindNew};
 use crate::groups::VoiceId;
 use nannou::prelude::*;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 /// Type alias for cell indices
 #[derive(Debug, Clone, Copy)]
 pub struct CellIdx {
     pub x: usize,
     pub y: usize,
-}
-
-/// Create a unique hash from voice_id and circle_id
-fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    (voice_id, circle_id).hash(&mut hasher);
-    hasher.finish()
 }
 
 /// A circular wind force that affects particles within a donut-shaped region
