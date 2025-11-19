@@ -15,6 +15,7 @@ use crate::{
     view::RhythmFormationType,
 };
 use nannou::wgpu::{Device, Queue};
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub enum CommandSource {
@@ -314,7 +315,7 @@ impl Model {
     }
 
     /// Process all queued commands with priority resolution (Terminal > OSC > UI)
-    pub fn process_command_queue(&mut self, time: f32) {
+    pub fn process_command_queue(&mut self, now: Instant) {
         if self.command_queue.is_empty() {
             return;
         }
@@ -350,12 +351,12 @@ impl Model {
         // Execute all final commands
         // (display updates happen automatically in execute_command)
         for command in final_commands {
-            self.execute_command(command, time);
+            self.execute_command(command, now);
         }
     }
 
     /// Apply a command immediately without queueing
-    pub fn execute_command(&mut self, command: Command, time: f32) {
+    pub fn execute_command(&mut self, command: Command, now: Instant) {
         // Send all commands to terminal display for visualization
         self.terminal_manager.borrow_mut().process_command(&command);
 
@@ -443,7 +444,7 @@ impl Model {
                         voice_id,
                         RhythmFormationType::Circle { radius },
                         rhythm.get_params(),
-                        time,
+                        now,
                     );
 
                     // Insert rhythm before applying parameters so validation can find it
@@ -599,13 +600,13 @@ impl Model {
             },
 
             CommandInner::Simple(atomic) => {
-                self.execute_simple_command(atomic, time);
+                self.execute_simple_command(atomic, now);
             }
         }
     }
 
     /// Execute atomic parameter commands without display updates (used internally)
-    fn execute_simple_command(&mut self, simple: SimpleCommand, time: f32) {
+    fn execute_simple_command(&mut self, simple: SimpleCommand, now: Instant) {
         match simple {
             // Voice-level atomic commands
             SimpleCommand::Alpha { voice_id, value } => {
@@ -778,7 +779,7 @@ impl Model {
                     rhythm.add_wings(count, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
-                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
+                        .reinitialize_formation(voice_id, rhythm.get_params(), now);
 
                     let status_message = format!(
                         "Voice {} - Added {} wings (total: {})",
@@ -801,7 +802,7 @@ impl Model {
                     rhythm.remove_wings(count);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
-                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
+                        .reinitialize_formation(voice_id, rhythm.get_params(), now);
 
                     let status_message = format!(
                         "Voice {} - Removed {} wings (total: {})",
@@ -827,7 +828,7 @@ impl Model {
                     rhythm.stop_sequencer(&mut self.sequencer_service);
 
                     // Trigger clearing animation in view
-                    self.rhythm_view.clear_formation(voice_id, time);
+                    self.rhythm_view.clear_formation(voice_id, now);
 
                     // Remove the rhythm from the model (view continues animating)
                     self.rhythms.remove(&voice_id);
@@ -887,7 +888,7 @@ impl Model {
                     rhythm.set_capacity(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
-                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
+                        .reinitialize_formation(voice_id, rhythm.get_params(), now);
                 }
             }
             SimpleCommand::RhythmNumWings { voice_id, value } => {
@@ -895,7 +896,7 @@ impl Model {
                     rhythm.set_num_wings(value);
                     rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
                     self.rhythm_view
-                        .reinitialize_formation(voice_id, rhythm.get_params(), time);
+                        .reinitialize_formation(voice_id, rhythm.get_params(), now);
                 }
             }
             SimpleCommand::RhythmSubdivision { voice_id, value } => {

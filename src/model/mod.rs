@@ -91,10 +91,6 @@ pub struct Model {
     // FPS display
     pub fps: FpsManager,
 
-    // Timing for render and updates
-    pub frame_count: u64,
-    pub update_ticks: u64,
-
     // Debug stuff
     pub show_bounds: bool,
     pub show_forces: bool,

@@ -1,5 +1,6 @@
 use nannou::prelude::*;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::{
     groups::rhythm::RhythmParams,
@@ -43,7 +44,7 @@ impl RhythmFormation for RhythmLinesFormation {
         self.capacity
     }
 
-    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, _time: f32) {
+    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, _time: Instant) {
         self.capacity = rhythm_params.capacity;
         let positions = Self::initialize_positions(self.center, self.width, self.capacity);
 
@@ -55,19 +56,19 @@ impl RhythmFormation for RhythmLinesFormation {
         }
     }
 
-    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32) {
+    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, now: Instant) {
         // TODO: Implement state-based animation for RhythmLinesFormation
         // For now, just re-initialize
-        self.initialize_rhythm(rhythm_params, time);
+        self.initialize_rhythm(rhythm_params, now);
     }
 
-    fn clear_rhythm(&mut self, _time: f32) {
+    fn clear_rhythm(&mut self, _now: Instant) {
         // TODO: Implement clearing animation for RhythmLinesFormation
         // For now, just clear elements immediately
         self.elements.clear();
     }
 
-    fn update_transitions(&mut self, _time: f32) {
+    fn update_transitions(&mut self, _now: Instant) {
         // TODO: Implement state-based animations for RhythmLinesFormation
         // Currently this formation has no state transitions
     }
@@ -76,7 +77,7 @@ impl RhythmFormation for RhythmLinesFormation {
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
-        time: f32,
+        now: Instant,
     ) {
         for (wing, rect) in self.elements.iter_mut() {
             // Update last update time of the current wing's Rect
@@ -84,7 +85,7 @@ impl RhythmFormation for RhythmLinesFormation {
             let mut active_wing = false;
             if let Some(current_wing) = update_params.current_slot {
                 if *wing == current_wing {
-                    rect.last_update_time = time;
+                    rect.last_update_instant = now;
                     active_wing = true;
                 }
             }
@@ -101,8 +102,8 @@ impl RhythmFormation for RhythmLinesFormation {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                time,
-                rect.last_update_time,
+                now,
+                rect.last_update_instant,
             );
 
             // Get slot parameters for scaling
@@ -132,8 +133,8 @@ impl RhythmFormation for RhythmLinesFormation {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                time,
-                rect.last_update_time,
+                now,
+                rect.last_update_instant,
             );
 
             let height = tween::interpolate_dimension(
@@ -144,8 +145,8 @@ impl RhythmFormation for RhythmLinesFormation {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                time,
-                rect.last_update_time,
+                now,
+                rect.last_update_instant,
             );
 
             rect.dims = Vec2::new(width, height);
@@ -208,7 +209,7 @@ pub struct RhythmLine {
     /// Alpha value
     pub(crate) alpha: f32,
     /// Last update time
-    pub(crate) last_update_time: f32,
+    pub(crate) last_update_instant: Instant,
 }
 
 impl RhythmElement for RhythmLine {
@@ -233,12 +234,12 @@ impl RhythmElement for RhythmLine {
         self.target_pos = target;
     }
 
-    fn set_last_active_time(&mut self, time: f32) {
-        self.last_update_time = time;
+    fn set_last_active_instant(&mut self, instant: Instant) {
+        self.last_update_instant = instant;
     }
 
-    fn last_update_time(&self) -> f32 {
-        self.last_update_time
+    fn last_update_instant(&self) -> Instant {
+        self.last_update_instant
     }
 
     fn set_is_wing(&mut self, _is_wing: bool) {
@@ -250,9 +251,9 @@ impl RhythmElement for RhythmLine {
         _rhythm_params: &RhythmParams,
         _update_params: &RhythmViewUpdateParams,
         _wing: usize,
-        time: f32,
+        now: Instant,
     ) {
-        self.last_update_time = time;
+        self.last_update_instant = now;
     }
 
     fn draw(&self, draw: &Draw) {
@@ -288,7 +289,7 @@ impl Default for RhythmLine {
             dims: Vec2::new(LINE_DEFAULT_WIDTH, LINE_DEFAULT_HEIGHT),
             color: Rgb::new(LINE_DEFAULT_R, LINE_DEFAULT_G, LINE_DEFAULT_B),
             alpha: LINE_DEFAULT_A,
-            last_update_time: 0.0,
+            last_update_instant: Instant::now(),
         }
     }
 }

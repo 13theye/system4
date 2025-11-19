@@ -3,6 +3,7 @@
 // Utility functions for interpolation
 
 use nannou::prelude::*;
+use std::time::Instant;
 
 pub enum InterpolationPhase {
     RampUp(f32),   // curved t value for ramping up
@@ -16,10 +17,10 @@ pub fn get_interpolation_phase(
     dwell_percent: f32,
     ramp_curve: f32,
     fade_curve: f32,
-    current_time: f32,
-    last_update_time: f32,
+    now: Instant,
+    last_update: Instant,
 ) -> InterpolationPhase {
-    let elapsed = (current_time - last_update_time).max(0.0);
+    let elapsed = (now - last_update).as_secs_f32().max(0.0);
     let ramp_up_duration = fade_duration * ramp_up_percent;
     let dwell_duration = fade_duration * dwell_percent;
     let dwell_end = ramp_up_duration + dwell_duration;
@@ -50,8 +51,8 @@ pub fn interpolate_color(
     dwell_pct: f32,
     ramp_curve: f32,
     fade_curve: f32,
-    current_time: f32,
-    last_update_time: f32,
+    now: Instant,
+    last_update: Instant,
 ) -> Rgb {
     // Convert RGB constants to HSV
     let max_hsv = Hsv::from(end_rgb);
@@ -63,8 +64,8 @@ pub fn interpolate_color(
         dwell_pct,
         ramp_curve,
         fade_curve,
-        current_time,
-        last_update_time,
+        now,
+        last_update,
     );
 
     let (h, s, v) = match phase {
@@ -107,8 +108,8 @@ pub fn interpolate_dimension(
     dwell_pct: f32,
     ramp_curve_expo: f32,
     fade_curve_expo: f32,
-    current_time: f32,
-    last_update_time: f32,
+    now: Instant,
+    last_update: Instant,
 ) -> f32 {
     let phase = get_interpolation_phase(
         fade_duration,
@@ -116,8 +117,8 @@ pub fn interpolate_dimension(
         dwell_pct,
         ramp_curve_expo,
         fade_curve_expo,
-        current_time,
-        last_update_time,
+        now,
+        last_update,
     );
 
     match phase {

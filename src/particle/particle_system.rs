@@ -8,6 +8,7 @@ use nannou::prelude::*;
 use nnpipe::renderers::{ParticleRenderer, SegmentRenderer};
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rayon::prelude::*;
+use std::time::Instant;
 
 use crate::{
     forces::ForceFields,
@@ -26,7 +27,7 @@ pub struct ParticleSystem {
     pub particle_feedback: HashMap<VoiceId, Vec<ParticleFeedback>>,
 
     // experimental
-    pub last_event_time: f32,
+    pub last_update: Instant,
 
     // forces
     pub forces: ForceFields,
@@ -77,7 +78,7 @@ impl ParticleSystem {
             mass_variation_enabled: true,
             mass_variation_amount: 0.05, // 5% variation by default
 
-            last_event_time: 0.0,
+            last_update: Instant::now(),
         }
     }
 
@@ -94,7 +95,7 @@ impl ParticleSystem {
         particle_renderer: &ParticleRenderer,
         segment_renderer: &SegmentRenderer,
         event: bool,
-        time: f32,
+        now: Instant,
     ) -> (usize, usize) {
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
@@ -127,7 +128,7 @@ impl ParticleSystem {
             let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
 
             if event {
-                self.last_event_time = time;
+                self.last_update = now;
             }
 
             // Interpolate color (same for all particles)
@@ -139,8 +140,8 @@ impl ParticleSystem {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                time,
-                self.last_event_time,
+                now,
+                self.last_update,
             );
 
             // Pre-compute variations using bulk RNG fill for better performance

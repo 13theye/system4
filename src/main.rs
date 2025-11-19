@@ -16,11 +16,8 @@ use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
 use std::cell::RefCell;
-use std::{
-    collections::HashMap,
-    fs,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::time::Instant;
+use std::{collections::HashMap, fs};
 
 use system4::{
     groups::VoiceId,
@@ -421,8 +418,7 @@ fn model(app: &App) -> Model {
         egui,
         rng,
         fps,
-        frame_count: 0,
-        update_ticks: 0,
+
         show_bounds: false,
         show_forces: false,
         command_input: CommandInput::new(),
@@ -453,9 +449,7 @@ fn main() {
 
 // TODO: refactor to use app.duration.since_prev_update or update.since_last
 fn update(app: &App, model: &mut Model, _update: Update) {
-    // Increment frame counter
-    model.frame_count += 1;
-    model.update_ticks += 1;
+    let now = Instant::now();
 
     // Update FPS counter
     model.fps.update();
@@ -473,7 +467,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.command_queue.append(&mut commands);
 
     // Process unified command queue with priority resolution
-    model.process_command_queue(app.time);
+    model.process_command_queue(now);
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -500,11 +494,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
         model
             .rhythm_view
-            .update_voice(voice_id, rhythm.get_params(), &update_params, app.time);
+            .update_voice(voice_id, rhythm.get_params(), &update_params, now);
     }
 
     // Update formations in transition states (including cleared/clearing ones)
-    model.rhythm_view.update_all_transitions(app.time);
+    model.rhythm_view.update_all_transitions(now);
 
     // This enables particles to flash with rhythm
     //let event = events.iter().any(|e| *e);
@@ -524,7 +518,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         &model.particle_renderer,
         &model.segment_renderer,
         event,
-        app.time,
+        now,
     );
 
     // Store counts for rendering
@@ -533,10 +527,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
-    if !should_render(model) {
-        return;
-    }
-
     // Begin Rendering context
     {
         let mut rendering = model.rendering.borrow_mut();
@@ -577,7 +567,6 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             queue,
             &model.gpu_particle_buffer,
             model.render_rect,
-            model.frame_count,
             rendering.get_named_texture("heatmap").unwrap(),
         );
 
@@ -1699,17 +1688,4 @@ fn set_macos_window_behavior(window: &Window) {
         (*ns_window)
             .setCollectionBehavior(NSWindowCollectionBehavior::from_bits_truncate(behavior));
     }
-}
-
-/// Static variable that ticks whenever a render happens
-static RENDER_TICKS: AtomicU64 = AtomicU64::new(0);
-
-/// A helper to decouple simulation with rendering.
-fn should_render(model: &Model) -> bool {
-    let render_ticks = RENDER_TICKS.load(Ordering::SeqCst);
-    let should_render = model.update_ticks != render_ticks;
-    if should_render {
-        RENDER_TICKS.fetch_add(model.update_ticks - render_ticks, Ordering::SeqCst);
-    }
-    should_render
 }

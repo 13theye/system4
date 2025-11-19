@@ -1,4 +1,5 @@
 use nannou::prelude::*;
+use std::time::Instant;
 
 use crate::{groups::rhythm::RhythmParams, view::RhythmViewUpdateParams};
 
@@ -15,16 +16,16 @@ pub trait RhythmFormation {
     fn center(&self) -> Vec2;
     fn capacity(&self) -> usize;
 
-    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32);
-    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32);
-    fn clear_rhythm(&mut self, time: f32);
+    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, now: Instant);
+    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, now: Instant);
+    fn clear_rhythm(&mut self, now: Instant);
 
-    fn update_transitions(&mut self, time: f32);
+    fn update_transitions(&mut self, now: Instant);
     fn update_active(
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
-        time: f32,
+        now: Instant,
     );
 
     fn draw(&self, draw: &Draw);
@@ -36,15 +37,15 @@ pub trait RhythmElement {
     fn target_position(&self) -> Vec2;
     fn start_position(&self) -> Vec2;
     fn set_animation_positions(&mut self, start: Vec2, target: Vec2);
-    fn set_last_active_time(&mut self, time: f32);
-    fn last_update_time(&self) -> f32;
+    fn set_last_active_instant(&mut self, now: Instant);
+    fn last_update_instant(&self) -> Instant;
     fn set_is_wing(&mut self, is_wing: bool);
     fn update(
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
         slot: usize,
-        time: f32,
+        now: Instant,
     );
     fn draw(&self, draw: &Draw);
 }

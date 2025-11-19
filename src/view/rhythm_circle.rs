@@ -1,5 +1,6 @@
 use nannou::prelude::*;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::{
     groups::rhythm::RhythmParams,
@@ -39,7 +40,7 @@ pub struct RhythmCircleFormation {
     pub radius: f32,
     pub elements: HashMap<usize, Box<dyn RhythmElement>>, // HashMap<wing, <RhythmRect>,
     state: RhythmFormationState,
-    last_state_change: f32,
+    last_state_change_instant: Instant,
 }
 
 impl RhythmFormation for RhythmCircleFormation {
@@ -51,7 +52,7 @@ impl RhythmFormation for RhythmCircleFormation {
         self.capacity
     }
 
-    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32) {
+    fn initialize_rhythm(&mut self, rhythm_params: &RhythmParams, now: Instant) {
         self.capacity = rhythm_params.capacity;
         let positions = Self::initialize_positions(self.radius, self.capacity);
 
@@ -67,10 +68,10 @@ impl RhythmFormation for RhythmCircleFormation {
             self.elements.insert(i, Box::new(new_element));
         }
 
-        self.change_state(RhythmFormationState::Initializing, time);
+        self.change_state(RhythmFormationState::Initializing, now);
     }
 
-    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, time: f32) {
+    fn reinitialize_rhythm(&mut self, rhythm_params: &RhythmParams, now: Instant) {
         let new_capacity = rhythm_params.capacity;
         let old_capacity = self.capacity;
 
@@ -107,10 +108,10 @@ impl RhythmFormation for RhythmCircleFormation {
         }
 
         // Transition to Reinitializing state
-        self.change_state(RhythmFormationState::Reinitializing, time);
+        self.change_state(RhythmFormationState::Reinitializing, now);
     }
 
-    fn clear_rhythm(&mut self, time: f32) {
+    fn clear_rhythm(&mut self, now: Instant) {
         // For all existing elements, set their target position to center
         // and their start position to current position
         for rect in self.elements.values_mut() {
@@ -119,17 +120,19 @@ impl RhythmFormation for RhythmCircleFormation {
         }
 
         // Transition to Clearing state
-        self.change_state(RhythmFormationState::Clearing, time);
+        self.change_state(RhythmFormationState::Clearing, now);
     }
 
-    fn update_transitions(&mut self, time: f32) {
+    fn update_transitions(&mut self, now: Instant) {
         // Handle state transition animations (Initializing, Reinitializing, Clearing)
         match self.state {
             RhythmFormationState::Inactive | RhythmFormationState::Active => {
                 // No transitions to update
             }
             RhythmFormationState::Initializing => {
-                let progress = ((time - self.last_state_change) / INIT_ANIMATION_DURATION).min(1.0);
+                let progress = ((now - self.last_state_change_instant).as_secs_f32()
+                    / INIT_ANIMATION_DURATION)
+                    .min(1.0);
 
                 // Animate elements from center to their target positions
                 for element in self.elements.values_mut() {
@@ -143,12 +146,13 @@ impl RhythmFormation for RhythmCircleFormation {
 
                 // Transition to Active when animation completes
                 if progress >= 1.0 {
-                    self.change_state(RhythmFormationState::Active, time);
+                    self.change_state(RhythmFormationState::Active, now);
                 }
             }
             RhythmFormationState::Reinitializing => {
-                let progress =
-                    ((time - self.last_state_change) / REINIT_ANIMATION_DURATION).min(1.0);
+                let progress = ((now - self.last_state_change_instant).as_secs_f32()
+                    / REINIT_ANIMATION_DURATION)
+                    .min(1.0);
 
                 // Animate elements to their new target positions
                 for element in self.elements.values_mut() {
@@ -162,12 +166,13 @@ impl RhythmFormation for RhythmCircleFormation {
 
                 // Transition to Active when animation completes
                 if progress >= 1.0 {
-                    self.change_state(RhythmFormationState::Active, time);
+                    self.change_state(RhythmFormationState::Active, now);
                 }
             }
             RhythmFormationState::Clearing => {
-                let progress =
-                    ((time - self.last_state_change) / CLEAR_ANIMATION_DURATION).min(1.0);
+                let progress = ((now - self.last_state_change_instant).as_secs_f32()
+                    / CLEAR_ANIMATION_DURATION)
+                    .min(1.0);
 
                 // Animate elements from current position back to center
                 for element in self.elements.values_mut() {
@@ -181,7 +186,7 @@ impl RhythmFormation for RhythmCircleFormation {
 
                 // Transition to Inactive when animation completes
                 if progress >= 1.0 {
-                    self.change_state(RhythmFormationState::Inactive, time);
+                    self.change_state(RhythmFormationState::Inactive, now);
                 }
             }
         }
@@ -191,7 +196,7 @@ impl RhythmFormation for RhythmCircleFormation {
         &mut self,
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
-        time: f32,
+        now: Instant,
     ) {
         // Don't run this if Inactive
         if matches!(self.state, RhythmFormationState::Inactive) {
@@ -200,7 +205,7 @@ impl RhythmFormation for RhythmCircleFormation {
 
         // Update elements
         for (slot, element) in self.elements.iter_mut() {
-            element.update(rhythm_params, update_params, *slot, time);
+            element.update(rhythm_params, update_params, *slot, now);
         }
     }
 
@@ -218,14 +223,14 @@ impl RhythmFormation for RhythmCircleFormation {
 }
 
 impl RhythmCircleFormation {
-    pub fn new(center: Vec2, radius: f32, capacity: usize, time: f32) -> Self {
+    pub fn new(center: Vec2, radius: f32, capacity: usize, now: Instant) -> Self {
         Self {
             center,
             radius,
             capacity,
             elements: HashMap::new(),
             state: RhythmFormationState::Inactive,
-            last_state_change: time,
+            last_state_change_instant: now,
         }
     }
 
@@ -241,9 +246,9 @@ impl RhythmCircleFormation {
         positions
     }
 
-    fn change_state(&mut self, state: RhythmFormationState, time: f32) {
+    fn change_state(&mut self, state: RhythmFormationState, now: Instant) {
         self.state = state;
-        self.last_state_change = time;
+        self.last_state_change_instant = now;
     }
 }
 
@@ -266,7 +271,7 @@ pub struct RhythmRect {
     /// Rotation angle in radians (counterclockwise)
     pub(crate) rotation: f32,
     /// Last update time
-    pub(crate) last_active_time: f32,
+    pub(crate) last_active_instant: Instant,
 }
 
 impl RhythmElement for RhythmRect {
@@ -291,12 +296,12 @@ impl RhythmElement for RhythmRect {
         self.target_pos = target;
     }
 
-    fn set_last_active_time(&mut self, time: f32) {
-        self.last_active_time = time;
+    fn set_last_active_instant(&mut self, now: Instant) {
+        self.last_active_instant = now;
     }
 
-    fn last_update_time(&self) -> f32 {
-        self.last_active_time
+    fn last_update_instant(&self) -> Instant {
+        self.last_active_instant
     }
 
     fn set_is_wing(&mut self, is_wing: bool) {
@@ -308,12 +313,12 @@ impl RhythmElement for RhythmRect {
         rhythm_params: &RhythmParams,
         update_params: &RhythmViewUpdateParams,
         slot: usize,
-        time: f32,
+        now: Instant,
     ) {
         // Update last active time of the current wing's Rect
         if let Some(current_slot) = update_params.current_slot {
             if slot == current_slot {
-                self.last_active_time = time;
+                self.last_active_instant = now;
             }
         }
 
@@ -344,8 +349,8 @@ impl RhythmElement for RhythmRect {
             DWELL_PERCENT,
             RAMP_CURVE_EXPONENT,
             FADE_CURVE_EXPONENT,
-            time,
-            self.last_active_time,
+            now,
+            self.last_active_instant,
         );
 
         // Get slot parameters for scaling
@@ -377,8 +382,8 @@ impl RhythmElement for RhythmRect {
             DWELL_PERCENT,
             RAMP_CURVE_EXPONENT,
             FADE_CURVE_EXPONENT,
-            time,
-            self.last_active_time,
+            now,
+            self.last_active_instant,
         );
 
         let height = tween::interpolate_dimension(
@@ -389,8 +394,8 @@ impl RhythmElement for RhythmRect {
             DWELL_PERCENT,
             RAMP_CURVE_EXPONENT,
             FADE_CURVE_EXPONENT,
-            time,
-            self.last_active_time,
+            now,
+            self.last_active_instant,
         );
 
         self.dims = Vec2::new(width, height);
@@ -400,7 +405,8 @@ impl RhythmElement for RhythmRect {
         let capacity = rhythm_params.capacity as f32;
         let angular_velocity = std::f32::consts::PI / (2.0 * wing_duration * capacity);
         let slot_offset = -(slot as f32) * std::f32::consts::PI / (2.0 * capacity);
-        self.rotation = slot_offset + angular_velocity * time;
+        self.rotation =
+            slot_offset + angular_velocity * (now - self.last_active_instant).as_secs_f32();
     }
 
     fn draw(&self, draw: &Draw) {
@@ -436,7 +442,7 @@ impl Default for RhythmRect {
             color: Rgb::new(RECT_LOW_R, RECT_LOW_G, RECT_LOW_B),
             alpha: RECT_DEFAULT_A,
             rotation: 0.0,
-            last_active_time: 0.0,
+            last_active_instant: Instant::now(),
         }
     }
 }
