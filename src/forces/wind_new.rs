@@ -2,12 +2,13 @@
 //
 // Rewrite of wind system
 
-use crate::{groups::VoiceId, particle::ParticleCore};
 use nannou::prelude::*;
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+
+use crate::{groups::VoiceId, particle::ParticleCore};
 
 /// Maximum wind angle deviation in radians (90 degrees)
 const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
@@ -21,11 +22,11 @@ fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
 
 /// Original Wind struct has been simplified as a simple Vec2 encoding both strengh and direction.
 #[derive(Debug, Default, Clone)]
-pub struct WindNew {
+pub struct Wind {
     pub velocity: Vec2,
 }
 
-impl WindNew {
+impl Wind {
     /// Create a default wind, equivalent to Vec2::ZERO
     pub fn zero() -> Self {
         Self::default()
@@ -85,17 +86,17 @@ impl WindNew {
 #[derive(Default)]
 pub struct WindTable {
     pub source_ids: Vec<Vec<u64>>,
-    pub winds: Vec<Vec<WindNew>>,
+    pub winds: Vec<Vec<Wind>>,
 }
 
 impl WindTable {
     /// Get the winds at a given cell index
-    pub fn get_winds(&self, index: usize) -> Option<&Vec<WindNew>> {
+    pub fn get_winds(&self, index: usize) -> Option<&Vec<Wind>> {
         self.winds.get(index)
     }
 
     /// Get mutable reference to winds at a given cell index
-    pub fn get_winds_mut(&mut self, index: usize) -> Option<&mut Vec<WindNew>> {
+    pub fn get_winds_mut(&mut self, index: usize) -> Option<&mut Vec<Wind>> {
         self.winds.get_mut(index)
     }
 
@@ -123,15 +124,15 @@ impl WindTable {
 /// None = no wind (particles unaffected), Some(WindNew) = wind force applied
 #[derive(Default)]
 pub struct WindsCombined {
-    pub cells: Vec<Option<WindNew>>,
+    pub cells: Vec<Option<Wind>>,
 }
 
 impl WindsCombined {
-    pub fn get(&self, index: usize) -> Option<&Option<WindNew>> {
+    pub fn get(&self, index: usize) -> Option<&Option<Wind>> {
         self.cells.get(index)
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Option<WindNew>> {
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Option<Wind>> {
         self.cells.get_mut(index)
     }
 }
@@ -199,7 +200,7 @@ impl WindField {
     }
 
     /// Add or update a wind source at the specified grid position
-    pub fn add_wind(&mut self, x: usize, y: usize, source_id: u64, wind: WindNew) {
+    pub fn add_wind(&mut self, x: usize, y: usize, source_id: u64, wind: Wind) {
         let Some(idx) = self.get_cell_index(x, y) else {
             return;
         };
@@ -248,7 +249,7 @@ impl WindField {
         y: usize,
         circle_id: usize,
         voice_id: VoiceId,
-        wind: WindNew,
+        wind: Wind,
     ) {
         let source_id = hash_voice_circle(voice_id, circle_id);
         self.add_wind(x, y, source_id, wind);
@@ -261,40 +262,28 @@ impl WindField {
         self.remove_wind(x, y, source_id);
     }
 
-    pub fn force_update_all(&mut self) {
-        // Hot path: iterate only over winds, no source_ids access for 100% cache utilization
-        self.wind_table
-            .winds
-            .iter()
-            .enumerate()
-            .for_each(|(idx, winds)| {
-                if winds.is_empty() {
-                    self.winds_combined.cells[idx] = None;
-                } else {
-                    self.winds_combined.cells[idx] = Some(WindNew::new(
-                        winds
-                            .iter()
-                            .fold(Vec2::ZERO, |accumulator, w| accumulator + w.velocity),
-                    ));
-                }
-            });
-    }
-
     /// Force a recalculation of all cells in the WindField in parallel with per-circle angle variations
-    pub fn par_force_update_all(
+    pub fn par_update_all_combined_cells(
         &mut self,
         rng: &mut rand::rngs::ThreadRng,
         circle_noise_values: &HashMap<u64, f32>,
     ) {
         use rand::Rng;
 
-        // Pre-compute random variations for all cells for each circle that has angle variation
+        // Pre-compute random variations for all cells for each circle that has angle variation ("Noise")
+        let num_cells = self.wind_table.winds.len();
         let mut cell_variations: HashMap<u64, Vec<f32>> = HashMap::new();
+
         for (&hash_key, &variation_factor) in circle_noise_values.iter() {
             if variation_factor > 0.0 {
-                let variations: Vec<f32> = (0..self.wind_table.winds.len())
-                    .map(|_| rng.random_range(-1.0..=1.0) * variation_factor)
-                    .collect();
+                let mut variations = vec![0.0; num_cells];
+                rng.fill(&mut variations[..]); // Bulk random fill [0.0, 1.0)
+
+                // Scale to [-variation_factor, variation_factor]
+                for v in &mut variations {
+                    *v = (*v * 2.0 - 1.0) * variation_factor;
+                }
+
                 cell_variations.insert(hash_key, variations);
             }
         }
@@ -349,7 +338,7 @@ impl WindField {
                 };
 
                 *combined_cell = if final_vector.length_squared() > 0.0 {
-                    Some(WindNew::new(final_vector))
+                    Some(Wind::new(final_vector))
                 } else {
                     None
                 };
@@ -377,7 +366,7 @@ impl WindField {
 
     /// Get combined wind at a position in ParticleSystem coordinates
     /// Returns None if position is out of bounds or cell has no wind
-    pub fn get_wind_at_pos(&self, position: Vec2) -> Option<WindNew> {
+    pub fn get_wind_at_pos(&self, position: Vec2) -> Option<Wind> {
         let (x, y) = self.position_to_idx(position)?;
 
         if let Some(idx) = self.get_cell_index(x, y) {
@@ -393,7 +382,7 @@ impl WindField {
 
     /// Get the source IDs and winds at a grid position (0,0 is top left)
     /// Returns (source_ids, winds) - both slices have the same length
-    pub fn get_wind_cell_data(&self, x: usize, y: usize) -> Option<(&[u64], &[WindNew])> {
+    pub fn get_wind_cell_data(&self, x: usize, y: usize) -> Option<(&[u64], &[Wind])> {
         let index = self.get_cell_index(x, y)?;
         let source_ids = self.wind_table.source_ids.get(index)?;
         let winds = self.wind_table.winds.get(index)?;

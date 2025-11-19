@@ -76,7 +76,7 @@ impl ForceFields {
 
         // Update each cell and use per-circle angle variations
         self.wind_field
-            .par_force_update_all(rng, &circle_noise_values);
+            .par_update_all_combined_cells(rng, &circle_noise_values);
     }
 
     /// Update all Winds in this ForceField
@@ -85,7 +85,7 @@ impl ForceFields {
         let mut dummy_rng = rand::rng();
         let empty_variations = HashMap::new();
         self.wind_field
-            .par_force_update_all(&mut dummy_rng, &empty_variations);
+            .par_update_all_combined_cells(&mut dummy_rng, &empty_variations);
     }
 
     /// Apply all applicable forces to a particle with mass variation factor

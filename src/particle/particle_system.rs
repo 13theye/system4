@@ -143,29 +143,25 @@ impl ParticleSystem {
                 self.last_event_time,
             );
 
-            // Pre-compute variations
-            let mass_variations: Vec<f32> = if self.mass_variation_enabled
-                && self.mass_variation_amount > 0.0
-            {
-                cores
-                    .iter()
-                    .map(|_| {
-                        rng.random_range(-self.mass_variation_amount..=self.mass_variation_amount)
-                    })
-                    .collect()
-            } else {
-                vec![0.0; cores.len()]
-            };
+            // Pre-compute variations using bulk RNG fill for better performance
+            let mut mass_variations = vec![0.0; cores.len()];
+            if self.mass_variation_enabled && self.mass_variation_amount > 0.0 {
+                rng.fill(&mut mass_variations[..]);
+                // Scale from [0.0, 1.0) to [-mass_variation_amount, mass_variation_amount]
+                for v in &mut mass_variations {
+                    *v = (*v * 2.0 - 1.0) * self.mass_variation_amount;
+                }
+            }
 
             let vibration = vibration_values.get(voice_id).copied().unwrap_or(0.0);
-            let offset_factors: Vec<f32> = if vibration > 0.0 {
-                cores
-                    .iter()
-                    .map(|_| rng.random_range(-vibration..vibration))
-                    .collect()
-            } else {
-                vec![0.0; cores.len()]
-            };
+            let mut offset_factors = vec![0.0; cores.len()];
+            if vibration > 0.0 {
+                rng.fill(&mut offset_factors[..]);
+                // Scale from [0.0, 1.0) to [-vibration, vibration]
+                for v in &mut offset_factors {
+                    *v = (*v * 2.0 - 1.0) * vibration;
+                }
+            }
 
             let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
 
@@ -199,12 +195,8 @@ impl ParticleSystem {
                     // Store the computed offset for GPU write
                     *computed_offset = offset;
 
-                    // Apply the offset
-                    let offset_position = if offset.length_squared() > 0.0 {
-                        core.position + offset
-                    } else {
-                        core.position
-                    };
+                    // Apply the offset (adding zero is fast, no need to check)
+                    let offset_position = core.position + offset;
                     feedback.record(offset_position, color);
 
                     if core.is_out_of_bounds(self.bounds_rect) {

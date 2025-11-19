@@ -2,7 +2,7 @@
 //
 // WindCircle implementation for wind_new.rs
 
-use super::wind_new::{WindField, WindNew};
+use super::wind_new::{Wind, WindField};
 use crate::groups::VoiceId;
 use nannou::prelude::*;
 
@@ -129,7 +129,7 @@ impl WindCircle {
         col: usize,
         row: usize,
         params: &WindCircleParams,
-    ) -> Option<WindNew> {
+    ) -> Option<Wind> {
         // Get cell origin
         let cell_origin = field.get_cell_origin(col, row)?;
 
@@ -155,7 +155,7 @@ impl WindCircle {
                 tangent_dir.x * sin_a + tangent_dir.y * cos_a,
             );
 
-            Some(WindNew::new_with(blended_direction, params.force))
+            Some(Wind::new_with(blended_direction, params.force))
         } else {
             None
         }
