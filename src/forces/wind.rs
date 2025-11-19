@@ -20,52 +20,49 @@ fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
 }
 
 /// A wind is a simple vector force that is applied to a particle.
-/// It has a direction and a strength.
-/// The direction is a unit vector that points in the direction of the wind.
-/// The strength is a scalar that multiplies the direction to get the actual force.
-/// The force is calculated as the difference between the wind's target velocity
-/// and the particle's current velocity. Particle intertia is also considered.
-/// The force is then added to the particle's acceleration.
+/// Original Wind struct has been simplified as a simple Vec2 encoding both strength and direction.
 #[derive(Clone, Copy, Debug, Default)]
+#[repr(C)]
 pub struct Wind {
-    // direction is a unit vector
-    direction: Vec2,
-    strength: f32,
+    pub velocity: Vec2,
 }
+
 impl Wind {
-    pub fn new() -> Self {
-        Self {
-            direction: vec2(0.0, 0.0),
-            strength: 0.0,
-        }
+    /// Create a default wind, equivalent to Vec2::ZERO
+    pub fn zero() -> Self {
+        Self::default()
+    }
+
+    /// Create a new wind with the given vector
+    pub fn new(velocity: Vec2) -> Self {
+        Self { velocity }
     }
 
     /// Create a new Wind with a direction and strength
-    pub fn new_with(direction: Vec2, strength: f32) -> Self {
+    pub fn new_with(direction: Vec2, speed: f32) -> Self {
         Self {
-            direction,
-            strength,
+            velocity: direction * speed,
         }
     }
 
+    /// Return the strength of the wind as a scalar
+    pub fn strength(&self) -> f32 {
+        self.velocity.length()
+    }
+
+    /// Return the direction component of the wind as a unit vector
+    pub fn direction(&self) -> Vec2 {
+        self.velocity.try_normalize().unwrap_or(Vec2::ZERO)
+    }
+
     /// Apply the Wind to a ParticleCore with mass variation factor
-    /// OPTIMIZED: Works with ParticleCore for better cache locality
     #[inline]
     pub fn apply(&self, particle: &mut ParticleCore, mass_variation_factor: f32) {
         // Activate the particle
         particle.activate();
 
-        // Get the x and y components of particle's current velocity
-        let particle_vx = particle.velocity.x;
-        let particle_vy = particle.velocity.y;
-
-        // Get the x and y components of wind's target velocity
-        let wind_vx = self.direction.x * self.strength;
-        let wind_vy = self.direction.y * self.strength;
-
-        // Calculate the difference in each component
-        let diff_x = wind_vx - particle_vx;
-        let diff_y = wind_vy - particle_vy;
+        // Calculate the difference between wind's target velocity and particle's current velocity
+        let diff = self.velocity - particle.velocity;
 
         // Calculate effective mass with variation factor
         let effective_mass = particle.mass * (1.0 + mass_variation_factor);
@@ -79,7 +76,7 @@ impl Wind {
         let inertia_factor = 1.0 / (1.0 + momentum_magnitude * inertia_coefficient);
 
         // Apply the force with inertial resistance using effective mass
-        let force = vec2(diff_x, diff_y) * inertia_factor;
+        let force = diff * inertia_factor;
         particle.acceleration += force / effective_mass;
     }
 }
@@ -88,27 +85,21 @@ impl Wind {
 /// It contains a list of winds that are acting on it,
 /// and a combined wind cache that is the sum of all the winds.
 /// The combined wind is recalculated when the cell or wind is updated.
+#[repr(C)]
 pub struct WindCell {
     winds: HashMap<u64, Wind>,
     combined_wind: Option<Wind>,
-    origin: Vec2,
     dirty: bool,
-
-    #[allow(dead_code)]
-    // rect is used for debugging
-    rect: Rect,
+    origin: Vec2,
 }
 
 impl WindCell {
-    pub fn new_from_origin(origin: Vec2, size: Vec2) -> Self {
-        let rect = Rect::from_x_y_w_h(origin.x, origin.y, size.x, size.y);
-
+    pub fn new_with_origin(origin: Vec2) -> Self {
         Self {
             winds: HashMap::new(),
             combined_wind: None,
-            origin,
-            rect,
             dirty: false,
+            origin,
         }
     }
 
@@ -144,34 +135,28 @@ impl WindCell {
             return;
         }
 
+        // Sum all wind velocities
         let mut total_force = vec2(0.0, 0.0);
         for wind in self.winds.values() {
-            total_force += wind.direction * wind.strength;
+            total_force += wind.velocity;
         }
 
-        let combined_strength = total_force.length();
-        let mut combined_direction = if combined_strength > 0.0 {
-            total_force.normalize()
-        } else {
-            vec2(0.0, 0.0) // if no force, direction doesn't matter.
-        };
-
-        // Apply angle variation if variation is non-zero and we have a valid direction
-        if angle_variation != 0.0 && combined_strength > 0.0 {
-            // Calculate actual angle deviation using pre-computed variation
+        // Apply angle variation if non-zero and we have force
+        let final_vector = if angle_variation != 0.0 && total_force.length_squared() > 0.0 {
             let angle_offset = angle_variation * MAX_WIND_ANGLE_DEVIATION;
-
-            // Apply rotation to the combined direction
             let cos_a = angle_offset.cos();
             let sin_a = angle_offset.sin();
 
-            combined_direction = vec2(
-                combined_direction.x * cos_a - combined_direction.y * sin_a,
-                combined_direction.x * sin_a + combined_direction.y * cos_a,
-            );
-        }
+            // Rotate the vector directly
+            vec2(
+                total_force.x * cos_a - total_force.y * sin_a,
+                total_force.x * sin_a + total_force.y * cos_a,
+            )
+        } else {
+            total_force
+        };
 
-        self.combined_wind = Some(Wind::new_with(combined_direction, combined_strength));
+        self.combined_wind = Some(Wind::new(final_vector));
         self.dirty = false;
     }
 }
@@ -218,7 +203,7 @@ impl WindField {
                         col as f32 * cell_size.x + cell_size.x / 2.0,
                         -(row as f32 * cell_size.y + cell_size.y / 2.0), // Negative Y to go downward
                     );
-                let cell = WindCell::new_from_origin(cell_origin, cell_size);
+                let cell = WindCell::new_with_origin(cell_origin);
                 cells.push(cell);
             }
         }
@@ -395,7 +380,7 @@ impl WindField {
 
             // Draw wind vector from cell origin
             let vector_scale = 3.0; // Increased scale for better visibility
-            let vector_end = cell.origin + wind.direction * wind.strength * vector_scale;
+            let vector_end = cell.origin + wind.velocity * vector_scale;
 
             draw.line()
                 .start(cell.origin * vec2(scale_x, scale_y))
@@ -449,8 +434,8 @@ impl WindField {
     pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         for cell in &self.cells {
             let color: Rgba = if let Some(wind) = cell.combined_wind {
-                let h = wind.direction.y.atan2(wind.direction.x) / (2.0 * PI);
-                let s = wind.strength / 30.0;
+                let h = wind.direction().y.atan2(wind.direction().x) / (2.0 * PI);
+                let s = wind.strength() / 30.0;
                 Rgba::from(hsv(h, s, 1.0))
             } else {
                 rgba(0.0, 0.0, 0.0, 0.0)
@@ -986,32 +971,32 @@ mod tests {
         let wind1 = field.get_wind_at_pos(pos1);
         assert!(wind1.is_some());
         let wind1 = wind1.unwrap();
-        assert_eq!(wind1.direction, vec2(1.0, 0.0));
-        assert_eq!(wind1.strength, 10.0);
+        assert_eq!(wind1.direction(), vec2(1.0, 0.0));
+        assert_eq!(wind1.strength(), 10.0);
 
         // Test 2: Position that maps to cell (1,1)
         let pos2 = vec2(-50.0, 0.0); // Should map to cell (1,1)
         let wind2 = field.get_wind_at_pos(pos2);
         assert!(wind2.is_some());
         let wind2 = wind2.unwrap();
-        assert_eq!(wind2.direction, vec2(0.0, 1.0));
-        assert_eq!(wind2.strength, 20.0);
+        assert_eq!(wind2.direction(), vec2(0.0, 1.0));
+        assert_eq!(wind2.strength(), 20.0);
 
         // Test 3: Position that maps to cell (3,2)
         let pos3 = vec2(150.0, -100.0); // Should map to cell (3,2)
         let wind3 = field.get_wind_at_pos(pos3);
         assert!(wind3.is_some());
         let wind3 = wind3.unwrap();
-        assert_eq!(wind3.direction, vec2(-1.0, 0.0));
-        assert_eq!(wind3.strength, 30.0);
+        assert_eq!(wind3.direction(), vec2(-1.0, 0.0));
+        assert_eq!(wind3.strength(), 30.0);
 
         // Test 4: Position that maps to cell (2,0)
         let pos4 = vec2(50.0, 100.0); // Should map to cell (2,0)
         let wind4 = field.get_wind_at_pos(pos4);
         assert!(wind4.is_some());
         let wind4 = wind4.unwrap();
-        assert_eq!(wind4.direction, vec2(0.0, -1.0));
-        assert_eq!(wind4.strength, 40.0);
+        assert_eq!(wind4.direction(), vec2(0.0, -1.0));
+        assert_eq!(wind4.strength(), 40.0);
 
         // Test 5: Position in empty cell should return None
         let pos5 = vec2(50.0, 0.0); // Should map to cell (2,1) which has no wind
@@ -1051,9 +1036,9 @@ mod tests {
         let expected_strength = (10.0_f32.powi(2) + 10.0_f32.powi(2)).sqrt();
         let expected_direction = vec2(10.0, 10.0).normalize();
 
-        assert!((wind.strength - expected_strength).abs() < 0.001);
-        assert!((wind.direction.x - expected_direction.x).abs() < 0.001);
-        assert!((wind.direction.y - expected_direction.y).abs() < 0.001);
+        assert!((wind.strength() - expected_strength).abs() < 0.001);
+        assert!((wind.direction().x - expected_direction.x).abs() < 0.001);
+        assert!((wind.direction().y - expected_direction.y).abs() < 0.001);
     }
 
     #[test]
@@ -1088,18 +1073,18 @@ mod tests {
         // Test position just left of X=0 boundary - should be cell (1,1)
         let wind1 = field.get_wind_at_pos(pos1);
         assert!(wind1.is_some());
-        assert_eq!(wind1.unwrap().strength, 100.0);
+        assert_eq!(wind1.unwrap().strength(), 100.0);
 
         // Test position just right of X=0 boundary - should be cell (2,1)
         let wind2 = field.get_wind_at_pos(pos2);
         assert!(wind2.is_some());
-        assert_eq!(wind2.unwrap().strength, 200.0);
+        assert_eq!(wind2.unwrap().strength(), 200.0);
 
         // Additional test: Position exactly on boundary (edge case)
         let pos3 = vec2(0.0, 0.1); // Exactly on X=0, should map to cell (2,1) due to floor()
         let wind3 = field.get_wind_at_pos(pos3);
         assert!(wind3.is_some());
-        assert_eq!(wind3.unwrap().strength, 200.0);
+        assert_eq!(wind3.unwrap().strength(), 200.0);
     }
 
     #[test]

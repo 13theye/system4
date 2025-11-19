@@ -58,8 +58,8 @@ impl ParticleSystem {
     ) -> Self {
         let bounds_size = Vec2::new(width, height);
         let bounds_rect = Rect::from_x_y_w_h(origin.x, origin.y, width, height);
-        let grid_cols = (width / 1.0) as usize;
-        let grid_rows = (height / 1.0) as usize;
+        let grid_cols = (width / 3.0) as usize;
+        let grid_rows = (height / 3.0) as usize;
 
         Self {
             origin,

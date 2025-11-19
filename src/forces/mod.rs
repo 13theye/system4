@@ -8,4 +8,7 @@ pub mod force;
 pub use force::Force;
 
 pub mod wind;
-pub use wind::{Wind, WindCircle, WindCircleParams, WindField};
+pub use wind::{WindCircle, WindCircleParams, WindField};
+
+//pub mod wind_new;
+//pub use wind_new::WindField;
