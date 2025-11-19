@@ -22,7 +22,6 @@ fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
 /// A wind is a simple vector force that is applied to a particle.
 /// Original Wind struct has been simplified as a simple Vec2 encoding both strength and direction.
 #[derive(Clone, Copy, Debug, Default)]
-#[repr(C)]
 pub struct Wind {
     pub velocity: Vec2,
 }
@@ -85,7 +84,6 @@ impl Wind {
 /// It contains a list of winds that are acting on it,
 /// and a combined wind cache that is the sum of all the winds.
 /// The combined wind is recalculated when the cell or wind is updated.
-#[repr(C)]
 pub struct WindCell {
     winds: HashMap<u64, Wind>,
     combined_wind: Option<Wind>,

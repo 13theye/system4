@@ -119,18 +119,19 @@ impl WindTable {
 }
 
 /// A flattened vector representing all Wind Cells.
-/// Each cell contains the combined wind acting on it
+/// Each cell contains the combined wind acting on it.
+/// None = no wind (particles unaffected), Some(WindNew) = wind force applied
 #[derive(Default)]
 pub struct WindsCombined {
-    pub cells: Vec<WindNew>,
+    pub cells: Vec<Option<WindNew>>,
 }
 
 impl WindsCombined {
-    pub fn get(&self, index: usize) -> Option<&WindNew> {
+    pub fn get(&self, index: usize) -> Option<&Option<WindNew>> {
         self.cells.get(index)
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut WindNew> {
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Option<WindNew>> {
         self.cells.get_mut(index)
     }
 }
@@ -173,7 +174,7 @@ impl WindField {
                 winds: vec![Vec::new(); total_cells],
             },
             winds_combined: WindsCombined {
-                cells: vec![WindNew::default(); total_cells],
+                cells: vec![None; total_cells],
             },
             params,
         }
@@ -188,9 +189,12 @@ impl WindField {
     }
 
     /// Given a particle, determines which WindCell contains the particle, then applies the WindCell's Wind on that particle.
+    /// If there is no wind at the particle's position, no force is applied.
     #[inline]
     pub fn apply(&self, particle: &mut ParticleCore, mass_variation_factor: f32) {
-        let wind = self.get_wind_at_pos(particle.position);
+        let Some(wind) = self.get_wind_at_pos(particle.position) else {
+            return; // No wind = no force applied
+        };
         wind.apply(particle, mass_variation_factor);
     }
 
@@ -264,11 +268,15 @@ impl WindField {
             .iter()
             .enumerate()
             .for_each(|(idx, winds)| {
-                self.winds_combined.cells[idx] = WindNew::new(
-                    winds
-                        .iter()
-                        .fold(Vec2::ZERO, |accumulator, w| accumulator + w.vector),
-                )
+                if winds.is_empty() {
+                    self.winds_combined.cells[idx] = None;
+                } else {
+                    self.winds_combined.cells[idx] = Some(WindNew::new(
+                        winds
+                            .iter()
+                            .fold(Vec2::ZERO, |accumulator, w| accumulator + w.vector),
+                    ));
+                }
             });
     }
 
@@ -340,7 +348,11 @@ impl WindField {
                     total_force
                 };
 
-                *combined_cell = WindNew::new(final_vector);
+                *combined_cell = if final_vector.length_squared() > 0.0 {
+                    Some(WindNew::new(final_vector))
+                } else {
+                    None
+                };
             });
     }
 
@@ -364,20 +376,21 @@ impl WindField {
     }
 
     /// Get combined wind at a position in ParticleSystem coordinates
-    pub fn get_wind_at_pos(&self, position: Vec2) -> WindNew {
+    /// Returns None if position is out of bounds or cell has no wind
+    pub fn get_wind_at_pos(&self, position: Vec2) -> Option<WindNew> {
         let Some((x, y)) = self.position_to_idx(position) else {
-            return WindNew::default();
+            return None;
         };
 
         if let Some(idx) = self.get_cell_index(x, y) {
             return self
                 .winds_combined
                 .get(idx)
-                .cloned()
-                .unwrap_or(WindNew::default());
+                .and_then(|opt| opt.as_ref())
+                .cloned();
         }
 
-        WindNew::default()
+        None
     }
 
     /// Get the source IDs and winds at a grid position (0,0 is top left)
@@ -396,7 +409,7 @@ impl WindField {
         };
         self.wind_table.source_ids[idx].clear();
         self.wind_table.winds[idx].clear();
-        self.winds_combined.cells[idx] = WindNew::default();
+        self.winds_combined.cells[idx] = None;
 
         #[cfg(debug_assertions)]
         self.wind_table.verify_invariant(idx);
@@ -435,8 +448,12 @@ impl WindField {
     /// Draw all the Wind vectors
     fn draw_vectors(&self, draw: &Draw, scale_x: f32, scale_y: f32, div_factor: usize) {
         // Draw wind vectors from selected cells based on div_factor
-        for (index, combined_wind) in self.winds_combined.cells.iter().enumerate() {
+        for (index, combined_wind_opt) in self.winds_combined.cells.iter().enumerate() {
             // Skip cells with no wind
+            let Some(combined_wind) = combined_wind_opt else {
+                continue;
+            };
+
             if combined_wind.vector.length() == 0.0 {
                 continue;
             }
@@ -511,7 +528,7 @@ impl WindField {
 
     /// Draw a grid of rectangles that represent the cells -- slow but more accurate
     pub fn draw_grid_rect(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        for (index, combined_wind) in self.winds_combined.cells.iter().enumerate() {
+        for (index, combined_wind_opt) in self.winds_combined.cells.iter().enumerate() {
             // Calculate row and column from the flat index
             let col = index % self.params.grid_cols;
             let row = index / self.params.grid_cols;
@@ -520,11 +537,15 @@ impl WindField {
                 continue;
             };
 
-            let color: Rgba = if combined_wind.strength() > 0.0 {
-                let direction = combined_wind.direction();
-                let h = direction.y.atan2(direction.x) / (2.0 * PI);
-                let s = combined_wind.strength() / 30.0;
-                Rgba::from(hsv(h, s, 1.0))
+            let color: Rgba = if let Some(combined_wind) = combined_wind_opt {
+                if combined_wind.strength() > 0.0 {
+                    let direction = combined_wind.direction();
+                    let h = direction.y.atan2(direction.x) / (2.0 * PI);
+                    let s = combined_wind.strength() / 30.0;
+                    Rgba::from(hsv(h, s, 1.0))
+                } else {
+                    rgba(0.0, 0.0, 0.0, 0.0)
+                }
             } else {
                 rgba(0.0, 0.0, 0.0, 0.0)
             };
