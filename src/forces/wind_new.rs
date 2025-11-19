@@ -139,18 +139,18 @@ impl WindsCombined {
 /// Parameters for the WindField
 #[derive(Default)]
 pub struct WindFieldParams {
-    origin: Vec2,
-    bounds_size: Vec2,
-    grid_cols: usize,
-    grid_rows: usize,
-    cell_size: Vec2,
+    pub origin: Vec2,
+    pub bounds_size: Vec2,
+    pub grid_cols: usize,
+    pub grid_rows: usize,
+    pub cell_size: Vec2,
 }
 
 /// The WindField is the orchestrator of the WindCells.
 pub struct WindField {
     wind_table: WindTable,
     winds_combined: WindsCombined,
-    params: WindFieldParams,
+    pub params: WindFieldParams,
 }
 
 impl WindField {
@@ -378,9 +378,7 @@ impl WindField {
     /// Get combined wind at a position in ParticleSystem coordinates
     /// Returns None if position is out of bounds or cell has no wind
     pub fn get_wind_at_pos(&self, position: Vec2) -> Option<WindNew> {
-        let Some((x, y)) = self.position_to_idx(position) else {
-            return None;
-        };
+        let (x, y) = self.position_to_idx(position)?;
 
         if let Some(idx) = self.get_cell_index(x, y) {
             return self
@@ -429,7 +427,7 @@ impl WindField {
     }
 
     /// Helper method to transform world coordinates to grid coordinates (floating point)
-    fn world_to_grid_coords(&self, pos: Vec2) -> Vec2 {
+    pub fn world_to_grid_coords(&self, pos: Vec2) -> Vec2 {
         let x1 = pos.x + self.params.bounds_size.x / 2.0;
         let y1 = -pos.y + self.params.bounds_size.y / 2.0;
 

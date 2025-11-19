@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use crate::{
-    forces::wind::WindField,
+    forces::WindField,
     groups::{Voice, VoiceId},
     particle::ParticleCore,
 };
