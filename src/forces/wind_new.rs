@@ -22,7 +22,7 @@ fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
 /// Original Wind struct has been simplified as a simple Vec2 encoding both strengh and direction.
 #[derive(Debug, Default, Clone)]
 pub struct WindNew {
-    pub vector: Vec2,
+    pub velocity: Vec2,
 }
 
 impl WindNew {
@@ -32,20 +32,20 @@ impl WindNew {
     }
 
     /// Create a new wind with the given vector
-    pub fn new(vector: Vec2) -> Self {
-        Self { vector }
+    pub fn new(velocity: Vec2) -> Self {
+        Self { velocity }
     }
 
-    /// Create a new Wind with a direction and strength
-    pub fn new_with(direction: Vec2, strength: f32) -> Self {
+    /// Create a new Wind with a direction and speed
+    pub fn new_with(direction: Vec2, speed: f32) -> Self {
         Self {
-            vector: direction * strength,
+            velocity: direction * speed,
         }
     }
 
     /// Return the strength of the wind as a scalar
     pub fn strength(&self) -> f32 {
-        self.vector.length()
+        self.velocity.length()
     }
 
     /// Return the direction component of the wind as a unit vector
@@ -60,7 +60,7 @@ impl WindNew {
         particle.activate();
 
         // Calculate the difference between wind's target velocity and particle's current velocity
-        let diff = self.vector - particle.velocity;
+        let diff = self.velocity - particle.velocity;
 
         // Calculate effective mass with variation factor
         let effective_mass = particle.mass * (1.0 + mass_variation_factor);
@@ -139,18 +139,18 @@ impl WindsCombined {
 /// Parameters for the WindField
 #[derive(Default)]
 pub struct WindFieldParams {
-    origin: Vec2,
-    bounds_size: Vec2,
-    grid_cols: usize,
-    grid_rows: usize,
-    cell_size: Vec2,
+    pub origin: Vec2,
+    pub bounds_size: Vec2,
+    pub grid_cols: usize,
+    pub grid_rows: usize,
+    pub cell_size: Vec2,
 }
 
 /// The WindField is the orchestrator of the WindCells.
 pub struct WindField {
     wind_table: WindTable,
     winds_combined: WindsCombined,
-    params: WindFieldParams,
+    pub params: WindFieldParams,
 }
 
 impl WindField {
@@ -274,7 +274,7 @@ impl WindField {
                     self.winds_combined.cells[idx] = Some(WindNew::new(
                         winds
                             .iter()
-                            .fold(Vec2::ZERO, |accumulator, w| accumulator + w.vector),
+                            .fold(Vec2::ZERO, |accumulator, w| accumulator + w.velocity),
                     ));
                 }
             });
@@ -332,7 +332,7 @@ impl WindField {
                 // Sum all wind vectors (hot path: only access winds array for 100% cache utilization)
                 let total_force: Vec2 = winds
                     .iter()
-                    .fold(Vec2::ZERO, |accumulator, w| accumulator + w.vector);
+                    .fold(Vec2::ZERO, |accumulator, w| accumulator + w.velocity);
 
                 // Apply angle variation if present
                 let final_vector = if final_variation != 0.0 && total_force.length() > 0.0 {
@@ -378,9 +378,7 @@ impl WindField {
     /// Get combined wind at a position in ParticleSystem coordinates
     /// Returns None if position is out of bounds or cell has no wind
     pub fn get_wind_at_pos(&self, position: Vec2) -> Option<WindNew> {
-        let Some((x, y)) = self.position_to_idx(position) else {
-            return None;
-        };
+        let (x, y) = self.position_to_idx(position)?;
 
         if let Some(idx) = self.get_cell_index(x, y) {
             return self
@@ -429,7 +427,7 @@ impl WindField {
     }
 
     /// Helper method to transform world coordinates to grid coordinates (floating point)
-    fn world_to_grid_coords(&self, pos: Vec2) -> Vec2 {
+    pub fn world_to_grid_coords(&self, pos: Vec2) -> Vec2 {
         let x1 = pos.x + self.params.bounds_size.x / 2.0;
         let y1 = -pos.y + self.params.bounds_size.y / 2.0;
 
@@ -454,7 +452,7 @@ impl WindField {
                 continue;
             };
 
-            if combined_wind.vector.length() == 0.0 {
+            if combined_wind.velocity.length() == 0.0 {
                 continue;
             }
 
