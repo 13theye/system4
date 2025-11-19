@@ -503,9 +503,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // This enables particles to flash with rhythm
     //let event = events.iter().any(|e| *e);
 
-    // Particle flash turned off
-    let event = false;
-
     // Update particle system with ZERO-COPY optimization
     // Get GPU queue for direct staging memory writes
     let window = app.main_window();
@@ -517,7 +514,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         queue,
         &model.particle_renderer,
         &model.segment_renderer,
-        event,
         now,
     );
 

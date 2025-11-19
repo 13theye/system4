@@ -94,9 +94,13 @@ impl ParticleSystem {
         queue: &nannou::wgpu::Queue,
         particle_renderer: &ParticleRenderer,
         segment_renderer: &SegmentRenderer,
-        event: bool,
         now: Instant,
     ) -> (usize, usize) {
+        let dt = (now - self.last_update).as_secs_f32();
+
+        // how many frames have passed with 60fps target
+        let framerate_factor = (dt / 0.0167).min(1.5);
+
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
 
@@ -127,14 +131,10 @@ impl ParticleSystem {
 
             let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
 
-            if event {
-                self.last_update = now;
-            }
-
             // Interpolate color (same for all particles)
             let color = tween::interpolate_color(
                 color_limit,
-                rgb(PARTICLE_HIGH_R, PARTICLE_HIGH_G, PARTICLE_),
+                rgb(PARTICLE_HIGH_R, PARTICLE_HIGH_G, PARTICLE_HIGH_B),
                 FADE_DURATION,
                 RAMP_UP_PERCENT,
                 DWELL_PERCENT,
@@ -183,7 +183,7 @@ impl ParticleSystem {
                         .apply_forces_to_particle(core, mass_variation_factor);
 
                     // Apply forces and color changes to particle core
-                    core.update(color, alpha_limit);
+                    core.update(color, alpha_limit, framerate_factor);
 
                     // Calculate and apply offset
                     let offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0 {
@@ -247,6 +247,9 @@ impl ParticleSystem {
             &computed_offsets_map,
             total_segment_count,
         );
+
+        // Record the last update time as the last item of business
+        self.last_update = now;
 
         (particles_written, segments_written)
     }

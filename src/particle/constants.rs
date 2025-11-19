@@ -19,7 +19,7 @@ pub const PARTICLE_MAX_SPAWN_RATE: f32 = 80.0;
 
 pub const PARTICLE_HIGH_R: f32 = 1.0;
 pub const PARTICLE_HIGH_G: f32 = 1.0;
-pub const PARTICLE_: f32 = 0.0;
+pub const PARTICLE_HIGH_B: f32 = 0.0;
 
 // Animation timing constants
 pub const FADE_DURATION: f32 = 1.0;

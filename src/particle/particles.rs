@@ -80,10 +80,10 @@ impl ParticleCore {
     /// Update the particle based on forces and age
     /// This is the hot path - keep it tight and cache-friendly
     #[inline]
-    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32) {
+    pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32, framerate_factor: f32) {
         // Apply velocity and reset acceleration
-        self.velocity += self.acceleration;
-        self.position += self.velocity;
+        self.velocity += self.acceleration * framerate_factor;
+        self.position += self.velocity * framerate_factor;
         self.acceleration = vec2(0.0, 0.0);
 
         // Update color if needed
@@ -113,8 +113,8 @@ impl ParticleCore {
         // Increment natural age and decrement remaining life span
         // Only increment age if the particle is activated
         if self.is_activated {
-            self.age += self.age_per_tick;
-            self.remaining_life_span -= self.age_per_tick;
+            self.age += self.age_per_tick * framerate_factor;
+            self.remaining_life_span -= self.age_per_tick * framerate_factor;
         }
 
         if self.remaining_life_span <= 0.0 {
