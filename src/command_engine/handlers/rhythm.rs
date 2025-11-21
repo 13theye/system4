@@ -8,6 +8,7 @@ use crate::{
 };
 use std::time::Instant;
 
+#[derive(Default)]
 pub struct RhythmCommandHandler;
 
 impl RhythmCommandHandler {
@@ -66,8 +67,11 @@ impl RhythmCommandHandler {
         ctx.insert_rhythm(voice_id, rhythm);
 
         // Phase 2: Apply parameters through the command pipeline
-        let parameter_commands =
-            RhythmCommandBuilder::generate_all_parameter_commands(&resolved_config, voice_id, source);
+        let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
+            &resolved_config,
+            voice_id,
+            source,
+        );
 
         // Queue parameter commands to avoid recursive execution
         for param_cmd in parameter_commands {
@@ -191,7 +195,8 @@ impl RhythmCommandHandler {
     ) {
         // Check if rhythm exists
         if !ctx.has_rhythm(voice_id) {
-            let error_message = format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
+            let error_message =
+                format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
             println!("Error: {}", error_message);
             return;
         }
@@ -237,8 +242,10 @@ impl RhythmCommandHandler {
             if let Some(rhythm) = ctx.get_rhythm_mut(voice_id) {
                 rhythm.remove_wings(count);
             } else {
-                let error_message =
-                    format!("Voice {} has no rhythm to remove wings from", voice_id.to_i32());
+                let error_message = format!(
+                    "Voice {} has no rhythm to remove wings from",
+                    voice_id.to_i32()
+                );
                 println!("Error: {}", error_message);
                 return;
             }
@@ -303,19 +310,34 @@ impl RhythmCommandHandler {
         println!("{}", status_message);
     }
 
-    pub fn set_length_range(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, range: RangeSize) {
+    pub fn set_length_range(
+        &mut self,
+        ctx: &mut dyn ExecutionContext,
+        voice_id: VoiceId,
+        range: RangeSize,
+    ) {
         if let Some(rhythm) = ctx.get_rhythm_mut(voice_id) {
             rhythm.set_length_range(range);
         }
     }
 
-    pub fn set_velocity_range(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, range: RangeSize) {
+    pub fn set_velocity_range(
+        &mut self,
+        ctx: &mut dyn ExecutionContext,
+        voice_id: VoiceId,
+        range: RangeSize,
+    ) {
         if let Some(rhythm) = ctx.get_rhythm_mut(voice_id) {
             rhythm.set_velocity_range(range);
         }
     }
 
-    pub fn set_cutoff_range(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, range: RangeSize) {
+    pub fn set_cutoff_range(
+        &mut self,
+        ctx: &mut dyn ExecutionContext,
+        voice_id: VoiceId,
+        range: RangeSize,
+    ) {
         if let Some(rhythm) = ctx.get_rhythm_mut(voice_id) {
             rhythm.set_cutoff_range(range);
         }

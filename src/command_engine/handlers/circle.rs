@@ -1,12 +1,10 @@
 use crate::{
-    command_engine::context::ExecutionContext,
-    commands::CommandSource,
-    forces::WindCircle,
-    groups::VoiceId,
-    model::command_builder::DroneCommandBuilder,
+    command_engine::context::ExecutionContext, commands::CommandSource, forces::WindCircle,
+    groups::VoiceId, model::command_builder::DroneCommandBuilder,
     terminals::commands::drone::DroneConfig,
 };
 
+#[derive(Debug, Default)]
 pub struct CircleCommandHandler;
 
 impl CircleCommandHandler {
@@ -78,7 +76,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 
@@ -95,7 +97,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 
@@ -112,7 +118,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 
@@ -130,7 +140,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 
@@ -147,7 +161,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 
@@ -164,7 +182,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 
@@ -181,7 +203,11 @@ impl CircleCommandHandler {
         value: f32,
     ) {
         if !ctx.validate_circle_exists(voice_id, circle_id) {
-            println!("Error: Circle {}:{} not found", voice_id.to_i32(), circle_id);
+            println!(
+                "Error: Circle {}:{} not found",
+                voice_id.to_i32(),
+                circle_id
+            );
             return;
         }
 

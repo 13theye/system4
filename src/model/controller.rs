@@ -118,7 +118,7 @@ impl Model {
                         &resolved_config,
                         voice_id,
                         circle_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     // Queue parameter commands to avoid recursive execution
@@ -176,7 +176,7 @@ impl Model {
                     let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     // Queue parameter commands to avoid recursive execution
@@ -203,7 +203,7 @@ impl Model {
                     let parameter_commands = DroneCommandBuilder::generate_voice_parameter_commands(
                         &config,
                         voice_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     // Queue parameter commands
@@ -233,14 +233,17 @@ impl Model {
                     let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
                         &config,
                         voice_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     for cmd in parameter_commands {
                         self.command_queue.push(cmd);
                     }
                 }
-                CompositeCommand::NewCircle { voice_id, circle_config } => {
+                CompositeCommand::NewCircle {
+                    voice_id,
+                    circle_config,
+                } => {
                     let validation = self.validate_voice(voice_id);
                     if !self.validate_and_handle_error(validation, "NewCircle") {
                         return;
@@ -283,7 +286,7 @@ impl Model {
                             &resolved_config,
                             voice_id,
                             circle_id,
-                            command.source.clone(),
+                            command.source,
                         );
 
                     // Add commands to queue instead of executing recursively
@@ -307,13 +310,13 @@ impl Model {
                     if self.rhythms.contains_key(&voice_id) {
                         let cmd = Command::new(
                             CommandInner::Simple(SimpleCommand::ClearRhythm { voice_id }),
-                            command.source.clone(),
+                            command.source,
                         );
                         self.command_queue.push(cmd);
                     } else if self.voices.contains_key(&voice_id) {
                         let cmd = Command::new(
                             CommandInner::Simple(SimpleCommand::ClearDrone { voice_id }),
-                            command.source.clone(),
+                            command.source,
                         );
                         self.command_queue.push(cmd);
                     }

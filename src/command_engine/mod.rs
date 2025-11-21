@@ -3,9 +3,10 @@ pub mod handlers;
 
 use crate::commands::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand};
 use context::ExecutionContext;
-use handlers::{DroneCommandHandler, RhythmCommandHandler, CircleCommandHandler};
+use handlers::{CircleCommandHandler, DroneCommandHandler, RhythmCommandHandler};
 use std::time::Instant;
 
+#[derive(Default)]
 pub struct CommandEngine {
     command_queue: Vec<Command>,
     drone_handler: DroneCommandHandler,
@@ -35,9 +36,10 @@ impl CommandEngine {
         }
 
         let mut final_commands = Vec::new();
-        let mut map_osc: std::collections::HashMap<String, (usize, CommandSource)> = std::collections::HashMap::new();
+        let mut map_osc: std::collections::HashMap<String, (usize, CommandSource)> =
+            std::collections::HashMap::new();
 
-        for (_i, command) in all_commands.iter().enumerate() {
+        for command in all_commands.iter() {
             let key = command.dedup_key();
 
             if let Some((existing_idx, existing_source)) = map_osc.get(&key) {
@@ -55,50 +57,64 @@ impl CommandEngine {
             }
         }
 
-        for command_opt in final_commands {
-            if let Some(command) = command_opt {
-                self.execute_command(ctx, command, now);
-            }
+        for command in final_commands.into_iter().flatten() {
+            self.execute_command(ctx, command, now);
         }
     }
 
-    pub fn execute_command(&mut self, ctx: &mut dyn ExecutionContext, command: Command, now: Instant) {
+    pub fn execute_command(
+        &mut self,
+        ctx: &mut dyn ExecutionContext,
+        command: Command,
+        now: Instant,
+    ) {
         ctx.log_command(&command);
 
         match command.command {
-            CommandInner::Composite(composite) => {
-                match composite {
-                    CompositeCommand::CreateDrone { config } => {
-                        self.drone_handler.create_drone(ctx, config, command.source, now);
-                    }
-                    CompositeCommand::ModifyDrone { voice_id, config } => {
-                        self.drone_handler.modify_drone(ctx, voice_id, config, command.source, now);
-                    }
-                    CompositeCommand::CreateRhythm { config } => {
-                        self.rhythm_handler.create_rhythm(ctx, config, command.source, now);
-                    }
-                    CompositeCommand::ModifyRhythm { voice_id, config } => {
-                        self.rhythm_handler.modify_rhythm(ctx, voice_id, config, command.source, now);
-                    }
-                    CompositeCommand::NewCircle { voice_id, circle_config } => {
-                        self.circle_handler.add_circle(ctx, voice_id, circle_config, command.source);
-                    }
-                    CompositeCommand::Clear { voice_id } => {
-                        if ctx.has_voice(voice_id) {
-                            self.drone_handler.clear_voice(ctx, voice_id);
-                        } else if ctx.has_rhythm(voice_id) {
-                            self.rhythm_handler.clear_rhythm(ctx, voice_id, now);
-                        }
+            CommandInner::Composite(composite) => match composite {
+                CompositeCommand::CreateDrone { config } => {
+                    self.drone_handler
+                        .create_drone(ctx, config, command.source, now);
+                }
+                CompositeCommand::ModifyDrone { voice_id, config } => {
+                    self.drone_handler
+                        .modify_drone(ctx, voice_id, config, command.source, now);
+                }
+                CompositeCommand::CreateRhythm { config } => {
+                    self.rhythm_handler
+                        .create_rhythm(ctx, config, command.source, now);
+                }
+                CompositeCommand::ModifyRhythm { voice_id, config } => {
+                    self.rhythm_handler
+                        .modify_rhythm(ctx, voice_id, config, command.source, now);
+                }
+                CompositeCommand::NewCircle {
+                    voice_id,
+                    circle_config,
+                } => {
+                    self.circle_handler
+                        .add_circle(ctx, voice_id, circle_config, command.source);
+                }
+                CompositeCommand::Clear { voice_id } => {
+                    if ctx.has_voice(voice_id) {
+                        self.drone_handler.clear_voice(ctx, voice_id);
+                    } else if ctx.has_rhythm(voice_id) {
+                        self.rhythm_handler.clear_rhythm(ctx, voice_id, now);
                     }
                 }
-            }
+            },
             CommandInner::Simple(simple) => {
                 self.execute_simple_command(ctx, simple, now);
             }
         }
     }
 
-    fn execute_simple_command(&mut self, ctx: &mut dyn ExecutionContext, command: SimpleCommand, now: Instant) {
+    fn execute_simple_command(
+        &mut self,
+        ctx: &mut dyn ExecutionContext,
+        command: SimpleCommand,
+        now: Instant,
+    ) {
         use crate::commands::SimpleCommand::*;
 
         match command {
@@ -120,31 +136,69 @@ impl CommandEngine {
             }
 
             // Circle-level commands
-            OuterRadius { voice_id, circle_id, value } => {
-                self.circle_handler.set_outer_radius(ctx, voice_id, circle_id, value);
+            OuterRadius {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_outer_radius(ctx, voice_id, circle_id, value);
             }
-            InnerRadius { voice_id, circle_id, value } => {
-                self.circle_handler.set_inner_radius(ctx, voice_id, circle_id, value);
+            InnerRadius {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_inner_radius(ctx, voice_id, circle_id, value);
             }
-            Force { voice_id, circle_id, value } => {
-                self.circle_handler.set_force(ctx, voice_id, circle_id, value);
+            Force {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_force(ctx, voice_id, circle_id, value);
             }
-            Gravity { voice_id, circle_id, value } => {
-                self.circle_handler.set_gravity(ctx, voice_id, circle_id, value);
+            Gravity {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_gravity(ctx, voice_id, circle_id, value);
             }
-            Noise { voice_id, circle_id, value } => {
-                self.circle_handler.set_noise(ctx, voice_id, circle_id, value);
+            Noise {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_noise(ctx, voice_id, circle_id, value);
             }
-            CenterX { voice_id, circle_id, value } => {
-                self.circle_handler.set_center_x(ctx, voice_id, circle_id, value);
+            CenterX {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_center_x(ctx, voice_id, circle_id, value);
             }
-            CenterY { voice_id, circle_id, value } => {
-                self.circle_handler.set_center_y(ctx, voice_id, circle_id, value);
+            CenterY {
+                voice_id,
+                circle_id,
+                value,
+            } => {
+                self.circle_handler
+                    .set_center_y(ctx, voice_id, circle_id, value);
             }
             ListCircles { voice_id } => {
                 self.circle_handler.list_circles(ctx, voice_id);
             }
-            RemoveCircle { voice_id, circle_id } => {
+            RemoveCircle {
+                voice_id,
+                circle_id,
+            } => {
                 self.circle_handler.remove_circle(ctx, voice_id, circle_id);
             }
 
@@ -183,14 +237,26 @@ impl CommandEngine {
             }
 
             // Rhythm parameter modifications
-            RhythmModifyLength { voice_id, modification } => {
-                self.rhythm_handler.modify_length(ctx, voice_id, modification);
+            RhythmModifyLength {
+                voice_id,
+                modification,
+            } => {
+                self.rhythm_handler
+                    .modify_length(ctx, voice_id, modification);
             }
-            RhythmModifyVelocity { voice_id, modification } => {
-                self.rhythm_handler.modify_velocity(ctx, voice_id, modification);
+            RhythmModifyVelocity {
+                voice_id,
+                modification,
+            } => {
+                self.rhythm_handler
+                    .modify_velocity(ctx, voice_id, modification);
             }
-            RhythmModifyCutoff { voice_id, modification } => {
-                self.rhythm_handler.modify_cutoff(ctx, voice_id, modification);
+            RhythmModifyCutoff {
+                voice_id,
+                modification,
+            } => {
+                self.rhythm_handler
+                    .modify_cutoff(ctx, voice_id, modification);
             }
         }
     }

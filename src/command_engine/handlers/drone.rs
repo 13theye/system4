@@ -7,6 +7,7 @@ use crate::{
 };
 use std::time::Instant;
 
+#[derive(Default)]
 pub struct DroneCommandHandler;
 
 impl DroneCommandHandler {
@@ -38,11 +39,8 @@ impl DroneCommandHandler {
         let default_color = ctx.default_particle_color();
         let global_max_spawn_rate = ctx.global_max_spawn_rate();
 
-        let circle_id = voice.initialize_drone(
-            &resolved_config,
-            default_color,
-            global_max_spawn_rate,
-        );
+        let circle_id =
+            voice.initialize_drone(&resolved_config, default_color, global_max_spawn_rate);
 
         ctx.osc_send()
             .send_drone_on_off(resolved_config.voice.to_i32(), 1);
@@ -113,12 +111,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn set_feedback(
-        &mut self,
-        ctx: &mut dyn ExecutionContext,
-        voice_id: VoiceId,
-        value: f32,
-    ) {
+    pub fn set_feedback(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (Feedback)", voice_id);
             return;
@@ -129,12 +122,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn set_vibration(
-        &mut self,
-        ctx: &mut dyn ExecutionContext,
-        voice_id: VoiceId,
-        value: f32,
-    ) {
+    pub fn set_vibration(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (Vibration)", voice_id);
             return;
@@ -145,12 +133,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn move_emitters(
-        &mut self,
-        ctx: &mut dyn ExecutionContext,
-        voice_id: VoiceId,
-        value: f32,
-    ) {
+    pub fn move_emitters(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (MoveEmitters)", voice_id);
             return;
