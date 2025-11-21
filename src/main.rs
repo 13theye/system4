@@ -21,6 +21,7 @@ use std::{collections::HashMap, fs};
 
 use system4::{
     groups::VoiceId,
+    managers::{RhythmManager, VoiceManager},
     model::{
         controller::{self, Command, CommandInner, CommandSource, SimpleCommand},
         Model,
@@ -188,7 +189,6 @@ fn model(app: &App) -> Model {
 
     // Create Nnpipe
     let gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
-    let gpu_segment_buffers = HashMap::new();
 
     let mut rendering = Nnpipe::new(
         device,
@@ -383,8 +383,8 @@ fn model(app: &App) -> Model {
 
     Model {
         particle_system,
-        voices: HashMap::new(),
-        rhythms: HashMap::new(),
+        voice_manager: VoiceManager::new(),
+        rhythm_manager: RhythmManager::new(),
         rhythm_view,
         clock,
         sequencer_service,
@@ -405,7 +405,6 @@ fn model(app: &App) -> Model {
         performer_draw,
         control_draw,
         gpu_particle_buffer,
-        gpu_segment_buffers,
         rendering: RefCell::new(rendering),
         heatmap_renderer,
         particle_renderer,
@@ -475,7 +474,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let mut events = Vec::new();
 
     // Update Rhythm logical groups & views
-    for (voice_id, rhythm) in model.rhythms.iter_mut() {
+    for (voice_id, rhythm) in model.rhythm_manager.rhythms_mut().iter_mut() {
         let (current_slot, current_wing) = rhythm.update();
 
         let params = rhythm.get_params();
@@ -509,7 +508,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let queue = window.queue();
 
     let (particles_written, segments_written) = model.particle_system.update_zero_copy(
-        &mut model.voices,
+        model.voice_manager.voices_mut(),
         &mut model.rng,
         queue,
         &model.particle_renderer,
@@ -643,7 +642,7 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
         // Apply transform to match texture coordinates
         model
             .particle_system
-            .draw_forces(&model.voices, &model.performer_draw, scale_x, scale_y);
+            .draw_forces(model.voice_manager.voices(), &model.performer_draw, scale_x, scale_y);
     }
 
     // Then draw over the texture

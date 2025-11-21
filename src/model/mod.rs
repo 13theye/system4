@@ -8,6 +8,7 @@ pub mod terminal_processor;
 
 use crate::{
     groups::{Rhythm, Voice, VoiceId},
+    managers::{RhythmManager, VoiceManager},
     model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
@@ -35,8 +36,9 @@ pub type GpuSegmentBuffer = Vec<SegmentGpu>;
 pub struct Model {
     pub particle_system: ParticleSystem,
 
-    pub voices: HashMap<VoiceId, Voice>,
-    pub rhythms: HashMap<VoiceId, Rhythm>,
+    // State managers
+    pub voice_manager: VoiceManager,
+    pub rhythm_manager: RhythmManager,
     pub rhythm_view: RhythmView,
 
     // Clock and Sequencers
@@ -67,7 +69,7 @@ pub struct Model {
 
     // Rendering engine
     pub gpu_particle_buffer: GpuParticleBuffer,
-    pub gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
+    // Note: gpu_segment_buffers moved to voice_manager
     pub rendering: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
     pub particle_renderer: ParticleRenderer,
@@ -130,62 +132,62 @@ impl crate::command_engine::context::ExecutionContext for Model {
         self.terminal_manager.borrow_mut().process_command(command);
     }
 
-    // Voice state access
+    // Voice state access - delegate to voice_manager
     fn has_voice(&self, voice_id: VoiceId) -> bool {
-        self.voices.contains_key(&voice_id)
+        self.voice_manager.has_voice(voice_id)
     }
 
     fn get_voice(&self, voice_id: VoiceId) -> Option<&Voice> {
-        self.voices.get(&voice_id)
+        self.voice_manager.get_voice(voice_id)
     }
 
     fn get_voice_mut(&mut self, voice_id: VoiceId) -> Option<&mut Voice> {
-        self.voices.get_mut(&voice_id)
+        self.voice_manager.get_voice_mut(voice_id)
     }
 
     fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice) {
-        self.voices.insert(voice_id, voice);
+        self.voice_manager.insert_voice(voice_id, voice);
     }
 
     fn remove_voice(&mut self, voice_id: VoiceId) -> Option<Voice> {
-        self.voices.remove(&voice_id)
+        self.voice_manager.remove_voice(voice_id)
     }
 
     fn voices(&self) -> &HashMap<VoiceId, Voice> {
-        &self.voices
+        self.voice_manager.voices()
     }
 
     fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice> {
-        &mut self.voices
+        self.voice_manager.voices_mut()
     }
 
-    // Rhythm state access
+    // Rhythm state access - delegate to rhythm_manager
     fn has_rhythm(&self, voice_id: VoiceId) -> bool {
-        self.rhythms.contains_key(&voice_id)
+        self.rhythm_manager.has_rhythm(voice_id)
     }
 
     fn get_rhythm(&self, voice_id: VoiceId) -> Option<&Rhythm> {
-        self.rhythms.get(&voice_id)
+        self.rhythm_manager.get_rhythm(voice_id)
     }
 
     fn get_rhythm_mut(&mut self, voice_id: VoiceId) -> Option<&mut Rhythm> {
-        self.rhythms.get_mut(&voice_id)
+        self.rhythm_manager.get_rhythm_mut(voice_id)
     }
 
     fn insert_rhythm(&mut self, voice_id: VoiceId, rhythm: Rhythm) {
-        self.rhythms.insert(voice_id, rhythm);
+        self.rhythm_manager.insert_rhythm(voice_id, rhythm);
     }
 
     fn remove_rhythm(&mut self, voice_id: VoiceId) -> Option<Rhythm> {
-        self.rhythms.remove(&voice_id)
+        self.rhythm_manager.remove_rhythm(voice_id)
     }
 
     fn rhythms(&self) -> &HashMap<VoiceId, Rhythm> {
-        &self.rhythms
+        self.rhythm_manager.rhythms()
     }
 
     fn rhythms_mut(&mut self) -> &mut HashMap<VoiceId, Rhythm> {
-        &mut self.rhythms
+        self.rhythm_manager.rhythms_mut()
     }
 
     // Rhythm view access
@@ -211,17 +213,17 @@ impl crate::command_engine::context::ExecutionContext for Model {
         self.particle_system.global_max_spawn_rate
     }
 
-    // GPU segment buffer access
+    // GPU segment buffer access - delegate to voice_manager
     fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&crate::rendering::GpuSegmentBuffer> {
-        self.gpu_segment_buffers.get(&voice_id)
+        self.voice_manager.get_segment_buffer(voice_id)
     }
 
     fn insert_segment_buffer(&mut self, voice_id: VoiceId, buffer: crate::rendering::GpuSegmentBuffer) {
-        self.gpu_segment_buffers.insert(voice_id, buffer);
+        self.voice_manager.insert_segment_buffer(voice_id, buffer);
     }
 
     fn remove_segment_buffer(&mut self, voice_id: VoiceId) -> Option<crate::rendering::GpuSegmentBuffer> {
-        self.gpu_segment_buffers.remove(&voice_id)
+        self.voice_manager.remove_segment_buffer(voice_id)
     }
 
     // Sequencer service access
@@ -244,87 +246,56 @@ impl crate::command_engine::context::ExecutionContext for Model {
         self.command_queue.push(command);
     }
 
-    // Validation
+    // Validation - delegate to managers
     fn validate_voice_exists(&self, voice_id: VoiceId) -> bool {
-        self.voices.contains_key(&voice_id)
+        self.voice_manager.validate_voice_exists(voice_id)
     }
 
     fn validate_rhythm_exists(&self, voice_id: VoiceId) -> bool {
-        self.rhythms.contains_key(&voice_id)
+        self.rhythm_manager.validate_rhythm_exists(voice_id)
     }
 
     fn validate_circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
-        self.voices
-            .get(&voice_id)
-            .map(|voice| voice.wind_circles.contains_key(&circle_id))
-            .unwrap_or(false)
+        self.voice_manager.validate_circle_exists(voice_id, circle_id)
     }
 
+    // Composite operations - delegate to voice_manager with wind field access
     fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
         let wind_field = &mut self.particle_system.forces.wind_field;
-
-        if let Some(voice) = self.voices.get_mut(&voice_id) {
-            if let Some(circle) = voice.wind_circles.get_mut(&circle_id) {
-                circle.remove_from_field(wind_field);
-                voice.remove_wind_circle(circle_id);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+        self.voice_manager.remove_circle_from_voice(voice_id, circle_id, wind_field)
     }
 
     fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
         let wind_field = &mut self.particle_system.forces.wind_field;
-
-        if let Some(voice) = self.voices.get_mut(&voice_id) {
-            for (_id, circle) in voice.wind_circles.iter_mut() {
-                circle.remove_from_field(wind_field);
-            }
-        }
+        self.voice_manager.remove_all_circles_from_voice(voice_id, wind_field);
     }
 
+    // Rhythm composite operations - delegate to rhythm_manager with service access
     fn update_rhythm_sequencer(&mut self, voice_id: VoiceId) {
-        if let Some(rhythm) = self.rhythms.get(&voice_id) {
-            rhythm.update_sequencer(&mut self.sequencer_service);
-        }
+        self.rhythm_manager.update_rhythm_sequencer(voice_id, &mut self.sequencer_service);
     }
 
     fn rhythm_reroll_wings(&mut self, voice_id: VoiceId) {
-        if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-            rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
-        }
+        self.rhythm_manager.rhythm_reroll_wings(voice_id, &mut self.rng, &mut self.sequencer_service);
     }
 
     fn rhythm_add_wings(&mut self, voice_id: VoiceId, count: usize) {
-        if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-            rhythm.add_wings(count, &mut self.rng);
-        }
+        self.rhythm_manager.rhythm_add_wings(voice_id, count, &mut self.rng);
     }
 
     fn rhythm_stop_sequencer(&mut self, voice_id: VoiceId) {
-        if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-            rhythm.stop_sequencer(&mut self.sequencer_service);
-        }
+        self.rhythm_manager.rhythm_stop_sequencer(voice_id, &mut self.sequencer_service);
     }
 
     fn rhythm_modify_all_slots_length(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification) {
-        if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-            rhythm.modify_all_slots_length(modification, &mut self.rng);
-        }
+        self.rhythm_manager.rhythm_modify_all_slots_length(voice_id, modification, &mut self.rng);
     }
 
     fn rhythm_modify_all_slots_velocity(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification) {
-        if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-            rhythm.modify_all_slots_velocity(modification, &mut self.rng);
-        }
+        self.rhythm_manager.rhythm_modify_all_slots_velocity(voice_id, modification, &mut self.rng);
     }
 
     fn rhythm_modify_all_slots_cutoff(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification) {
-        if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
-            rhythm.modify_all_slots_cutoff(modification, &mut self.rng);
-        }
+        self.rhythm_manager.rhythm_modify_all_slots_cutoff(voice_id, modification, &mut self.rng);
     }
 }

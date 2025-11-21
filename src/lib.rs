@@ -4,6 +4,7 @@ pub mod command_engine;
 pub mod commands;
 pub mod forces;
 pub mod groups;
+pub mod managers;
 pub mod model;
 pub mod osc;
 pub mod particle;
