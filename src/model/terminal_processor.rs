@@ -79,7 +79,7 @@ impl Model {
                 let voice_command = Command::new(
                     CommandInner::Composite(CompositeCommand::NewCircle {
                         voice_id: voice_enum,
-                        config,
+                        circle_config: config,
                     }),
                     CommandSource::Terminal,
                 );

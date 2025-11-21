@@ -866,7 +866,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Alpha {
                                                 voice_id: VoiceId::Voice0,
                                                 value: alpha,
-                                            }), CommandSource::Ui));
+                                            }), CommandSource::UI));
                                         }
 
                                         // Volume slider
@@ -882,7 +882,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Volume {
                                                 voice_id: VoiceId::Voice0,
                                                 value: volume,
-                                            }), CommandSource::Ui));
+                                            }), CommandSource::UI));
                                         }
 
                                         // Vibration offset slider
@@ -899,7 +899,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Vibration {
                                                     voice_id: VoiceId::Voice0,
                                                     value: vibration_offset,
-                                                }), CommandSource::Ui),
+                                                }), CommandSource::UI),
                                             );
                                         }
 
@@ -917,7 +917,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
                                                     voice_id: VoiceId::Voice0,
                                                     value: feedback,
-                                                }), CommandSource::Ui),
+                                                }), CommandSource::UI),
                                             );
                                         }
 
@@ -935,7 +935,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::MoveEmitters {
                                                     voice_id: VoiceId::Voice0,
                                                     value: emitter_position,
-                                                }), CommandSource::Ui),
+                                                }), CommandSource::UI),
                                             );
                                         }
 
@@ -978,7 +978,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: radius,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -997,7 +997,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: inner_radius,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1016,7 +1016,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: strength,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1035,7 +1035,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_bias,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1054,7 +1054,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: angle_variation,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1073,7 +1073,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_x,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1092,7 +1092,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice0,
                                                                             circle_id: *circle_id,
                                                                             value: center_y,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
                                                                 ui.add_space(10.0);
@@ -1166,7 +1166,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Alpha {
                                                 voice_id: VoiceId::Voice3,
                                                 value: alpha,
-                                            }), CommandSource::Ui));
+                                            }), CommandSource::UI));
                                         }
 
                                         // Volume slider
@@ -1182,7 +1182,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                             command_queue.push(Command::new(CommandInner::Simple(SimpleCommand::Volume {
                                                 voice_id: VoiceId::Voice3,
                                                 value: volume,
-                                            }), CommandSource::Ui));
+                                            }), CommandSource::UI));
                                         }
 
                                         // Vibration offset slider
@@ -1199,7 +1199,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Vibration {
                                                     voice_id: VoiceId::Voice3,
                                                     value: vibration_offset,
-                                                }), CommandSource::Ui),
+                                                }), CommandSource::UI),
                                             );
                                         }
 
@@ -1217,7 +1217,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::Feedback {
                                                     voice_id: VoiceId::Voice3,
                                                     value: feedback,
-                                                }), CommandSource::Ui),
+                                                }), CommandSource::UI),
                                             );
                                         }
 
@@ -1235,7 +1235,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 Command::new(CommandInner::Simple(SimpleCommand::MoveEmitters {
                                                     voice_id: VoiceId::Voice3,
                                                     value: emitter_position,
-                                                }), CommandSource::Ui),
+                                                }), CommandSource::UI),
                                             );
                                         }
 
@@ -1278,7 +1278,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: radius,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1297,7 +1297,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: inner_radius,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1316,7 +1316,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: strength,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1335,7 +1335,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_bias,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1354,7 +1354,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: angle_variation,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1373,7 +1373,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_x,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
 
@@ -1392,7 +1392,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                                             voice_id: VoiceId::Voice3,
                                                                             circle_id: *circle_id,
                                                                             value: center_y,
-                                                                        }), CommandSource::Ui),
+                                                                        }), CommandSource::UI),
                                                                     );
                                                                 }
                                                                 ui.add_space(10.0);
