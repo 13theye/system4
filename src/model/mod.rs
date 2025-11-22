@@ -14,17 +14,15 @@ use crate::{
     particle::ParticleSystem,
     rendering::RenderState,
     services::sequencer::SequencerService,
-    terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
+    ui::UiState,
     utils::IdGenerator,
     view::RhythmView,
 };
 
-use fps::FpsManager;
-use nannou_egui::Egui;
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 
-use std::{cell::RefCell, collections::HashMap};
+use std::collections::HashMap;
 
 pub struct Model {
     pub particle_system: ParticleSystem,
@@ -46,33 +44,17 @@ pub struct Model {
     // Rendering state
     pub render_state: RenderState,
 
+    // UI state
+    pub ui_state: UiState,
+
     // Simple ID counter
     pub id_generator: IdGenerator,
-
-    // Egui
-    pub egui: Egui,
 
     // Random
     pub rng: ThreadRng,
 
-    // FPS display
-    pub fps: FpsManager,
-
-    // Debug stuff
-    pub show_bounds: bool,
-    pub show_forces: bool,
-
-    // Command input for NTerminal
-    pub command_input: CommandInput,
-
-    // Terminal view manager for on-screen display
-    pub terminal_manager: RefCell<TerminalViewManager>,
-
     // Unified command queue with priority resolution
     pub command_queue: Vec<Command>,
-
-    // UI state
-    pub active_tab: usize, // 0 = Voices, 1 = NTerminal
 }
 
 impl Drop for Model {
@@ -94,7 +76,7 @@ fn erase_drone(model: &mut Model, id: i32) {
 // ExecutionContext implementation for Model
 impl crate::command_engine::context::ExecutionContext for Model {
     fn log_command(&mut self, command: &crate::commands::Command) {
-        self.terminal_manager.borrow_mut().process_command(command);
+        self.ui_state.terminal_manager.borrow_mut().process_command(command);
     }
 
     // Voice state access - delegate to voice_manager

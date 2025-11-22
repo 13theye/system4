@@ -12,5 +12,6 @@ pub mod rendering;
 pub mod services;
 pub mod settings;
 pub mod terminals;
+pub mod ui;
 pub mod utils;
 pub mod view;

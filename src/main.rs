@@ -13,7 +13,6 @@ use rand::rngs::ThreadRng;
 use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
-use std::cell::RefCell;
 use std::fs;
 use std::time::Instant;
 
@@ -29,10 +28,8 @@ use system4::{
     rendering::RenderState,
     services::sequencer::SequencerService,
     settings::*,
-    terminals::{
-        command_input::CommandInput,
-        terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification},
-    },
+    terminals::terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification},
+    ui::UiState,
     utils::IdGenerator,
 };
 
@@ -272,6 +269,9 @@ fn model(app: &App) -> Model {
         font,
     );
 
+    // Create UI state
+    let ui_state = UiState::new(egui, fps, terminal_manager);
+
     Model {
         particle_system,
         voice_manager: VoiceManager::new(),
@@ -283,16 +283,10 @@ fn model(app: &App) -> Model {
         osc_send,
         osc_loop,
         render_state,
+        ui_state,
         id_generator: IdGenerator::new(),
-        egui,
         rng,
-        fps,
-        show_bounds: false,
-        show_forces: false,
-        command_input: CommandInput::new(),
-        terminal_manager: RefCell::new(terminal_manager),
         command_queue: Vec::new(),
-        active_tab: 0,
     }
 }
 
@@ -320,7 +314,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let now = Instant::now();
 
     // Update FPS counter
-    model.fps.update();
+    model.ui_state.fps.update();
 
     // Get GPU resources
     let window = app.main_window();
@@ -452,7 +446,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // Update and draw terminal view as overlay on top of post-processed texture
         if let Some(terminal_view) = model
-            .terminal_manager
+            .ui_state.terminal_manager
             .borrow_mut()
             .get_mut_terminal_view("main")
         {
@@ -461,7 +455,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // Update and draw drone parameter displays
         model
-            .terminal_manager
+            .ui_state.terminal_manager
             .borrow_mut()
             .update_drone_parameter_displays(&rendering.draw);
 
@@ -480,7 +474,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     // End Rendering context
 
     // Show screen bounds if enabled
-    if model.show_bounds {
+    if model.ui_state.show_bounds {
         draw_bounds(app, model);
     }
 
@@ -498,7 +492,7 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
     rendering.draw_to_frame(&model.render_state.performer_reshaper, &frame);
 
     // Show force vectors if enabled
-    if model.show_forces {
+    if model.ui_state.show_forces {
         let performer_rect = app
             .window(model.render_state.performer_window_id)
             .unwrap()
@@ -529,7 +523,7 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
     model.render_state.control_draw.background().color(BLACK);
     let _ = model.render_state.control_draw.to_frame(app, &frame);
     // Then draw egui UI on top
-    model.egui.draw_to_frame(&frame).unwrap();
+    model.ui_state.egui.draw_to_frame(&frame).unwrap();
 }
 
 // ******************************* Input Capture *****************************
@@ -540,7 +534,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     match key {
         Key::P => {
             // Toggle debug and FPS display
-            model.show_bounds = !model.show_bounds;
+            model.ui_state.show_bounds = !model.ui_state.show_bounds;
         }
         Key::C => {
             model.osc_loop.send_inner_radius(4, 0.5);
@@ -557,7 +551,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
 }
 
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
-    model.egui.handle_raw_event(event);
+    model.ui_state.egui.handle_raw_event(event);
 
     // Handle keyboard input for command terminal
     if let nannou::winit::event::WindowEvent::KeyboardInput { input, .. } = event {
@@ -567,7 +561,7 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
 
                 match key {
                     VirtualKeyCode::Escape => {
-                        model.command_input.clear();
+                        model.ui_state.command_input.clear();
                     }
                     _ => {
                         // Handle character input
@@ -638,7 +632,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
     let voice3_vibration_offset = model.get_vibration(VoiceId::Voice3);
     let voice3_emitter_position = model.get_emitter_position(VoiceId::Voice3);
 
-    let ctx = model.egui.begin_frame();
+    let ctx = model.ui_state.egui.begin_frame();
 
     // Set text style settings
     let style = (*ctx.style()).clone();
@@ -673,11 +667,11 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         model.particle_system.get_particle_count()
                     ));
                     // FPS
-                    ui.label(format!("FPS: {:.1}", model.fps.fps()));
+                    ui.label(format!("FPS: {:.1}", model.ui_state.fps.fps()));
                     ui.add_space(15.0);
 
                     show_forces_changed =
-                        ui.checkbox(&mut model.show_forces, "Show Forces").changed();
+                        ui.checkbox(&mut model.ui_state.show_forces, "Show Forces").changed();
                     ui.add_space(30.0);
 
                     // Instructions section
@@ -690,16 +684,16 @@ fn update_control_ui(app: &App, model: &mut Model) {
                         ui.add_space(20.0);
                         ui.horizontal(|ui| {
                             if ui
-                                .selectable_label(model.active_tab == 0, "Terminal")
+                                .selectable_label(model.ui_state.active_tab == 0, "Terminal")
                                 .clicked()
                             {
-                                model.active_tab = 0;
+                                model.ui_state.active_tab = 0;
                             }
                             if ui
-                                .selectable_label(model.active_tab == 1, "Voices")
+                                .selectable_label(model.ui_state.active_tab == 1, "Voices")
                                 .clicked()
                             {
-                                model.active_tab = 1;
+                                model.ui_state.active_tab = 1;
                             }
                         });
                     });
@@ -709,7 +703,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
                 // Tab content (top-aligned)
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                    match model.active_tab {
+                    match model.ui_state.active_tab {
                         1 => {
                             // Voices tab content with scrollable columns
                             ui.horizontal(|ui| {
@@ -1317,7 +1311,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                                 .show(ui, |ui| {
                                                     // Use TextEdit with proper Enter key handling
                                                     let response = ui.add(
-                                                        egui::TextEdit::multiline(&mut model.command_input)
+                                                        egui::TextEdit::multiline(&mut model.ui_state.command_input)
                                                             .font(egui::TextStyle::Body)
                                                             .frame(false)
                                                             .min_size(egui::vec2(280.0, 150.0))
@@ -1329,24 +1323,24 @@ fn update_control_ui(app: &App, model: &mut Model) {
 
                                                     // Update terminal display with live command text
                                                     if response.changed() {
-                                                        model.terminal_manager.borrow_mut().update_from_command_input("main", &model.command_input);
+                                                        model.ui_state.terminal_manager.borrow_mut().update_from_command_input("main", &model.ui_state.command_input);
                                                     }
 
                                                     // Handle Enter key press through egui input system
                                                     // Check for Enter key pressed while the text field has focus
                                                     if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                                                        && model.command_input.is_ready_for_execution() {
-                                                            if let Some(command) = model.command_input.try_execute() {
+                                                        && model.ui_state.command_input.is_ready_for_execution() {
+                                                            if let Some(command) = model.ui_state.command_input.try_execute() {
                                                                 println!("Executing command: {:?}", command);
 
                                                                 // Collect terminal command for processing after egui context is dropped
                                                                 terminal_commands_to_process.push(command);
 
                                                                 // Clear the input after successful execution
-                                                                model.command_input.clear();
+                                                                model.ui_state.command_input.clear();
 
                                                                 // Clear the terminal display
-                                                                model.terminal_manager.borrow_mut().clear_terminal_view("main");
+                                                                model.ui_state.terminal_manager.borrow_mut().clear_terminal_view("main");
                                                             }
                                                         }
 
@@ -1361,13 +1355,13 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.label("Status:");
 
                                         // Priority: Show execution results first
-                                        if let Some(success) = model.command_input.last_success() {
+                                        if let Some(success) = model.ui_state.command_input.last_success() {
                                             ui.colored_label(egui::Color32::GREEN, format!("✅ {}", success));
-                                        } else if let Some(error) = model.command_input.last_error() {
+                                        } else if let Some(error) = model.ui_state.command_input.last_error() {
                                             ui.colored_label(egui::Color32::RED, format!("❌ Error: {}", error));
-                                        } else if model.command_input.is_ready_for_execution() {
+                                        } else if model.ui_state.command_input.is_ready_for_execution() {
                                             ui.colored_label(egui::Color32::LIGHT_GREEN, "Ready to execute (press Enter)");
-                                        } else if model.command_input.is_empty() {
+                                        } else if model.ui_state.command_input.is_empty() {
                                             ui.colored_label(egui::Color32::GRAY, "Ready for input");
                                         } else {
                                             ui.colored_label(egui::Color32::YELLOW, "Add semicolon (;) to execute");
@@ -1384,7 +1378,7 @@ fn update_control_ui(app: &App, model: &mut Model) {
                                         .stroke(egui::Stroke::new(1.0, egui::Color32::GRAY))
                                         .inner_margin(egui::style::Margin::symmetric(6.0, 6.0))
                                         .show(ui, |ui| {
-                                            let display_text = model.command_input.display();
+                                            let display_text = model.ui_state.command_input.display();
                                             if display_text.is_empty() {
                                                 ui.colored_label(egui::Color32::GRAY, "Command preview will appear here...");
                                             } else {

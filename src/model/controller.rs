@@ -79,7 +79,7 @@ impl Model {
     /// Apply a command immediately without queueing
     pub fn execute_command(&mut self, command: Command, now: Instant) {
         // Send all commands to terminal display for visualization
-        self.terminal_manager.borrow_mut().process_command(&command);
+        self.ui_state.terminal_manager.borrow_mut().process_command(&command);
 
         match command.command {
             CommandInner::Composite(composite) => match composite {
@@ -191,7 +191,7 @@ impl Model {
                     let status_message =
                         format!("Voice {} - Created rhythm sequencer", voice_id.to_i32());
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state.command_input.set_success_message(status_message);
                 }
                 CompositeCommand::ModifyDrone { voice_id, config } => {
                     let validation = self.validate_voice(voice_id);
@@ -225,7 +225,7 @@ impl Model {
                         let error_message =
                             format!("Voice {} has no rhythm to modify", voice_id.to_i32());
                         println!("Error: {}", error_message);
-                        self.command_input.set_error_message(error_message);
+                        self.ui_state.command_input.set_error_message(error_message);
                         return;
                     }
 
@@ -299,7 +299,7 @@ impl Model {
                         circle_id
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state.command_input.set_success_message(status_message);
                 }
                 CompositeCommand::Clear { voice_id } => {
                     let validation = self.validate_voice(voice_id);
@@ -495,7 +495,7 @@ impl Model {
                 println!("{}", status_message);
 
                 // Send to Performer Control status line
-                self.command_input.set_success_message(status_message);
+                self.ui_state.command_input.set_success_message(status_message);
             }
             SimpleCommand::AddWings { voice_id, count } => {
                 // Check if rhythm exists for this voice
@@ -512,12 +512,12 @@ impl Model {
                         rhythm.get_params().wings.len()
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state.command_input.set_success_message(status_message);
                 } else {
                     let error_message =
                         format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
                     println!("Error: {}", error_message);
-                    self.command_input.set_error_message(error_message);
+                    self.ui_state.command_input.set_error_message(error_message);
                 }
             }
             SimpleCommand::RemoveWings { voice_id, count } => {
@@ -535,14 +535,14 @@ impl Model {
                         rhythm.get_params().wings.len()
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state.command_input.set_success_message(status_message);
                 } else {
                     let error_message = format!(
                         "Voice {} has no rhythm to remove wings from",
                         voice_id.to_i32()
                     );
                     println!("Error: {}", error_message);
-                    self.command_input.set_error_message(error_message);
+                    self.ui_state.command_input.set_error_message(error_message);
                 }
             }
             SimpleCommand::ClearRhythm { voice_id } => {
@@ -562,12 +562,12 @@ impl Model {
                         voice_id.to_i32()
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state.command_input.set_success_message(status_message);
                 } else {
                     let error_message =
                         format!("Voice {} has no rhythm to clear", voice_id.to_i32());
                     println!("Error: {}", error_message);
-                    self.command_input.set_error_message(error_message);
+                    self.ui_state.command_input.set_error_message(error_message);
                 }
             }
             SimpleCommand::ClearDrone { voice_id } => {
@@ -600,7 +600,7 @@ impl Model {
                     circle_id
                 );
                 println!("{}", status_message);
-                self.command_input.set_success_message(status_message);
+                self.ui_state.command_input.set_success_message(status_message);
             }
             // Rhythm structure parameters
             SimpleCommand::RhythmCapacity { voice_id, value } => {
@@ -868,7 +868,7 @@ impl Model {
             ValidationResult::VoiceNotFound(_) | ValidationResult::CircleNotFound(_, _) => {
                 if let Some(error_msg) = validation.to_error_message() {
                     println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                    self.ui_state.command_input.set_success_message(error_msg);
                 }
                 false
             }
