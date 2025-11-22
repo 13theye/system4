@@ -1,6 +1,6 @@
 // Constants for the Particle System
 
-use crate::model::{GpuParticleBuffer, GpuSegmentBuffer};
+use crate::rendering::{render_state::GpuParticleBuffer, GpuSegmentBuffer};
 
 // Constants for the Particle Core
 pub const PARTICLE_MASS: f32 = 11.0;

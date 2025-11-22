@@ -8,16 +8,14 @@
 use fps::FpsManager;
 use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
-use nnpipe::renderers::{HeatmapRenderer, ParticleRenderer, SegmentRenderer};
-use nnpipe::*;
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
 use std::cell::RefCell;
+use std::fs;
 use std::time::Instant;
-use std::{collections::HashMap, fs};
 
 use system4::{
     groups::VoiceId,
@@ -27,7 +25,8 @@ use system4::{
         Model,
     },
     osc::{OscController, OscSender},
-    particle::{ParticleSystem, EMPTY_GPU_PARTICLE_BUFFER},
+    particle::ParticleSystem,
+    rendering::RenderState,
     services::sequencer::SequencerService,
     settings::*,
     terminals::{
@@ -56,8 +55,6 @@ fn model(app: &App) -> Model {
         settings.rendering.texture_width as f32,
         settings.rendering.texture_height as f32,
     );
-
-    let render_rect = Rect::from_x_y_w_h(0.0, 0.0, render_size.x, render_size.y);
 
     // Init clock
     let mut clock = ClockService::with()
@@ -183,127 +180,7 @@ fn model(app: &App) -> Model {
     );
     println!("Control window scale: {:?}", control_window.scale_factor());
 
-    // Set up render texture
-    // the device isn't tied to window, but it's nannou's way of getting the handle.
-    let device = audience_window.device();
-
-    // Create Nnpipe
-    let gpu_particle_buffer = EMPTY_GPU_PARTICLE_BUFFER;
-
-    let mut rendering = Nnpipe::new(
-        device,
-        settings.rendering.texture_width,
-        settings.rendering.texture_height,
-        settings.rendering.texture_samples,
-    );
-
-    // Create heatmap renderer
-    let heatmap_renderer = HeatmapRenderer::new(
-        device,
-        settings.rendering.texture_width,
-        settings.rendering.texture_height,
-        particle_limit as usize,
-    );
-
-    // Create reshapers for both windows
-    let audience_reshaper = rendering.create_reshaper_for_post_processed(device, &audience_window);
-    let performer_reshaper =
-        rendering.create_reshaper_for_post_processed(device, &performer_window);
-    let audience_draw = nannou::Draw::new();
-    let performer_draw = nannou::Draw::new();
-    let control_draw = nannou::Draw::new();
-
-    // Set up effects pipeline
-
-    let lo_config = TextureConfig {
-        width: settings.rendering.texture_width / 2,
-        height: settings.rendering.texture_height / 2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-    };
-
-    let med_config = TextureConfig {
-        width: settings.rendering.texture_width,
-        height: settings.rendering.texture_height,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-    };
-
-    let hi_config = TextureConfig {
-        width: settings.rendering.texture_width,
-        height: settings.rendering.texture_height,
-        format: wgpu::TextureFormat::Rgba16Float,
-    };
-
-    // Create particle renderer
-    let particle_renderer: ParticleRenderer = ParticleRenderer::new(device, hi_config, 25000);
-
-    // Create segment renderer
-    let segment_renderer = SegmentRenderer::new(device, hi_config, 25000);
-
-    // Create pipeline textures
-    rendering.create_named_texture(device, "terminal", hi_config);
-    rendering.create_named_texture(device, "particles", hi_config);
-    rendering.create_named_texture(device, "heatmap", hi_config);
-    //rendering.create_named_texture(device, "particle_processed", hi_config);
-    rendering.create_named_texture(device, "heatmap_processed", hi_config);
-    rendering.create_named_texture(device, "processed_composited", hi_config);
-    rendering.create_named_texture(device, "post-processed", hi_config);
-
-    let particle_effects = PipelineBuilder::new()
-        .name("Particle Effects Pipeline")
-        .input_texture("particles")
-        .feedback(hi_config, 1.0, 60.0)
-        .output_texture("particle_processed")
-        .build(device);
-    if let Ok(effect) = particle_effects {
-        rendering.add_multi_pipeline("particle_effects", effect);
-    }
-
-    let heatmap_effects = PipelineBuilder::new()
-        .name("Heatmap Effects Pipeline")
-        .input_texture("heatmap")
-        .feedback(hi_config, 1.0, 10.0)
-        .output_texture("heatmap_processed")
-        .build(device);
-
-    if let Ok(effect) = heatmap_effects {
-        rendering.add_multi_pipeline("heatmap_effects", effect);
-    }
-
-    let composite_step = PipelineBuilder::new()
-        .name("Composite Step Pipeline")
-        .input_textures(&["particles", "heatmap_processed"])
-        .output_texture("processed_composited")
-        .simple_additive_composite(hi_config, 0.5)
-        .build(device);
-
-    if let Ok(effect) = composite_step {
-        rendering.add_multi_pipeline("composite_step", effect);
-    }
-
-    let effects = PipelineBuilder::new()
-        .name("Particle Effects Pipeline")
-        .input_texture("particles")
-        .output_texture("post-processed")
-        .brightness_extract(med_config, 0.7)
-        .downsample(lo_config)
-        .gaussian_blur_passes(lo_config, 2, 2.0, 5.0)
-        .bloom_composite_with_curve(hi_config, 2.0, 3.0)
-        //.inversion(hi_config, 1.0)
-        .build(device);
-
-    if let Ok(effect) = effects {
-        rendering.add_multi_pipeline("effects", effect);
-    }
-
-    let final_composite = PipelineBuilder::new()
-        .name("Final overlay composite")
-        .input_textures(&["post-processed", "terminal"])
-        .simple_over_composite(hi_config, 1.0)
-        .build(device);
-
-    if let Ok(effect) = final_composite {
-        rendering.add_multi_pipeline("final composite", effect);
-    }
+    // Rendering initialization moved to RenderState::from_app
 
     // Set up egui
     let egui = Egui::from_window(&control_window);
@@ -381,6 +258,20 @@ fn model(app: &App) -> Model {
     terminal_manager.add_drone_parameters_display(VoiceId::Voice0, drone_params_voice1);
     terminal_manager.add_drone_parameters_display(VoiceId::Voice3, drone_params_voice4);
 
+    // Initialize rendering state with all GPU resources and pipelines
+    let render_state = RenderState::from_app(
+        app,
+        audience_window_id,
+        performer_window_id,
+        control_window_id,
+        settings.rendering.texture_width,
+        settings.rendering.texture_height,
+        settings.rendering.texture_samples,
+        particle_limit,
+        dpi_scale,
+        font,
+    );
+
     Model {
         particle_system,
         voice_manager: VoiceManager::new(),
@@ -391,33 +282,11 @@ fn model(app: &App) -> Model {
         osc,
         osc_send,
         osc_loop,
-        render_size,
-        render_rect,
-        dpi_scale,
-        font,
+        render_state,
         id_generator: IdGenerator::new(),
-        audience_window_id,
-        performer_window_id,
-        control_window_id,
-        audience_reshaper,
-        performer_reshaper,
-        audience_draw,
-        performer_draw,
-        control_draw,
-        gpu_particle_buffer,
-        rendering: RefCell::new(rendering),
-        heatmap_renderer,
-        particle_renderer,
-        //particle_renderer4,
-        segment_renderer,
-
-        particle_count: 0,
-        segment_instance_count: 0,
-
         egui,
         rng,
         fps,
-
         show_bounds: false,
         show_forces: false,
         command_input: CommandInput::new(),
@@ -511,20 +380,20 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.voice_manager.voices_mut(),
         &mut model.rng,
         queue,
-        &model.particle_renderer,
-        &model.segment_renderer,
+        &model.render_state.particle_renderer,
+        &model.render_state.segment_renderer,
         now,
     );
 
     // Store counts for rendering
-    model.particle_count = particles_written;
-    model.segment_instance_count = segments_written;
+    model.render_state.particle_count = particles_written;
+    model.render_state.segment_instance_count = segments_written;
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
     // Begin Rendering context
     {
-        let mut rendering = model.rendering.borrow_mut();
+        let mut rendering = model.render_state.render_engine.borrow_mut();
 
         // Get GPU resources
         let window = app.main_window();
@@ -541,27 +410,27 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // ZERO-COPY: Encode particles and segments without re-uploading
         // Data was already written directly to GPU staging in update_zero_copy
-        model.particle_renderer.encode_only(
+        model.render_state.particle_renderer.encode_only(
             &mut encoder,
-            model.particle_count,
+            model.render_state.particle_count,
             rendering.get_named_texture("particles").unwrap(),
         );
 
-        model.segment_renderer.encode_only(
+        model.render_state.segment_renderer.encode_only(
             &mut encoder,
-            model.segment_instance_count,
+            model.render_state.segment_instance_count,
             rendering.get_named_texture("particles").unwrap(),
         );
 
         // Encode heatmap (still uses legacy buffer for now)
         // will not work in the current ZERO-COPY implementation because buffer will
         // remain empty.
-        model.heatmap_renderer.encode_into(
+        model.render_state.heatmap_renderer.encode_into(
             device,
             &mut encoder,
             queue,
-            &model.gpu_particle_buffer,
-            model.render_rect,
+            &model.render_state.gpu_particle_buffer,
+            model.render_state.render_rect,
             rendering.get_named_texture("heatmap").unwrap(),
         );
 
@@ -606,7 +475,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         rendering.submit_command_encoder(device, queue, encoder);
 
         // Update reshaper if needed (could be cached in Model)
-        rendering.draw_to_frame(&model.audience_reshaper, &frame);
+        rendering.draw_to_frame(&model.render_state.audience_reshaper, &frame);
     }
     // End Rendering context
 
@@ -616,21 +485,24 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     }
 
     // Draw over the texture
-    let _ = model.audience_draw.to_frame(app, &frame);
+    let _ = model.render_state.audience_draw.to_frame(app, &frame);
 }
 
 fn performer_view(app: &App, model: &Model, frame: Frame) {
-    let rendering = model.rendering.borrow_mut();
+    let rendering = model.render_state.render_engine.borrow_mut();
 
     // Get the raw scene texture view
     let _scene_view = rendering.get_scene_view();
 
     // Draw game content to the frame
-    rendering.draw_to_frame(&model.performer_reshaper, &frame);
+    rendering.draw_to_frame(&model.render_state.performer_reshaper, &frame);
 
     // Show force vectors if enabled
     if model.show_forces {
-        let performer_rect = app.window(model.performer_window_id).unwrap().rect();
+        let performer_rect = app
+            .window(model.render_state.performer_window_id)
+            .unwrap()
+            .rect();
 
         // Create a scaled draw context that matches texture coordinates
         let texture_size = rendering.scene_texture.size();
@@ -640,19 +512,22 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
         let scale_y = performer_rect.h() / texture_size[1] as f32;
 
         // Apply transform to match texture coordinates
-        model
-            .particle_system
-            .draw_forces(model.voice_manager.voices(), &model.performer_draw, scale_x, scale_y);
+        model.particle_system.draw_forces(
+            model.voice_manager.voices(),
+            &model.render_state.performer_draw,
+            scale_x,
+            scale_y,
+        );
     }
 
     // Then draw over the texture
-    let _ = model.performer_draw.to_frame(app, &frame);
+    let _ = model.render_state.performer_draw.to_frame(app, &frame);
 }
 
 fn control_view(app: &App, model: &Model, frame: Frame) {
     // Draw background first
-    model.control_draw.background().color(BLACK);
-    let _ = model.control_draw.to_frame(app, &frame);
+    model.render_state.control_draw.background().color(BLACK);
+    let _ = model.render_state.control_draw.to_frame(app, &frame);
     // Then draw egui UI on top
     model.egui.draw_to_frame(&frame).unwrap();
 }
@@ -711,7 +586,7 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
 // ************************ Control UI display  *************************************
 
 fn update_control_ui(app: &App, model: &mut Model) {
-    let Some(control_window) = app.window(model.control_window_id) else {
+    let Some(control_window) = app.window(model.render_state.control_window_id) else {
         eprintln!("Control window not found. Exiting app.");
         std::process::exit(1);
     };
@@ -1624,8 +1499,11 @@ fn adjust_style_from(style: egui::Style) -> egui::Style {
 // ************************ Debug display  *************************************
 
 fn draw_bounds(app: &App, model: &Model) {
-    let draw = &model.audience_draw;
-    let rect = app.window(model.audience_window_id).unwrap().rect();
+    let draw = &model.render_state.audience_draw;
+    let rect = app
+        .window(model.render_state.audience_window_id)
+        .unwrap()
+        .rect();
 
     // Draw (+,+) axes
     draw.line()

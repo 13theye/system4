@@ -12,6 +12,7 @@ use crate::{
     model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
+    rendering::RenderState,
     services::sequencer::SequencerService,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     utils::IdGenerator,
@@ -19,19 +20,11 @@ use crate::{
 };
 
 use fps::FpsManager;
-use nannou::{prelude::*, text::Font, wgpu::TextureReshaper};
 use nannou_egui::Egui;
-use nnpipe::renderers::{
-    HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
-};
-use nnpipe::*;
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 
 use std::{cell::RefCell, collections::HashMap};
-
-pub type GpuParticleBuffer = Vec<ParticleGpu>;
-pub type GpuSegmentBuffer = Vec<SegmentGpu>;
 
 pub struct Model {
     pub particle_system: ParticleSystem,
@@ -50,36 +43,8 @@ pub struct Model {
     pub osc_send: OscSender,
     pub osc_loop: OscSender,
 
-    // Windows' texture reshapers
-    pub render_size: Vec2,
-    pub render_rect: Rect,
-    pub audience_window_id: WindowId,
-    pub performer_window_id: WindowId,
-    pub control_window_id: WindowId,
-    pub audience_reshaper: TextureReshaper,
-    pub performer_reshaper: TextureReshaper,
-
-    // Nannou API
-    /// Draw context for UI elements to audience_window only
-    pub audience_draw: nannou::Draw,
-    /// Draw context for UI elements to performer_window only
-    pub performer_draw: nannou::Draw,
-    /// Draw context for drawing UI elements to ui_window only
-    pub control_draw: nannou::Draw,
-
-    // Rendering engine
-    pub gpu_particle_buffer: GpuParticleBuffer,
-    // Note: gpu_segment_buffers moved to voice_manager
-    pub rendering: RefCell<Nnpipe>,
-    pub heatmap_renderer: HeatmapRenderer,
-    pub particle_renderer: ParticleRenderer,
-    pub segment_renderer: SegmentRenderer,
-    pub dpi_scale: f32,
-    pub font: Font,
-
-    // Zero-copy particle rendering counts
-    pub particle_count: usize,
-    pub segment_instance_count: usize,
+    // Rendering state
+    pub render_state: RenderState,
 
     // Simple ID counter
     pub id_generator: IdGenerator,
