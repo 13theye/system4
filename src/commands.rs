@@ -2,7 +2,10 @@
 
 use crate::{
     groups::VoiceId,
-    terminals::commands::{drone::DroneConfig, rhythm::{ParameterModification, RangeSize, RhythmConfig}},
+    terminals::commands::{
+        drone::DroneConfig,
+        rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,15 +128,15 @@ pub enum SimpleCommand {
     // Slot modification parameters (for editing)
     RhythmModifyLength {
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
     },
     RhythmModifyVelocity {
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
     },
     RhythmModifyCutoff {
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
     },
 }
 

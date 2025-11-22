@@ -1,7 +1,7 @@
 use crate::{
     groups::{Rhythm, VoiceId},
     services::sequencer::SequencerService,
-    terminals::commands::rhythm::ParameterModification,
+    terminals::commands::rhythm::RhythmParamModification,
 };
 use rand::rngs::ThreadRng;
 use std::collections::HashMap;
@@ -107,7 +107,7 @@ impl RhythmManager {
     pub fn rhythm_modify_all_slots_length(
         &mut self,
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
         rng: &mut ThreadRng,
     ) {
         if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
@@ -120,7 +120,7 @@ impl RhythmManager {
     pub fn rhythm_modify_all_slots_velocity(
         &mut self,
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
         rng: &mut ThreadRng,
     ) {
         if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
@@ -133,7 +133,7 @@ impl RhythmManager {
     pub fn rhythm_modify_all_slots_cutoff(
         &mut self,
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
         rng: &mut ThreadRng,
     ) {
         if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {

@@ -7,13 +7,15 @@ pub mod controller;
 pub mod terminal_processor;
 
 use crate::{
+    command_engine::context::ExecutionContext,
     groups::{Rhythm, Voice, VoiceId},
     managers::{RhythmManager, VoiceManager},
     model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
-    rendering::RenderState,
+    rendering::{GpuSegmentBuffer, RenderState},
     services::sequencer::SequencerService,
+    terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
     utils::IdGenerator,
     view::RhythmView,
@@ -74,9 +76,12 @@ fn erase_drone(model: &mut Model, id: i32) {
 }
 
 // ExecutionContext implementation for Model
-impl crate::command_engine::context::ExecutionContext for Model {
+impl ExecutionContext for Model {
     fn log_command(&mut self, command: &crate::commands::Command) {
-        self.ui_state.terminal_manager.borrow_mut().process_command(command);
+        self.ui_state
+            .terminal_manager
+            .borrow_mut()
+            .process_command(command);
     }
 
     // Voice state access - delegate to voice_manager
@@ -161,15 +166,22 @@ impl crate::command_engine::context::ExecutionContext for Model {
     }
 
     // GPU segment buffer access - delegate to voice_manager
-    fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&crate::rendering::GpuSegmentBuffer> {
+    fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer> {
         self.voice_manager.get_segment_buffer(voice_id)
     }
 
-    fn insert_segment_buffer(&mut self, voice_id: VoiceId, buffer: crate::rendering::GpuSegmentBuffer) {
+    fn insert_segment_buffer(
+        &mut self,
+        voice_id: VoiceId,
+        buffer: crate::rendering::GpuSegmentBuffer,
+    ) {
         self.voice_manager.insert_segment_buffer(voice_id, buffer);
     }
 
-    fn remove_segment_buffer(&mut self, voice_id: VoiceId) -> Option<crate::rendering::GpuSegmentBuffer> {
+    fn remove_segment_buffer(
+        &mut self,
+        voice_id: VoiceId,
+    ) -> Option<crate::rendering::GpuSegmentBuffer> {
         self.voice_manager.remove_segment_buffer(voice_id)
     }
 
@@ -203,46 +215,71 @@ impl crate::command_engine::context::ExecutionContext for Model {
     }
 
     fn validate_circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
-        self.voice_manager.validate_circle_exists(voice_id, circle_id)
+        self.voice_manager
+            .validate_circle_exists(voice_id, circle_id)
     }
 
     // Composite operations - delegate to voice_manager with wind field access
     fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
         let wind_field = &mut self.particle_system.forces.wind_field;
-        self.voice_manager.remove_circle_from_voice(voice_id, circle_id, wind_field)
+        self.voice_manager
+            .remove_circle_from_voice(voice_id, circle_id, wind_field)
     }
 
     fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
         let wind_field = &mut self.particle_system.forces.wind_field;
-        self.voice_manager.remove_all_circles_from_voice(voice_id, wind_field);
+        self.voice_manager
+            .remove_all_circles_from_voice(voice_id, wind_field);
     }
 
     // Rhythm composite operations - delegate to rhythm_manager with service access
     fn update_rhythm_sequencer(&mut self, voice_id: VoiceId) {
-        self.rhythm_manager.update_rhythm_sequencer(voice_id, &mut self.sequencer_service);
+        self.rhythm_manager
+            .update_rhythm_sequencer(voice_id, &mut self.sequencer_service);
     }
 
     fn rhythm_reroll_wings(&mut self, voice_id: VoiceId) {
-        self.rhythm_manager.rhythm_reroll_wings(voice_id, &mut self.rng, &mut self.sequencer_service);
+        self.rhythm_manager.rhythm_reroll_wings(
+            voice_id,
+            &mut self.rng,
+            &mut self.sequencer_service,
+        );
     }
 
     fn rhythm_add_wings(&mut self, voice_id: VoiceId, count: usize) {
-        self.rhythm_manager.rhythm_add_wings(voice_id, count, &mut self.rng);
+        self.rhythm_manager
+            .rhythm_add_wings(voice_id, count, &mut self.rng);
     }
 
     fn rhythm_stop_sequencer(&mut self, voice_id: VoiceId) {
-        self.rhythm_manager.rhythm_stop_sequencer(voice_id, &mut self.sequencer_service);
+        self.rhythm_manager
+            .rhythm_stop_sequencer(voice_id, &mut self.sequencer_service);
     }
 
-    fn rhythm_modify_all_slots_length(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification) {
-        self.rhythm_manager.rhythm_modify_all_slots_length(voice_id, modification, &mut self.rng);
+    fn rhythm_modify_all_slots_length(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    ) {
+        self.rhythm_manager
+            .rhythm_modify_all_slots_length(voice_id, modification, &mut self.rng);
     }
 
-    fn rhythm_modify_all_slots_velocity(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification) {
-        self.rhythm_manager.rhythm_modify_all_slots_velocity(voice_id, modification, &mut self.rng);
+    fn rhythm_modify_all_slots_velocity(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    ) {
+        self.rhythm_manager
+            .rhythm_modify_all_slots_velocity(voice_id, modification, &mut self.rng);
     }
 
-    fn rhythm_modify_all_slots_cutoff(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification) {
-        self.rhythm_manager.rhythm_modify_all_slots_cutoff(voice_id, modification, &mut self.rng);
+    fn rhythm_modify_all_slots_cutoff(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    ) {
+        self.rhythm_manager
+            .rhythm_modify_all_slots_cutoff(voice_id, modification, &mut self.rng);
     }
 }

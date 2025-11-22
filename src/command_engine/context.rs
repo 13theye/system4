@@ -5,6 +5,7 @@ use crate::{
     osc::OscSender,
     rendering::GpuSegmentBuffer,
     services::sequencer::SequencerService,
+    terminals::commands::rhythm::RhythmParamModification,
     view::RhythmView,
 };
 use rand::rngs::ThreadRng;
@@ -77,7 +78,19 @@ pub trait ExecutionContext {
     fn rhythm_reroll_wings(&mut self, voice_id: VoiceId);
     fn rhythm_add_wings(&mut self, voice_id: VoiceId, count: usize);
     fn rhythm_stop_sequencer(&mut self, voice_id: VoiceId);
-    fn rhythm_modify_all_slots_length(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification);
-    fn rhythm_modify_all_slots_velocity(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification);
-    fn rhythm_modify_all_slots_cutoff(&mut self, voice_id: VoiceId, modification: crate::terminals::commands::rhythm::ParameterModification);
+    fn rhythm_modify_all_slots_length(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    );
+    fn rhythm_modify_all_slots_velocity(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    );
+    fn rhythm_modify_all_slots_cutoff(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    );
 }

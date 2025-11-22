@@ -314,20 +314,20 @@ impl Rhythm {
     /// Modify all slots' length based on ParameterModification
     pub fn modify_all_slots_length(
         &mut self,
-        modification: crate::terminals::commands::rhythm::ParameterModification,
+        modification: crate::terminals::commands::rhythm::RhythmParamModification,
         rng: &mut ThreadRng,
     ) {
-        use crate::terminals::commands::rhythm::ParameterModification;
+        use crate::terminals::commands::rhythm::RhythmParamModification;
         match modification {
-            ParameterModification::Absolute(value) => {
+            RhythmParamModification::Absolute(value) => {
                 self.set_all_slot_length(value.clamp(0.0, 1.0));
             }
-            ParameterModification::Relative(delta) => {
+            RhythmParamModification::Relative(delta) => {
                 for slot in &mut self.params.slots {
                     slot.length = (slot.length + delta).clamp(0.0, 1.0);
                 }
             }
-            ParameterModification::Randomize(range) => {
+            RhythmParamModification::Randomize(range) => {
                 self.randomize_all_slots_length(range, rng);
             }
         }
@@ -336,20 +336,20 @@ impl Rhythm {
     /// Modify all slots' velocity based on ParameterModification
     pub fn modify_all_slots_velocity(
         &mut self,
-        modification: crate::terminals::commands::rhythm::ParameterModification,
+        modification: crate::terminals::commands::rhythm::RhythmParamModification,
         rng: &mut ThreadRng,
     ) {
-        use crate::terminals::commands::rhythm::ParameterModification;
+        use crate::terminals::commands::rhythm::RhythmParamModification;
         match modification {
-            ParameterModification::Absolute(value) => {
+            RhythmParamModification::Absolute(value) => {
                 self.set_all_slot_velocity(value.clamp(0.0, 1.0));
             }
-            ParameterModification::Relative(delta) => {
+            RhythmParamModification::Relative(delta) => {
                 for slot in &mut self.params.slots {
                     slot.velocity = (slot.velocity + delta).clamp(0.0, 1.0);
                 }
             }
-            ParameterModification::Randomize(range) => {
+            RhythmParamModification::Randomize(range) => {
                 self.randomize_all_slots_velocity(range, rng);
             }
         }
@@ -358,20 +358,20 @@ impl Rhythm {
     /// Modify all slots' cutoff based on ParameterModification
     pub fn modify_all_slots_cutoff(
         &mut self,
-        modification: crate::terminals::commands::rhythm::ParameterModification,
+        modification: crate::terminals::commands::rhythm::RhythmParamModification,
         rng: &mut ThreadRng,
     ) {
-        use crate::terminals::commands::rhythm::ParameterModification;
+        use crate::terminals::commands::rhythm::RhythmParamModification;
         match modification {
-            ParameterModification::Absolute(value) => {
+            RhythmParamModification::Absolute(value) => {
                 self.set_all_slot_cutoff(value.clamp(0.0, 1.0));
             }
-            ParameterModification::Relative(delta) => {
+            RhythmParamModification::Relative(delta) => {
                 for slot in &mut self.params.slots {
                     slot.cutoff = (slot.cutoff + delta).clamp(0.0, 1.0);
                 }
             }
-            ParameterModification::Randomize(range) => {
+            RhythmParamModification::Randomize(range) => {
                 self.randomize_all_slots_cutoff(range, rng);
             }
         }

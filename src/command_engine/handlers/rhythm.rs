@@ -3,7 +3,7 @@ use crate::{
     commands::CommandSource,
     groups::{Rhythm, VoiceId},
     model::command_builder::RhythmCommandBuilder,
-    terminals::commands::rhythm::{ParameterModification, RangeSize, RhythmConfig},
+    terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
     view::RhythmFormationType,
 };
 use std::time::Instant;
@@ -347,7 +347,7 @@ impl RhythmCommandHandler {
         &mut self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
     ) {
         ctx.rhythm_modify_all_slots_length(voice_id, modification);
         ctx.update_rhythm_sequencer(voice_id);
@@ -357,7 +357,7 @@ impl RhythmCommandHandler {
         &mut self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
     ) {
         ctx.rhythm_modify_all_slots_velocity(voice_id, modification);
         ctx.update_rhythm_sequencer(voice_id);
@@ -367,7 +367,7 @@ impl RhythmCommandHandler {
         &mut self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
-        modification: ParameterModification,
+        modification: RhythmParamModification,
     ) {
         ctx.rhythm_modify_all_slots_cutoff(voice_id, modification);
         ctx.update_rhythm_sequencer(voice_id);
