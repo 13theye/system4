@@ -15,7 +15,7 @@ impl CircleCommandHandler {
     }
 
     pub fn add_circle(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_config: DroneConfig,
@@ -71,7 +71,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_outer_radius(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -92,7 +92,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_inner_radius(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -113,7 +113,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_force(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -135,7 +135,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_gravity(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -156,7 +156,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_noise(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -177,7 +177,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_center_x(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -198,7 +198,7 @@ impl CircleCommandHandler {
     }
 
     pub fn set_center_y(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_id: usize,
@@ -218,7 +218,7 @@ impl CircleCommandHandler {
         }
     }
 
-    pub fn list_circles(&mut self, ctx: &dyn ExecutionContext, voice_id: VoiceId) {
+    pub fn list_circles(&self, ctx: &dyn ExecutionContext, voice_id: VoiceId) {
         let circle_ids = self.get_wind_circle_ids(ctx, voice_id);
         let circles_str = if circle_ids.is_empty() {
             "No WindCircles found".to_string()
@@ -230,12 +230,7 @@ impl CircleCommandHandler {
         println!("{}", status_message);
     }
 
-    pub fn remove_circle(
-        &mut self,
-        ctx: &mut dyn ExecutionContext,
-        voice_id: VoiceId,
-        circle_id: i32,
-    ) {
+    pub fn remove_circle(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, circle_id: i32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found", voice_id);
             return;

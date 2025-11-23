@@ -16,7 +16,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn create_rhythm(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         config: RhythmConfig,
         source: CommandSource,
@@ -85,7 +85,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn modify_rhythm(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         config: RhythmConfig,
@@ -114,7 +114,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn set_capacity(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         value: usize,
@@ -145,7 +145,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn set_num_wings(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         value: usize,
@@ -172,7 +172,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn set_subdivision(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         value: prat::BeatSubdivision,
@@ -186,7 +186,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn add_wings(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         count: usize,
@@ -230,7 +230,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn remove_wings(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         count: usize,
@@ -278,12 +278,7 @@ impl RhythmCommandHandler {
         }
     }
 
-    pub fn clear_rhythm(
-        &mut self,
-        ctx: &mut dyn ExecutionContext,
-        voice_id: VoiceId,
-        now: Instant,
-    ) {
+    pub fn clear_rhythm(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, now: Instant) {
         // First check if rhythm exists, then stop the sequencer
         {
             if !ctx.has_rhythm(voice_id) {
@@ -310,7 +305,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn set_length_range(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         range: RangeSize,
@@ -321,7 +316,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn set_velocity_range(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         range: RangeSize,
@@ -332,7 +327,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn set_cutoff_range(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         range: RangeSize,
@@ -343,7 +338,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn modify_length(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         modification: RhythmParamModification,
@@ -353,7 +348,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn modify_velocity(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         modification: RhythmParamModification,
@@ -363,7 +358,7 @@ impl RhythmCommandHandler {
     }
 
     pub fn modify_cutoff(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         modification: RhythmParamModification,

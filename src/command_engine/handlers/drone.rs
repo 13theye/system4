@@ -15,7 +15,7 @@ impl DroneCommandHandler {
     }
 
     pub fn create_drone(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         config: DroneConfig,
         source: CommandSource,
@@ -63,7 +63,7 @@ impl DroneCommandHandler {
     }
 
     pub fn modify_drone(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         config: DroneConfig,
@@ -88,7 +88,7 @@ impl DroneCommandHandler {
         // These should be handled by explicit circle commands instead
     }
 
-    pub fn set_alpha(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
+    pub fn set_alpha(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (Alpha)", voice_id);
             return;
@@ -99,7 +99,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn set_volume(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
+    pub fn set_volume(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (Volume)", voice_id);
             return;
@@ -110,7 +110,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn set_feedback(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
+    pub fn set_feedback(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (Feedback)", voice_id);
             return;
@@ -121,7 +121,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn set_vibration(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
+    pub fn set_vibration(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (Vibration)", voice_id);
             return;
@@ -132,7 +132,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn move_emitters(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
+    pub fn move_emitters(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
         if !ctx.validate_voice_exists(voice_id) {
             println!("Error: Voice {:?} not found (MoveEmitters)", voice_id);
             return;
@@ -143,12 +143,12 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn clear_voice(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
+    pub fn clear_voice(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
         self.kill_voice(ctx, voice_id);
         ctx.osc_send().send_drone_on_off(voice_id.to_i32(), 0);
     }
 
-    fn kill_voice(&mut self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
+    fn kill_voice(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
         // Remove all circles from wind field
         ctx.remove_all_circles_from_voice(voice_id);
 
