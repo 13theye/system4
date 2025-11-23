@@ -337,7 +337,9 @@ impl WindField {
                     total_force
                 };
 
-                *combined_cell = if final_vector.length_squared() > 0.0 {
+                // If there are wind sources in this cell, always create a Wind
+                // (even if they sum to zero). None means "no wind sources affect this cell"
+                *combined_cell = if !winds.is_empty() {
                     Some(Wind::new(final_vector))
                 } else {
                     None
