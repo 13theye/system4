@@ -1,6 +1,8 @@
 use crate::{
-    command_engine::context::ExecutionContext, commands::CommandSource, forces::WindCircle,
-    groups::VoiceId, model::command_builder::DroneCommandBuilder,
+    command_engine::{commands::CommandSource, context::ExecutionContext},
+    forces::WindCircle,
+    groups::VoiceId,
+    model::command_builder::DroneCommandBuilder,
     terminals::commands::drone::DroneConfig,
 };
 

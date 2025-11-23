@@ -1,8 +1,9 @@
+pub mod commands;
 pub mod context;
 pub mod handlers;
 
-use crate::commands::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand};
-use context::ExecutionContext;
+pub use commands::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand};
+pub use context::ExecutionContext;
 use handlers::{CircleCommandHandler, DroneCommandHandler, RhythmCommandHandler};
 use std::time::Instant;
 
@@ -115,7 +116,7 @@ impl CommandEngine {
         command: SimpleCommand,
         now: Instant,
     ) {
-        use crate::commands::SimpleCommand::*;
+        use commands::SimpleCommand::*;
 
         match command {
             // Voice-level commands

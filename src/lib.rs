@@ -1,7 +1,6 @@
 // /src/lib.rs
 
 pub mod command_engine;
-pub mod commands;
 pub mod forces;
 pub mod groups;
 pub mod managers;

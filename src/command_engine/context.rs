@@ -1,5 +1,5 @@
+use super::commands::Command;
 use crate::{
-    commands::Command,
     forces::WindField,
     groups::{Rhythm, Voice, VoiceId},
     osc::OscSender,

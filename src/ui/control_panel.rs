@@ -1,7 +1,7 @@
 use super::params::DroneVoiceParams;
 use super::voice_panel;
+use crate::command_engine::Command;
 use crate::groups::VoiceId;
-use crate::model::controller::Command;
 use crate::model::Model;
 use crate::terminals::command_input::CommandInput;
 use nannou::App;

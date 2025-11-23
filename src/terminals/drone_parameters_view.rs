@@ -4,8 +4,8 @@
 
 use super::terminal_view::{TerminalView, TerminalViewLineFadeMode, TerminalViewParams};
 use crate::{
+    command_engine::{Command, CommandInner, CompositeCommand, SimpleCommand},
     groups::VoiceId,
-    model::controller::{Command, CommandInner, CompositeCommand, SimpleCommand},
 };
 use nannou::prelude::*;
 use std::{collections::HashMap, time::Instant};

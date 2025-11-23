@@ -6,8 +6,8 @@ use nannou_osc as osc;
 use std::error::Error;
 
 use crate::{
+    command_engine::{Command, CommandInner, CommandSource, SimpleCommand},
     groups::VoiceId,
-    model::controller::{Command, CommandInner, CommandSource, SimpleCommand},
     settings::OscSendConfig,
 };
 

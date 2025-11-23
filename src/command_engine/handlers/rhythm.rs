@@ -1,6 +1,5 @@
 use crate::{
-    command_engine::context::ExecutionContext,
-    commands::CommandSource,
+    command_engine::{commands::CommandSource, context::ExecutionContext},
     groups::{Rhythm, VoiceId},
     model::command_builder::RhythmCommandBuilder,
     terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},

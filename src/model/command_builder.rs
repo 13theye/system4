@@ -3,7 +3,7 @@
 // Centralized command building and validation system
 // Reduces code duplication and provides consistent error handling
 
-use super::controller::{Command, CommandInner, CommandSource, SimpleCommand};
+use crate::command_engine::{Command, CommandInner, CommandSource, SimpleCommand};
 use crate::groups::VoiceId;
 use crate::terminals::commands::drone::DroneConfig;
 use crate::terminals::commands::rhythm::RhythmConfig;

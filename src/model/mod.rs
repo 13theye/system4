@@ -7,10 +7,9 @@ pub mod controller;
 pub mod terminal_processor;
 
 use crate::{
-    command_engine::context::ExecutionContext,
+    command_engine::{context::ExecutionContext, Command},
     groups::{Rhythm, Voice, VoiceId},
     managers::{RhythmManager, VoiceManager},
-    model::controller::Command,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     rendering::{GpuSegmentBuffer, RenderState},
@@ -77,7 +76,7 @@ fn erase_drone(model: &mut Model, id: i32) {
 
 // ExecutionContext implementation for Model
 impl ExecutionContext for Model {
-    fn log_command(&mut self, command: &crate::commands::Command) {
+    fn log_command(&mut self, command: &crate::command_engine::Command) {
         self.ui_state
             .terminal_manager
             .borrow_mut()
@@ -201,7 +200,7 @@ impl ExecutionContext for Model {
     }
 
     // Command queue
-    fn queue_command(&mut self, command: crate::commands::Command) {
+    fn queue_command(&mut self, command: crate::command_engine::Command) {
         self.command_queue.push(command);
     }
 

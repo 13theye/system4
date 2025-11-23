@@ -1,7 +1,7 @@
 // Voice panel rendering functions
 
 use super::params::DroneVoiceParams;
-use crate::model::controller::{Command, CommandInner, CommandSource, SimpleCommand};
+use crate::command_engine::{Command, CommandInner, CommandSource, SimpleCommand};
 
 /// Renders a drone voice panel (for Voice 0 and Voice 3)
 /// Returns a vector of commands that should be queued
