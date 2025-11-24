@@ -57,3 +57,10 @@ pub struct ControlWindowConfig {
     pub width: u32,
     pub height: u32,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct OpenAIServiceConfig {
+    pub url: String,
+    pub model: String,
+    pub system_prompt: String,
+}
