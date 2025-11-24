@@ -3,7 +3,7 @@
 // Centralized command building and validation system
 // Reduces code duplication and provides consistent error handling
 
-use super::controller::{Command, CommandInner, CommandSource, SimpleCommand};
+use crate::command_engine::{Command, CommandInner, CommandSource, SimpleCommand};
 use crate::groups::VoiceId;
 use crate::terminals::commands::drone::DroneConfig;
 use crate::terminals::commands::rhythm::RhythmConfig;
@@ -134,9 +134,7 @@ impl DroneCommandBuilder {
 
         // Voice-level parameters
         commands.extend(Self::generate_voice_parameter_commands(
-            config,
-            voice_id,
-            source.clone(),
+            config, voice_id, source,
         ));
 
         // Circle-level parameters
@@ -161,7 +159,7 @@ impl DroneCommandBuilder {
                     voice_id,
                     value: brightness,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -171,7 +169,7 @@ impl DroneCommandBuilder {
                     voice_id,
                     value: volume,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -181,7 +179,7 @@ impl DroneCommandBuilder {
                     voice_id,
                     value: feedback,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -191,7 +189,7 @@ impl DroneCommandBuilder {
                     voice_id,
                     value: vibration,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -214,7 +212,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: gravity,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -225,7 +223,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: force,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -236,7 +234,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: outer_radius,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -247,7 +245,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: inner_radius,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -258,7 +256,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: noise,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -269,7 +267,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: center_x,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -280,7 +278,7 @@ impl DroneCommandBuilder {
                     circle_id,
                     value: center_y,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -379,21 +377,15 @@ impl RhythmCommandBuilder {
         let mut commands = Vec::new();
 
         // Structure parameters
-        commands.extend(Self::generate_structure_commands(
-            config,
-            voice_id,
-            source.clone(),
-        ));
+        commands.extend(Self::generate_structure_commands(config, voice_id, source));
 
         // Range parameters (for creation)
-        commands.extend(Self::generate_range_commands(
-            config,
-            voice_id,
-            source.clone(),
-        ));
+        commands.extend(Self::generate_range_commands(config, voice_id, source));
 
         // Modification parameters (for editing)
-        commands.extend(Self::generate_modification_commands(config, voice_id, source));
+        commands.extend(Self::generate_modification_commands(
+            config, voice_id, source,
+        ));
 
         commands
     }
@@ -412,7 +404,7 @@ impl RhythmCommandBuilder {
                     voice_id,
                     value: capacity,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -422,7 +414,7 @@ impl RhythmCommandBuilder {
                     voice_id,
                     value: num_wings,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -432,7 +424,7 @@ impl RhythmCommandBuilder {
                     voice_id,
                     value: subdivision,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -450,21 +442,21 @@ impl RhythmCommandBuilder {
         if let Some(range) = config.length_range {
             commands.push(Command::new(
                 CommandInner::Simple(SimpleCommand::RhythmLengthRange { voice_id, range }),
-                source.clone(),
+                source,
             ));
         }
 
         if let Some(range) = config.velocity_range {
             commands.push(Command::new(
                 CommandInner::Simple(SimpleCommand::RhythmVelocityRange { voice_id, range }),
-                source.clone(),
+                source,
             ));
         }
 
         if let Some(range) = config.cutoff_range {
             commands.push(Command::new(
                 CommandInner::Simple(SimpleCommand::RhythmCutoffRange { voice_id, range }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -485,7 +477,7 @@ impl RhythmCommandBuilder {
                     voice_id,
                     modification,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -495,7 +487,7 @@ impl RhythmCommandBuilder {
                     voice_id,
                     modification,
                 }),
-                source.clone(),
+                source,
             ));
         }
 
@@ -505,7 +497,7 @@ impl RhythmCommandBuilder {
                     voice_id,
                     modification,
                 }),
-                source.clone(),
+                source,
             ));
         }
 

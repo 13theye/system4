@@ -4,8 +4,8 @@
 pub mod field;
 pub use field::{CellIdx, ForceFields};
 
-pub mod force;
-pub use force::Force;
+pub mod force_type;
+pub use force_type::ForceType;
 
 //pub mod wind;
 //pub use wind::{WindCircle, WindCircleParams, WindField};

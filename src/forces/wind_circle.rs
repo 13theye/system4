@@ -232,7 +232,7 @@ impl WindCircle {
 /// - Center bias: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
 /// - Angle variation: Amount of random angle variation (0.0-1.0, where 1.0 = �90� deviation)
 /// - Dirty: Flag to indicate that one or more parameters have changed so that WindField will recalculate
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WindCircleParams {
     /// center of the circle in the ParticleSystem space
     pub center: Vec2,

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy)]
-pub enum ParameterModification {
+pub enum RhythmParamModification {
     Absolute(f32),        // Set to exact value
     Relative(f32),        // Add/subtract delta
     Randomize(RangeSize), // Re-roll within range
@@ -63,9 +63,9 @@ pub struct RhythmBuilder {
     pub length_range: Option<RangeSize>,
     pub velocity_range: Option<RangeSize>,
     pub cutoff_range: Option<RangeSize>,
-    pub length_modification: Option<ParameterModification>,
-    pub velocity_modification: Option<ParameterModification>,
-    pub cutoff_modification: Option<ParameterModification>,
+    pub length_modification: Option<RhythmParamModification>,
+    pub velocity_modification: Option<RhythmParamModification>,
+    pub cutoff_modification: Option<RhythmParamModification>,
     pub parameters: HashMap<String, ParameterValue>,
 }
 
@@ -78,9 +78,9 @@ pub struct RhythmConfig {
     pub length_range: Option<RangeSize>,
     pub velocity_range: Option<RangeSize>,
     pub cutoff_range: Option<RangeSize>,
-    pub length_modification: Option<ParameterModification>,
-    pub velocity_modification: Option<ParameterModification>,
-    pub cutoff_modification: Option<ParameterModification>,
+    pub length_modification: Option<RhythmParamModification>,
+    pub velocity_modification: Option<RhythmParamModification>,
+    pub cutoff_modification: Option<RhythmParamModification>,
     pub additional_parameters: HashMap<String, ParameterValue>,
 }
 
@@ -150,7 +150,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                 match value {
                     ParameterValue::Number(n) => {
                         // Absolute value: .length(0.5)
-                        self.length_modification = Some(ParameterModification::Absolute(n));
+                        self.length_modification = Some(RhythmParamModification::Absolute(n));
                     }
                     ParameterValue::String(s) => {
                         // Try parsing as range size first, then as relative modification
@@ -158,7 +158,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                             // Set both: range for future slot generation, modification for editing
                             self.length_range = Some(range);
                             self.length_modification =
-                                Some(ParameterModification::Randomize(range));
+                                Some(RhythmParamModification::Randomize(range));
                         } else {
                             self.length_modification = Some(parse_relative_modification(s)?);
                         }
@@ -169,7 +169,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                 match value {
                     ParameterValue::Number(n) => {
                         // Absolute value: .velocity(0.5)
-                        self.velocity_modification = Some(ParameterModification::Absolute(n));
+                        self.velocity_modification = Some(RhythmParamModification::Absolute(n));
                     }
                     ParameterValue::String(s) => {
                         // Try parsing as range size first, then as relative modification
@@ -177,7 +177,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                             // Set both: range for future slot generation, modification for editing
                             self.velocity_range = Some(range);
                             self.velocity_modification =
-                                Some(ParameterModification::Randomize(range));
+                                Some(RhythmParamModification::Randomize(range));
                         } else {
                             self.velocity_modification = Some(parse_relative_modification(s)?);
                         }
@@ -188,7 +188,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                 match value {
                     ParameterValue::Number(n) => {
                         // Absolute value: .cutoff(0.5)
-                        self.cutoff_modification = Some(ParameterModification::Absolute(n));
+                        self.cutoff_modification = Some(RhythmParamModification::Absolute(n));
                     }
                     ParameterValue::String(s) => {
                         // Try parsing as range size first, then as relative modification
@@ -196,7 +196,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                             // Set both: range for future slot generation, modification for editing
                             self.cutoff_range = Some(range);
                             self.cutoff_modification =
-                                Some(ParameterModification::Randomize(range));
+                                Some(RhythmParamModification::Randomize(range));
                         } else {
                             self.cutoff_modification = Some(parse_relative_modification(s)?);
                         }
@@ -230,14 +230,14 @@ impl TerminalCommandBuilder for RhythmBuilder {
 }
 
 /// Parse relative modification symbols (+, ++, +++, -, --, ---)
-fn parse_relative_modification(s: String) -> Result<ParameterModification, ParseError> {
+fn parse_relative_modification(s: String) -> Result<RhythmParamModification, ParseError> {
     match s.as_str() {
-        "+" => Ok(ParameterModification::Relative(0.1)),
-        "++" => Ok(ParameterModification::Relative(0.2)),
-        "+++" => Ok(ParameterModification::Relative(0.3)),
-        "-" => Ok(ParameterModification::Relative(-0.1)),
-        "--" => Ok(ParameterModification::Relative(-0.2)),
-        "---" => Ok(ParameterModification::Relative(-0.3)),
+        "+" => Ok(RhythmParamModification::Relative(0.1)),
+        "++" => Ok(RhythmParamModification::Relative(0.2)),
+        "+++" => Ok(RhythmParamModification::Relative(0.3)),
+        "-" => Ok(RhythmParamModification::Relative(-0.1)),
+        "--" => Ok(RhythmParamModification::Relative(-0.2)),
+        "---" => Ok(RhythmParamModification::Relative(-0.3)),
         _ => Err(ParseError::UnexpectedToken {
             expected: "+, ++, +++, -, --, ---, or range size (xs, s, m, l, xl)".to_string(),
             found: s,

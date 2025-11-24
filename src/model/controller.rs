@@ -3,6 +3,7 @@
 // Command extension for Model
 
 use crate::{
+    command_engine::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand},
     forces::WindCircleParams,
     groups::{Rhythm, Voice, VoiceId},
     model::{
@@ -11,299 +12,17 @@ use crate::{
         },
         Model,
     },
-    terminals::commands::{drone::DroneConfig, rhythm::RhythmConfig},
     view::RhythmFormationType,
 };
 use nannou::wgpu::{Device, Queue};
 use std::time::Instant;
 
-#[derive(Debug, Clone)]
-pub enum CommandSource {
-    Terminal,
-    Osc,
-    Ui,
-}
-
-#[derive(Debug, Clone)]
-pub struct Command {
-    pub command: CommandInner,
-    pub source: CommandSource,
-}
-
-#[derive(Debug, Clone)]
-pub enum SimpleCommand {
-    Alpha {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    Volume {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    Feedback {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    Vibration {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    MoveEmitters {
-        voice_id: VoiceId,
-        value: f32,
-    },
-    OuterRadius {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    InnerRadius {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    Force {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    Gravity {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    Noise {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    CenterX {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    CenterY {
-        voice_id: VoiceId,
-        circle_id: usize,
-        value: f32,
-    },
-    ListCircles {
-        voice_id: VoiceId,
-    },
-    AddWings {
-        voice_id: VoiceId,
-        count: usize,
-    },
-    RemoveWings {
-        voice_id: VoiceId,
-        count: usize,
-    },
-    ClearRhythm {
-        voice_id: VoiceId,
-    },
-    ClearDrone {
-        voice_id: VoiceId,
-    },
-    RemoveCircle {
-        voice_id: VoiceId,
-        circle_id: i32,
-    },
-    // Rhythm structure parameters
-    RhythmCapacity {
-        voice_id: VoiceId,
-        value: usize,
-    },
-    RhythmNumWings {
-        voice_id: VoiceId,
-        value: usize,
-    },
-    RhythmSubdivision {
-        voice_id: VoiceId,
-        value: prat::BeatSubdivision,
-    },
-    // Slot range parameters (for creation)
-    RhythmLengthRange {
-        voice_id: VoiceId,
-        range: crate::terminals::commands::rhythm::RangeSize,
-    },
-    RhythmVelocityRange {
-        voice_id: VoiceId,
-        range: crate::terminals::commands::rhythm::RangeSize,
-    },
-    RhythmCutoffRange {
-        voice_id: VoiceId,
-        range: crate::terminals::commands::rhythm::RangeSize,
-    },
-    // Slot modification parameters (for editing)
-    RhythmModifyLength {
-        voice_id: VoiceId,
-        modification: crate::terminals::commands::rhythm::ParameterModification,
-    },
-    RhythmModifyVelocity {
-        voice_id: VoiceId,
-        modification: crate::terminals::commands::rhythm::ParameterModification,
-    },
-    RhythmModifyCutoff {
-        voice_id: VoiceId,
-        modification: crate::terminals::commands::rhythm::ParameterModification,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub enum CompositeCommand {
-    CreateDrone {
-        config: DroneConfig,
-    },
-    CreateRhythm {
-        config: RhythmConfig,
-    },
-    ModifyDrone {
-        voice_id: VoiceId,
-        config: DroneConfig,
-    },
-    ModifyRhythm {
-        voice_id: VoiceId,
-        config: RhythmConfig,
-    },
-    NewCircle {
-        voice_id: VoiceId,
-        config: DroneConfig,
-    },
-    Clear {
-        voice_id: VoiceId,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub enum CommandInner {
-    Simple(SimpleCommand),
-    Composite(CompositeCommand),
-}
-
-impl Command {
-    pub fn new(command: CommandInner, source: CommandSource) -> Self {
-        Self { command, source }
-    }
-}
-
 /// Get priority value from a command's source (lower = higher priority)
 fn get_command_priority(command: &Command) -> u8 {
     match &command.source {
         CommandSource::Terminal => 0,
-        CommandSource::Osc => 1,
-        CommandSource::Ui => 2,
-    }
-}
-
-/// Generate a unique key for each voice/parameter combination to identify conflicts
-fn get_command_key(command: &Command) -> String {
-    match &command.command {
-        CommandInner::Composite(composite) => match composite {
-            CompositeCommand::CreateDrone { config } => {
-                format!("CreateDrone_{}", config.voice)
-            }
-            CompositeCommand::CreateRhythm { config } => {
-                format!("CreateRhythm_{:?}", config.voice)
-            }
-            CompositeCommand::ModifyDrone { voice_id, .. } => {
-                format!("ModifyDrone_{:?}", voice_id)
-            }
-            CompositeCommand::ModifyRhythm { voice_id, .. } => {
-                format!("ModifyRhythm_{:?}", voice_id)
-            }
-            CompositeCommand::NewCircle { voice_id, .. } => {
-                format!("NewCircle_{:?}", voice_id)
-            }
-            CompositeCommand::Clear { voice_id, .. } => {
-                format!("Clear_{:?}", voice_id)
-            }
-        },
-        CommandInner::Simple(atomic) => match atomic {
-            SimpleCommand::Alpha {
-                voice_id: voice, ..
-            } => format!("Alpha_{:?}", voice),
-            SimpleCommand::Volume {
-                voice_id: voice, ..
-            } => format!("Volume_{:?}", voice),
-            SimpleCommand::Feedback {
-                voice_id: voice, ..
-            } => format!("Feedback_{:?}", voice),
-            SimpleCommand::Vibration {
-                voice_id: voice, ..
-            } => format!("Vibration_{:?}", voice),
-            SimpleCommand::MoveEmitters {
-                voice_id: voice, ..
-            } => format!("MoveEmitters_{:?}", voice),
-            SimpleCommand::OuterRadius {
-                voice_id: voice, ..
-            } => format!("OuterRadius_{:?}", voice),
-            SimpleCommand::InnerRadius {
-                voice_id: voice, ..
-            } => format!("InnerRadius_{:?}", voice),
-            SimpleCommand::Force {
-                voice_id: voice, ..
-            } => format!("Strength_{:?}", voice),
-            SimpleCommand::Gravity {
-                voice_id: voice, ..
-            } => format!("CenterBias_{:?}", voice),
-            SimpleCommand::Noise {
-                voice_id: voice, ..
-            } => format!("AngleVariation_{:?}", voice),
-            SimpleCommand::CenterX {
-                voice_id: voice, ..
-            } => format!("ForceCenterX_{:?}", voice),
-            SimpleCommand::CenterY {
-                voice_id: voice, ..
-            } => format!("ForceCenterY_{:?}", voice),
-            SimpleCommand::ListCircles {
-                voice_id: voice, ..
-            } => format!("ListCircles_{:?}", voice),
-            SimpleCommand::AddWings {
-                voice_id: voice, ..
-            } => format!("AddWings_{:?}", voice),
-            SimpleCommand::RemoveWings {
-                voice_id: voice, ..
-            } => format!("RemoveWings_{:?}", voice),
-            SimpleCommand::ClearRhythm {
-                voice_id: voice, ..
-            } => format!("ClearRhythm_{:?}", voice),
-            SimpleCommand::ClearDrone {
-                voice_id: voice, ..
-            } => format!("EraseDrone_{:?}", voice),
-            SimpleCommand::RemoveCircle {
-                voice_id: voice,
-                circle_id,
-                ..
-            } => format!("RemoveCircle_{:?}_{}", voice, circle_id),
-            // Rhythm parameter commands
-            SimpleCommand::RhythmCapacity { voice_id, .. } => {
-                format!("RhythmCapacity_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmNumWings { voice_id, .. } => {
-                format!("RhythmNumWings_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmSubdivision { voice_id, .. } => {
-                format!("RhythmSubdivision_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmLengthRange { voice_id, .. } => {
-                format!("RhythmLengthRange_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmVelocityRange { voice_id, .. } => {
-                format!("RhythmVelocityRange_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmCutoffRange { voice_id, .. } => {
-                format!("RhythmCutoffRange_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmModifyLength { voice_id, .. } => {
-                format!("RhythmModifyLength_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmModifyVelocity { voice_id, .. } => {
-                format!("RhythmModifyVelocity_{:?}", voice_id)
-            }
-            SimpleCommand::RhythmModifyCutoff { voice_id, .. } => {
-                format!("RhythmModifyCutoff_{:?}", voice_id)
-            }
-        },
+        CommandSource::OSC => 1,
+        CommandSource::UI => 2,
     }
 }
 
@@ -328,12 +47,12 @@ impl Model {
 
         for command in all_commands {
             let current_priority = get_command_priority(&command);
-            let command_key = get_command_key(&command);
+            let command_key = command.dedup_key();
 
             // Check if we already have a command for this voice/parameter combination
             if let Some(existing_index) = final_commands
                 .iter()
-                .position(|existing_cmd| get_command_key(existing_cmd) == command_key)
+                .position(|existing_cmd: &Command| existing_cmd.dedup_key() == command_key)
             {
                 let existing_priority = get_command_priority(&final_commands[existing_index]);
 
@@ -358,7 +77,10 @@ impl Model {
     /// Apply a command immediately without queueing
     pub fn execute_command(&mut self, command: Command, now: Instant) {
         // Send all commands to terminal display for visualization
-        self.terminal_manager.borrow_mut().process_command(&command);
+        self.ui_state
+            .terminal_manager
+            .borrow_mut()
+            .process_command(&command);
 
         match command.command {
             CommandInner::Composite(composite) => match composite {
@@ -366,7 +88,7 @@ impl Model {
                     // Convert voice ID to Voice enum
                     let voice_id = config.voice;
 
-                    if self.voices.contains_key(&config.voice) {
+                    if self.voice_manager.has_voice(config.voice) {
                         // Voice already exists, do nothing
                         println!("Controller: Voice {} already exists", &config.voice);
                         return;
@@ -388,7 +110,7 @@ impl Model {
                     voice.set_is_spawning(true);
 
                     // Insert voice before applying parameters so validation can find it
-                    self.voices.insert(voice_id, voice);
+                    self.voice_manager.insert_voice(voice_id, voice);
 
                     // Phase 2: Apply parameters through the command pipeline
                     // This is redundant until we make a default drone maker
@@ -397,7 +119,7 @@ impl Model {
                         &resolved_config,
                         voice_id,
                         circle_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     // Queue parameter commands to avoid recursive execution
@@ -409,7 +131,7 @@ impl Model {
                 CompositeCommand::CreateRhythm { config } => {
                     let voice_id = config.voice;
 
-                    if self.rhythms.contains_key(&voice_id) {
+                    if self.rhythm_manager.has_rhythm(voice_id) {
                         println!("Controller: Rhythm for voice {} already exists", voice_id);
                         return;
                     }
@@ -448,14 +170,14 @@ impl Model {
                     );
 
                     // Insert rhythm before applying parameters so validation can find it
-                    self.rhythms.insert(voice_id, rhythm);
+                    self.rhythm_manager.insert_rhythm(voice_id, rhythm);
 
                     // Phase 2: Apply parameters through the command pipeline
                     // This is redundant until we make a default rhythm maker
                     let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
                         &resolved_config,
                         voice_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     // Queue parameter commands to avoid recursive execution
@@ -470,7 +192,9 @@ impl Model {
                     let status_message =
                         format!("Voice {} - Created rhythm sequencer", voice_id.to_i32());
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state
+                        .command_input
+                        .set_success_message(status_message);
                 }
                 CompositeCommand::ModifyDrone { voice_id, config } => {
                     let validation = self.validate_voice(voice_id);
@@ -482,7 +206,7 @@ impl Model {
                     let parameter_commands = DroneCommandBuilder::generate_voice_parameter_commands(
                         &config,
                         voice_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     // Queue parameter commands
@@ -500,11 +224,11 @@ impl Model {
                     }
 
                     // Check if rhythm exists for this voice
-                    if !self.rhythms.contains_key(&voice_id) {
+                    if !self.rhythm_manager.has_rhythm(voice_id) {
                         let error_message =
                             format!("Voice {} has no rhythm to modify", voice_id.to_i32());
                         println!("Error: {}", error_message);
-                        self.command_input.set_error_message(error_message);
+                        self.ui_state.command_input.set_error_message(error_message);
                         return;
                     }
 
@@ -512,21 +236,24 @@ impl Model {
                     let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
                         &config,
                         voice_id,
-                        command.source.clone(),
+                        command.source,
                     );
 
                     for cmd in parameter_commands {
                         self.command_queue.push(cmd);
                     }
                 }
-                CompositeCommand::NewCircle { voice_id, config } => {
+                CompositeCommand::NewCircle {
+                    voice_id,
+                    circle_config,
+                } => {
                     let validation = self.validate_voice(voice_id);
                     if !self.validate_and_handle_error(validation, "NewCircle") {
                         return;
                     }
 
                     // Merge config with defaults
-                    let resolved_config = config.merge_with_defaults();
+                    let resolved_config = circle_config.merge_with_defaults();
 
                     // Extract circle parameters (voice-level params are ignored for new circles)
                     let gravity = resolved_config.gravity.unwrap();
@@ -538,7 +265,7 @@ impl Model {
                     let noise = resolved_config.noise.unwrap();
 
                     // Create the new WindCircle
-                    let voice = self.voices.get_mut(&voice_id).unwrap();
+                    let voice = self.voice_manager.get_voice_mut(voice_id).unwrap();
                     let circle_id = voice.issue_wind_circle_idx();
 
                     let center = nannou::prelude::vec2(center_x, center_y);
@@ -562,7 +289,7 @@ impl Model {
                             &resolved_config,
                             voice_id,
                             circle_id,
-                            command.source.clone(),
+                            command.source,
                         );
 
                     // Add commands to queue instead of executing recursively
@@ -575,7 +302,9 @@ impl Model {
                         circle_id
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state
+                        .command_input
+                        .set_success_message(status_message);
                 }
                 CompositeCommand::Clear { voice_id } => {
                     let validation = self.validate_voice(voice_id);
@@ -583,16 +312,16 @@ impl Model {
                         return;
                     }
 
-                    if self.rhythms.contains_key(&voice_id) {
+                    if self.rhythm_manager.has_rhythm(voice_id) {
                         let cmd = Command::new(
                             CommandInner::Simple(SimpleCommand::ClearRhythm { voice_id }),
-                            command.source.clone(),
+                            command.source,
                         );
                         self.command_queue.push(cmd);
-                    } else if self.voices.contains_key(&voice_id) {
+                    } else if self.voice_manager.has_voice(voice_id) {
                         let cmd = Command::new(
                             CommandInner::Simple(SimpleCommand::ClearDrone { voice_id }),
-                            command.source.clone(),
+                            command.source,
                         );
                         self.command_queue.push(cmd);
                     }
@@ -615,7 +344,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_alpha_limit(value);
                 }
             }
@@ -625,7 +354,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_volume(value);
                 }
             }
@@ -635,7 +364,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_feedback(value);
                 }
             }
@@ -645,7 +374,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_vibration(value);
                 }
             }
@@ -655,7 +384,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_emitter_position(value);
                 }
             }
@@ -670,7 +399,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_outer_radius(circle_id, value);
                 }
             }
@@ -684,7 +413,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_inner_radius(circle_id, value);
                 }
             }
@@ -699,7 +428,7 @@ impl Model {
                 }
 
                 let strength = value.min(30.0); // 30 is the max strength of the wind circle
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_force(circle_id, strength);
                 }
             }
@@ -713,7 +442,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_gravity(circle_id, value);
                 }
             }
@@ -727,7 +456,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_noise(circle_id, value);
                 }
             }
@@ -741,7 +470,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_center_x(circle_id, value);
                 }
             }
@@ -755,7 +484,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(voice) = self.voices.get_mut(&voice_id) {
+                if let Some(voice) = self.voice_manager.get_voice_mut(voice_id) {
                     voice.set_circle_center_y(circle_id, value);
                 }
             }
@@ -771,11 +500,13 @@ impl Model {
                 println!("{}", status_message);
 
                 // Send to Performer Control status line
-                self.command_input.set_success_message(status_message);
+                self.ui_state
+                    .command_input
+                    .set_success_message(status_message);
             }
             SimpleCommand::AddWings { voice_id, count } => {
                 // Check if rhythm exists for this voice
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.add_wings(count, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
@@ -788,17 +519,19 @@ impl Model {
                         rhythm.get_params().wings.len()
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state
+                        .command_input
+                        .set_success_message(status_message);
                 } else {
                     let error_message =
                         format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
                     println!("Error: {}", error_message);
-                    self.command_input.set_error_message(error_message);
+                    self.ui_state.command_input.set_error_message(error_message);
                 }
             }
             SimpleCommand::RemoveWings { voice_id, count } => {
                 // Check if rhythm exists for this voice
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.remove_wings(count);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
@@ -811,19 +544,21 @@ impl Model {
                         rhythm.get_params().wings.len()
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state
+                        .command_input
+                        .set_success_message(status_message);
                 } else {
                     let error_message = format!(
                         "Voice {} has no rhythm to remove wings from",
                         voice_id.to_i32()
                     );
                     println!("Error: {}", error_message);
-                    self.command_input.set_error_message(error_message);
+                    self.ui_state.command_input.set_error_message(error_message);
                 }
             }
             SimpleCommand::ClearRhythm { voice_id } => {
                 // Check if rhythm exists for this voice
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     // Stop the sequencer before removing the rhythm
                     rhythm.stop_sequencer(&mut self.sequencer_service);
 
@@ -831,19 +566,21 @@ impl Model {
                     self.rhythm_view.clear_formation(voice_id, now);
 
                     // Remove the rhythm from the model (view continues animating)
-                    self.rhythms.remove(&voice_id);
+                    self.rhythm_manager.remove_rhythm(voice_id);
 
                     let status_message = format!(
                         "Voice {} - Cleared rhythm and stopped sequencer",
                         voice_id.to_i32()
                     );
                     println!("{}", status_message);
-                    self.command_input.set_success_message(status_message);
+                    self.ui_state
+                        .command_input
+                        .set_success_message(status_message);
                 } else {
                     let error_message =
                         format!("Voice {} has no rhythm to clear", voice_id.to_i32());
                     println!("Error: {}", error_message);
-                    self.command_input.set_error_message(error_message);
+                    self.ui_state.command_input.set_error_message(error_message);
                 }
             }
             SimpleCommand::ClearDrone { voice_id } => {
@@ -860,7 +597,7 @@ impl Model {
                 }
 
                 // Remove the circle from the voice
-                let voice = self.voices.get_mut(&voice_id).unwrap();
+                let voice = self.voice_manager.get_voice_mut(voice_id).unwrap();
                 let Some(circle) = voice.wind_circles.get_mut(&(circle_id as usize)) else {
                     return;
                 };
@@ -876,7 +613,9 @@ impl Model {
                     circle_id
                 );
                 println!("{}", status_message);
-                self.command_input.set_success_message(status_message);
+                self.ui_state
+                    .command_input
+                    .set_success_message(status_message);
             }
             // Rhythm structure parameters
             SimpleCommand::RhythmCapacity { voice_id, value } => {
@@ -884,7 +623,7 @@ impl Model {
                     return;
                 }
 
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_capacity(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
@@ -892,7 +631,7 @@ impl Model {
                 }
             }
             SimpleCommand::RhythmNumWings { voice_id, value } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_num_wings(value);
                     rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
                     self.rhythm_view
@@ -900,24 +639,24 @@ impl Model {
                 }
             }
             SimpleCommand::RhythmSubdivision { voice_id, value } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_subdivision(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                 }
             }
             // Slot range parameters (for creation)
             SimpleCommand::RhythmLengthRange { voice_id, range } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_length_range(range);
                 }
             }
             SimpleCommand::RhythmVelocityRange { voice_id, range } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_velocity_range(range);
                 }
             }
             SimpleCommand::RhythmCutoffRange { voice_id, range } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_cutoff_range(range);
                 }
             }
@@ -926,7 +665,7 @@ impl Model {
                 voice_id,
                 modification,
             } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.modify_all_slots_length(modification, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                 }
@@ -935,7 +674,7 @@ impl Model {
                 voice_id,
                 modification,
             } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.modify_all_slots_velocity(modification, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                 }
@@ -944,7 +683,7 @@ impl Model {
                 voice_id,
                 modification,
             } => {
-                if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
+                if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.modify_all_slots_cutoff(modification, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
                 }
@@ -954,7 +693,7 @@ impl Model {
 
     /// Get all wind circle IDs for a voice
     pub fn get_wind_circle_ids(&self, voice: VoiceId) -> Vec<usize> {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return Vec::new();
         };
         let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();
@@ -964,13 +703,13 @@ impl Model {
 
     /// Get the params of a circle
     pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
-        let voice = self.voices.get(&voice)?;
+        let voice = self.voice_manager.voices().get(&voice)?;
         voice.wind_circles.get(&id).map(|circle| circle.params())
     }
 
     /// Get the alpha limit of a Voice ("brightness")
     pub fn get_alpha_limit(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -979,7 +718,7 @@ impl Model {
 
     /// Get the center bias of a Voice's WindCircle ("gravity")
     pub fn get_center_bias(&mut self, voice: VoiceId, id: usize) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -992,7 +731,7 @@ impl Model {
 
     /// Get the angle variation of a Voice's WindCircle by id ("noise")
     pub fn get_noise(&self, voice: VoiceId, id: usize) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -1005,7 +744,7 @@ impl Model {
 
     /// Get the position offset factor of a Voice ("vibration")
     pub fn get_vibration(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -1013,7 +752,7 @@ impl Model {
     }
 
     pub fn get_emitter_position(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -1021,7 +760,7 @@ impl Model {
     }
 
     pub fn get_volume(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -1029,7 +768,7 @@ impl Model {
     }
 
     pub fn get_feedback(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voices.get(&voice) else {
+        let Some(voice) = self.voice_manager.voices().get(&voice) else {
             return 0.0;
         };
 
@@ -1039,7 +778,7 @@ impl Model {
     /// End a voice -- remove its wind circles and remove it from the hashmap
     pub fn kill_voice(&mut self, voice_id: VoiceId) {
         // Remove voice's wind circles from force field
-        let Some(voice) = self.voices.get_mut(&voice_id) else {
+        let Some(voice) = self.voice_manager.get_voice_mut(voice_id) else {
             return;
         };
 
@@ -1051,7 +790,7 @@ impl Model {
         }
 
         // Remove the voice from the hashmap
-        self.voices.remove(&voice_id);
+        self.voice_manager.remove_voice(voice_id);
     }
 }
 
@@ -1106,12 +845,12 @@ pub fn update_feedback(model: &mut Model, _device: &Device, _queue: &Queue) {
     let voice4_feedback = model.get_feedback(VoiceId::Voice3);
 
     // Update segment length based on Voice1 feedback slider
-    if let Some(voice1) = model.voices.get_mut(&VoiceId::Voice0) {
+    if let Some(voice1) = model.voice_manager.get_voice_mut(VoiceId::Voice0) {
         voice1.set_segment_length(voice1_feedback);
     }
 
     // Update segment length based on Voice4 feedback slider
-    if let Some(voice4) = model.voices.get_mut(&VoiceId::Voice3) {
+    if let Some(voice4) = model.voice_manager.get_voice_mut(VoiceId::Voice3) {
         voice4.set_segment_length(voice4_feedback);
     }
 }
@@ -1119,11 +858,11 @@ pub fn update_feedback(model: &mut Model, _device: &Device, _queue: &Queue) {
 // Implement VoiceValidator trait for Model to enable centralized validation
 impl VoiceValidator for Model {
     fn voice_exists(&self, voice_id: VoiceId) -> bool {
-        self.voices.contains_key(&voice_id) || self.rhythms.contains_key(&voice_id)
+        self.voice_manager.has_voice(voice_id) || self.rhythm_manager.has_rhythm(voice_id)
     }
 
     fn circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
-        if let Some(voice) = self.voices.get(&voice_id) {
+        if let Some(voice) = self.voice_manager.voices().get(&voice_id) {
             voice.wind_circles.contains_key(&circle_id)
         } else {
             false
@@ -1144,7 +883,7 @@ impl Model {
             ValidationResult::VoiceNotFound(_) | ValidationResult::CircleNotFound(_, _) => {
                 if let Some(error_msg) = validation.to_error_message() {
                     println!("Error: {}", error_msg);
-                    self.command_input.set_success_message(error_msg);
+                    self.ui_state.command_input.set_success_message(error_msg);
                 }
                 false
             }

@@ -6,8 +6,8 @@ use nannou_osc as osc;
 use std::error::Error;
 
 use crate::{
+    command_engine::{Command, CommandInner, CommandSource, SimpleCommand},
     groups::VoiceId,
-    model::controller::{Command, CommandInner, CommandSource, SimpleCommand},
     settings::OscSendConfig,
 };
 
@@ -151,7 +151,7 @@ impl OscController {
                                     voice_id: voice,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -163,7 +163,7 @@ impl OscController {
                                     voice_id: voice,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -179,7 +179,7 @@ impl OscController {
                                     circle_id: *circle_id as usize,
                                     value: val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -194,7 +194,7 @@ impl OscController {
                                     circle_id: *circle_id as usize,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -209,7 +209,7 @@ impl OscController {
                                     circle_id: *circle_id as usize,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -225,7 +225,7 @@ impl OscController {
 
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -240,7 +240,7 @@ impl OscController {
                                     circle_id: *circle_id as usize,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -255,7 +255,7 @@ impl OscController {
                                     circle_id: *circle_id as usize,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -267,7 +267,7 @@ impl OscController {
                                     voice_id: voice,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -282,7 +282,7 @@ impl OscController {
                                     circle_id: *circle_id as usize,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -294,7 +294,7 @@ impl OscController {
                                     voice_id: voice,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }
@@ -306,7 +306,7 @@ impl OscController {
                                     voice_id: voice,
                                     value: *val,
                                 }),
-                                CommandSource::Osc,
+                                CommandSource::OSC,
                             ));
                         }
                     }

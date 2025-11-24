@@ -3,11 +3,9 @@
 // Terminal command processing extension for Model
 
 use crate::{
+    command_engine::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand},
     groups::VoiceId,
-    model::{
-        controller::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand},
-        Model,
-    },
+    model::Model,
     terminals::commands::TerminalCommand,
 };
 
@@ -79,7 +77,7 @@ impl Model {
                 let voice_command = Command::new(
                     CommandInner::Composite(CompositeCommand::NewCircle {
                         voice_id: voice_enum,
-                        config,
+                        circle_config: config,
                     }),
                     CommandSource::Terminal,
                 );
