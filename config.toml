@@ -15,6 +15,11 @@ receive_port = 50450
 target_addr = "127.0.0.1"
 target_port = 50450
 
+[openai_service]
+url = "http://localhost:1234/v1/responses"
+model = "openai/gpt-oss-20b"
+system_prompt = "We are playing a rhythm game. I will send you a representation of a rhythm, and you will respond with a rhythm that will sound good when played with my rhythm.\nThe rhythm is represented as filled and empty slots.\nExample: [OOXOOOXOOOXOOOXO]\nThis represents a rhythm with a capacity of 16 subdivisions. The X's are the strikes of the rhythm.\nRespond with the same format and subdivision capacity as the one you are given in our conversation.\nYour response can include your thought process. If you want to include your thought process, put that in a new line after the rhythm, like this:\n[OOXOOXOOX]\nI chose this rhythm because...\nThe first line of your response must include your rhythm and nothing else."
+
 [speed]
 # initial beats per minute (float)
 bpm = 125.0

@@ -12,15 +12,18 @@ pub struct OpenAIResponse {
     pub object: String,
     /// Unix timestamp in seconds.
     pub created_at: i64,
-    pub status: String,
+    /// Overall status of the response (e.g. "completed").
+    /// Some backends may omit this field; in that case we treat it as `None`.
+    #[serde(default)]
+    pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<OpenAIError>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub incomplete_details: Option<OpenAIIncompleteDetails>,
     pub model: String,
-    /// Items in the output array; this app currently only models message items.
-    pub output: Vec<OpenAIOutputMessage>,
-    /// Optional reasoning summary data.
+    /// Items in the output array; can be either messages or reasoning objects.
+    pub output: Vec<OpenAIOutputItem>,
+    /// Optional reasoning summary data at the response level.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<OpenAIReasoning>,
     /// Optional token usage information.
@@ -39,18 +42,43 @@ pub struct OpenAIIncompleteDetails {
     pub reason: String,
 }
 
+/// An item in the `output` array. It can be either a standard assistant message
+/// or a reasoning object.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum OpenAIOutputItem {
+    Message(OpenAIOutputMessage),
+    Reasoning(OpenAIOutputReasoning),
+}
+
 /// A single output item of type "message".
 #[derive(Debug, Deserialize)]
 pub struct OpenAIOutputMessage {
     pub id: String,
-    pub status: String,
+    /// Status of this message item; may be omitted in some responses.
+    #[serde(default)]
+    pub status: Option<String>,
     #[serde(rename = "type")]
-    pub typ: String, // e.g. "message"
-    /// Role of the message sender (e.g. "assistant").
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<String>,
+    pub typ: String, // always "message"
+    /// Role of the message sender (always "assistant" for output messages).
+    pub role: String,
     /// Structured content blocks (text, refusal, etc.).
     pub content: Vec<OpenAIOutputContent>,
+}
+
+/// A reasoning object in the output array.
+#[derive(Debug, Deserialize)]
+pub struct OpenAIOutputReasoning {
+    pub id: String,
+    /// Status of this reasoning item; may be omitted in some responses.
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(rename = "type")]
+    pub typ: String, // always "reasoning"
+    /// Summary of the reasoning.
+    pub summary: Vec<OpenAIReasoningText>,
+    /// Full reasoning content.
+    pub content: Vec<OpenAIReasoningText>,
 }
 
 /// A single content block within an output message.
@@ -64,6 +92,19 @@ pub enum OpenAIOutputContent {
     /// Any other content type we are not explicitly modeling.
     #[serde(other)]
     Unknown,
+}
+
+/// One block of reasoning text, used in both `summary` and `content` of
+/// reasoning items.
+#[derive(Debug, Deserialize)]
+pub struct OpenAIReasoningText {
+    pub text: String,
+    #[serde(rename = "type")]
+    pub typ: String, // always "reasoning_text"
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub encrypted_content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +133,7 @@ pub struct OpenAIUsageOutputTokensDetails {
     pub reasoning_tokens: u64,
 }
 
+/// Response-level reasoning summary (separate from per-output reasoning items).
 #[derive(Debug, Deserialize)]
 pub struct OpenAIReasoning {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -135,23 +177,28 @@ mod tests {
         assert_eq!(resp.id, "resp_123");
         assert_eq!(resp.object, "response");
         assert_eq!(resp.created_at, 1_700_000_000);
-        assert_eq!(resp.status, "completed");
+        assert_eq!(resp.status.as_deref(), Some("completed"));
         assert!(resp.reasoning.is_none());
         assert!(resp.usage.is_none());
         assert_eq!(resp.output.len(), 1);
 
-        let msg = &resp.output[0];
-        assert_eq!(msg.id, "msg_1");
-        assert_eq!(msg.status, "completed");
-        assert_eq!(msg.typ, "message");
-        assert_eq!(msg.role.as_deref(), Some("assistant"));
-        assert_eq!(msg.content.len(), 1);
+        let item = &resp.output[0];
+        match item {
+            OpenAIOutputItem::Message(msg) => {
+                assert_eq!(msg.id, "msg_1");
+                assert_eq!(msg.status.as_deref(), Some("completed"));
+                assert_eq!(msg.typ, "message");
+                assert_eq!(msg.role, "assistant");
+                assert_eq!(msg.content.len(), 1);
 
-        match msg.content[0] {
-            OpenAIOutputContent::OutputText { ref text } => {
-                assert_eq!(text, "Hello, world!");
+                match msg.content[0] {
+                    OpenAIOutputContent::OutputText { ref text } => {
+                        assert_eq!(text, "Hello, world!");
+                    }
+                    _ => panic!("expected OutputText content"),
+                }
             }
-            _ => panic!("expected OutputText content"),
+            _ => panic!("expected Message output item"),
         }
     }
 
@@ -217,13 +264,18 @@ mod tests {
             .expect("output details should be present");
         assert_eq!(output_details.reasoning_tokens, 1);
 
-        let msg = &resp.output[0];
-        assert_eq!(msg.content.len(), 1);
-        match msg.content[0] {
-            OpenAIOutputContent::OutputRefusal { ref refusal } => {
-                assert_eq!(refusal, "I cannot do that.");
+        let item = &resp.output[0];
+        match item {
+            OpenAIOutputItem::Message(msg) => {
+                assert_eq!(msg.content.len(), 1);
+                match msg.content[0] {
+                    OpenAIOutputContent::OutputRefusal { ref refusal } => {
+                        assert_eq!(refusal, "I cannot do that.");
+                    }
+                    _ => panic!("expected OutputRefusal content"),
+                }
             }
-            _ => panic!("expected OutputRefusal content"),
+            _ => panic!("expected Message output item"),
         }
     }
 }

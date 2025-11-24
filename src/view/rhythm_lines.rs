@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::{
-    groups::rhythm::RhythmParams,
+    groups::RhythmParams,
     utils::tween,
     view::{RhythmElement, RhythmFormation, RhythmViewUpdateParams},
 };

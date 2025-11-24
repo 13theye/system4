@@ -54,7 +54,7 @@ impl OpenAIService {
 
     /// Send a request via OpenAI API
     pub fn send(&mut self, content: &str) -> Result<(), String> {
-        // Clone the content, ystem prompt, model name, url, client
+        // Clone the content, system prompt, model name, url, client
         let content = content.to_owned();
         let system_prompt = self.system_prompt.clone();
         let model = self.model.clone();
@@ -84,7 +84,7 @@ impl OpenAIService {
                             let _ = tx.send(Some(response)).await;
                         }
                         Err(e) => {
-                            eprintln!("OpenAIService: API error {}", e);
+                            eprintln!("OpenAIService: API error: {}", e);
                             if let Some(source) = e.source() {
                                 eprintln!("OpenAIService: error source: {}", source);
                             }
@@ -152,10 +152,17 @@ async fn generate_response(
     client: Client,
 ) -> Result<OpenAIResponse, Box<dyn Error + Send + Sync>> {
     let reasoning = OpenAIReasoningConfig {
-        effort: OpenAIReasoningEffort::Medium,
+        effort: OpenAIReasoningEffort::Low,
     };
 
-    let model: OpenAIModelName = serde_json::from_str(&model)?;
+    // Map the plain model string from config to our enum
+    let model = match model.as_str() {
+        "openai/gpt-oss-20b" => OpenAIModelName::GptOss20b,
+        other => {
+            return Err(format!("Unsupported model name: {}", other).into());
+        }
+    };
+
     let instructions = prompt.unwrap_or("".to_owned());
 
     let request = OpenAIRequest {
@@ -168,17 +175,46 @@ async fn generate_response(
     let request_raw =
         serde_json::to_string(&request).expect("OpenAIService task: failed to serialize request");
 
-    let response_http = client.post(&url).body(request_raw).send().await?;
+    // Debug: log request body before sending
+    println!("OpenAIService: request body: {}", request_raw);
+
+    // Ensure server treats body as JSON
+    let response_http = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .body(request_raw)
+        .send()
+        .await?;
+
+    let status = response_http.status();
     let response_raw = response_http.text().await?;
+
+    if !status.is_success() {
+        eprintln!(
+            "OpenAIService: HTTP error {} with body: {}",
+            status, response_raw
+        );
+        return Err(format!("HTTP {}: {}", status, response_raw).into());
+    }
+
+    // Debug: log raw response body before attempting JSON parse
+    eprintln!("OpenAIService: raw response body: {}", response_raw);
+
     let response: OpenAIResponse = serde_json::from_str(&response_raw)?;
 
-    if response.status == "completed" {
+    // Treat either an explicit "completed" status or a missing status
+    // (some backends omit it) as a successful, final response.
+    if matches!(response.status.as_deref(), Some("completed") | None) {
         return Ok(response);
     }
 
-    if response.error.is_some() {
-        return Err(response.error.unwrap().message.into());
+    if let Some(err) = response.error {
+        return Err(err.message.into());
     }
 
-    Err("No response generated".into())
+    Err(format!(
+        "No response generated, unexpected status: {:?}",
+        response.status
+    )
+    .into())
 }

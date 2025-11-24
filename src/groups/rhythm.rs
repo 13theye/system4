@@ -7,72 +7,13 @@ use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rand_distr::{Distribution, SkewNormal};
 
 use crate::{
-    groups::{VoiceId, VoiceParams},
+    groups::{RhythmParams, RhythmSlot, RhythmSlotIndexed, VoiceId, VoiceParams},
     particle::emitter::Emitter,
     services::sequencer::SequencerService,
     terminals::commands::rhythm::RangeSize,
 };
 
 const NUM_SLOTS: usize = 32;
-
-#[derive(Debug, Clone)]
-pub struct RhythmSlot {
-    pub velocity: f32,
-    pub length: f32,
-    pub cutoff: f32,
-}
-
-#[derive(Debug, Clone)]
-pub struct RhythmParams {
-    pub capacity: usize,
-    pub num_wings: usize,
-    pub subdivision: BeatSubdivision,
-    pub length_range: RangeSize,
-    pub velocity_range: RangeSize,
-    pub pitch_range: RangeSize,
-    pub wings: Vec<usize>,
-    pub wings_buffer: Vec<usize>,
-    pub slots: Vec<RhythmSlot>,
-}
-
-impl Default for RhythmParams {
-    fn default() -> Self {
-        Self {
-            capacity: 0,
-            num_wings: 0,
-            subdivision: BeatSubdivision::Eighth,
-            length_range: RangeSize::default(),
-            velocity_range: RangeSize::default(),
-            pitch_range: RangeSize::default(),
-            wings: Vec::new(),
-            wings_buffer: Vec::new(),
-            slots: Vec::new(),
-        }
-    }
-}
-
-impl RhythmParams {
-    pub fn new(
-        capacity: usize,
-        num_wings: usize,
-        subdivision: BeatSubdivision,
-        length_range: RangeSize,
-        velocity_range: RangeSize,
-        pitch_range: RangeSize,
-    ) -> Self {
-        Self {
-            capacity,
-            num_wings,
-            subdivision,
-            length_range,
-            velocity_range,
-            pitch_range,
-            wings: Vec::new(),
-            wings_buffer: Vec::new(),
-            slots: Vec::new(),
-        }
-    }
-}
 
 pub struct Rhythm {
     pub id: VoiceId,
@@ -116,6 +57,71 @@ impl Rhythm {
 
         let result = sequencer.try_recv();
         result.ok()
+    }
+
+    /*************** For AI Rhythm *************************** */
+    /// Future function for gathering RhythmSlots for LLM
+    pub fn as_ai_rhythm(&self) -> Vec<RhythmSlotIndexed> {
+        self.params
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| (i, *slot))
+            .collect()
+    }
+
+    /// Simpler test function that gathers filled slots for LLM
+    pub fn as_test_ai_rhythm(&self) -> String {
+        let mut output = String::from("[");
+        for i in 0..self.params.capacity {
+            if self.params.wings.contains(&i) {
+                output.push('X');
+            } else {
+                output.push('O');
+            }
+        }
+        output.push(']');
+
+        output
+    }
+
+    /// Apply a rhythm pattern returned by the AI to this rhythm.
+    ///
+    /// The expected format is a bracketed string such as "[OXXOOXXOO]".
+    /// Each 'X' becomes a filled slot (wing), each 'O' becomes empty.
+    pub fn apply_ai_pattern(&mut self, pattern: &str) {
+        let trimmed = pattern.trim();
+        if !trimmed.starts_with('[') || !trimmed.ends_with(']') || trimmed.len() < 3 {
+            println!("Rhythm::apply_ai_pattern: invalid pattern format: {}", pattern);
+            return;
+        }
+
+        let inner = &trimmed[1..trimmed.len() - 1];
+        if inner.is_empty() {
+            println!("Rhythm::apply_ai_pattern: empty pattern body: {}", pattern);
+            return;
+        }
+
+        if !inner.chars().all(|c| c == 'O' || c == 'X') {
+            println!(
+                "Rhythm::apply_ai_pattern: pattern contains invalid characters: {}",
+                pattern
+            );
+            return;
+        }
+
+        let capacity = inner.chars().count();
+        let mut wings = Vec::new();
+        for (idx, ch) in inner.chars().enumerate() {
+            if ch == 'X' {
+                wings.push(idx);
+            }
+        }
+
+        self.params.capacity = capacity;
+        self.params.wings = wings;
+        self.params.num_wings = self.params.wings.len();
+        self.params.wings_buffer.clear();
     }
 
     /*************** Beat logic helpers *************************** */
@@ -174,7 +180,7 @@ impl Rhythm {
     }
 
     pub fn set_cutoff_range(&mut self, range: RangeSize) {
-        self.params.pitch_range = range; // Note: cutoff maps to pitch_range internally
+        self.params.cutoff_range = range; // Note: cutoff maps to pitch_range internally
     }
 
     /// Add back wings from buffer, or generate additional wings as needed
@@ -238,11 +244,11 @@ impl Rhythm {
     pub fn roll_slot(&mut self, rng: &mut ThreadRng) -> RhythmSlot {
         let length = rng.random_range(self.params.length_range.to_range_inclusive());
         let velocity = rng.random_range(self.params.velocity_range.to_range_inclusive());
-        let pitch = rng.random_range(self.params.pitch_range.to_range_inclusive());
+        let cutoff = rng.random_range(self.params.cutoff_range.to_range_inclusive());
         RhythmSlot {
             length,
             velocity,
-            cutoff: pitch,
+            cutoff,
         }
     }
 

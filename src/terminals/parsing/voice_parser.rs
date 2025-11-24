@@ -37,6 +37,9 @@ impl VoiceParser {
             "newCircle" => Self::parse_new_circle_from_voice(tokens, position, voice_id),
             "removeCircle" => Self::parse_remove_circle_from_voice(tokens, position, voice_id),
             "clear" => Self::parse_clear_from_voice(tokens, position, voice_id),
+            "generateRhythm" => {
+                Self::parse_generate_rhythm_from_voice(tokens, position, voice_id)
+            }
             _ => {
                 // Check if this is a parameter modification command
                 match categorize_parameter(&sub_command) {
@@ -148,12 +151,25 @@ impl VoiceParser {
         position: &mut usize,
         voice_id: i32,
     ) -> Result<TerminalCommand, ParseError> {
-        // Parse: voice(voice_id).clearRhythm();
+        // Parse: voice(voice_id).clear();
         ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
         ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
         ParsingUtils::parse_optional_semicolon(tokens, position)?;
 
         Ok(TerminalCommand::Clear { voice_id })
+    }
+
+    fn parse_generate_rhythm_from_voice(
+        tokens: &[Token],
+        position: &mut usize,
+        voice_id: i32,
+    ) -> Result<TerminalCommand, ParseError> {
+        // Parse: voice(voice_id).generateRhythm();
+        ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
+        ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
+        ParsingUtils::parse_optional_semicolon(tokens, position)?;
+
+        Ok(TerminalCommand::GenerateRhythm { voice_id })
     }
 
     fn parse_remove_circle_from_voice(

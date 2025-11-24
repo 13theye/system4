@@ -19,16 +19,15 @@ use std::time::Instant;
 use system4::{
     groups::VoiceId,
     managers::{RhythmManager, VoiceManager},
-    model::{
-        controller,
-        Model,
-    },
+    model::{controller, Model},
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     rendering::RenderState,
     services::sequencer::SequencerService,
     settings::*,
-    terminals::terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification},
+    terminals::terminal_view::{
+        TerminalViewManager, TerminalViewParams, TerminalViewTextJustification,
+    },
     ui::{control_panel::update_control_ui, UiState},
     utils::IdGenerator,
 };
@@ -275,7 +274,7 @@ fn model(app: &App) -> Model {
     Model {
         particle_system,
         voice_manager: VoiceManager::new(),
-        rhythm_manager: RhythmManager::new(),
+        rhythm_manager: RhythmManager::new(&settings.openai_service),
         rhythm_view,
         clock,
         sequencer_service,
@@ -330,6 +329,16 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Process unified command queue with priority resolution
     model.process_command_queue(now);
+
+    // Poll AI rhythm responses (if any) and apply them to rhythms
+    model
+        .rhythm_manager
+        .poll_ai(
+            now,
+            &mut model.sequencer_service,
+            &mut model.rhythm_view,
+            &mut model.rng,
+        );
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -446,7 +455,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // Update and draw terminal view as overlay on top of post-processed texture
         if let Some(terminal_view) = model
-            .ui_state.terminal_manager
+            .ui_state
+            .terminal_manager
             .borrow_mut()
             .get_mut_terminal_view("main")
         {
@@ -455,7 +465,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         // Update and draw drone parameter displays
         model
-            .ui_state.terminal_manager
+            .ui_state
+            .terminal_manager
             .borrow_mut()
             .update_drone_parameter_displays(&rendering.draw);
 
@@ -576,7 +587,6 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
     // Note: Text input is now handled directly by egui TextEdit widget
     // through the TextBuffer trait implementation
 }
-
 
 // ************************ Debug display  *************************************
 

@@ -1,7 +1,9 @@
 use crate::{
-    services::openai::OpenAIService,
+    services::openai::{self, OpenAIService},
     settings::OpenAIServiceConfig,
 };
+
+use openai::schema::response::{OpenAIOutputContent, OpenAIOutputItem};
 
 pub struct AIRhythm {
     ai_service: OpenAIService,
@@ -14,16 +16,36 @@ impl AIRhythm {
         Self { ai_service }
     }
 
-    /// Polls OpenAIService for any completed responses.
+    /// Send a request to OpenAI.
+    pub fn send_openai(&mut self, rhythm: &str) {
+        println!("AIRhythm: starting OpenAI request");
+        self.ai_service.send(rhythm).unwrap();
+    }
+
+    /// Polls OpenAIService for any completed responses and extracts text content.
     ///
-    /// This is a placeholder hook; integration with AIRhythm behavior
-    /// can be added once response handling is defined.
-    pub fn poll_openai(&mut self) {
+    /// Returns a Vec of all OutputText strings found in the response. The
+    /// caller is responsible for interpreting the content.
+    pub fn poll_openai(&mut self) -> Vec<String> {
+        let mut texts = Vec::new();
+
         if let Some(response) = self.ai_service.try_recv() {
             println!(
                 "AIRhythm: received OpenAI response with {} output item(s)",
                 response.output.len()
             );
+
+            for item in response.output {
+                if let OpenAIOutputItem::Message(message) = item {
+                    for content in message.content {
+                        if let OpenAIOutputContent::OutputText { text } = content {
+                            texts.push(text);
+                        }
+                    }
+                }
+            }
         }
+
+        texts
     }
 }

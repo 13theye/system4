@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::{
-    groups::{rhythm::RhythmParams, VoiceId},
+    groups::{RhythmParams, VoiceId},
     view::{RhythmCircleFormation, RhythmFormation, RhythmLinesFormation},
 };
 
