@@ -4,7 +4,7 @@ use nannou::{prelude::*, text::*};
 use std::{collections::HashMap, time::Instant};
 
 use super::{command_input::CommandInput, drone_parameters_view::DroneParametersView};
-use crate::{groups::VoiceId, model::controller::Command};
+use crate::{command_engine::Command, groups::VoiceId};
 
 /// Defines the alignment corner of a TerminalView box
 #[derive(Clone, Copy, Debug)]

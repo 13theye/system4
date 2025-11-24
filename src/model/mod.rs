@@ -7,36 +7,30 @@ pub mod controller;
 pub mod terminal_processor;
 
 use crate::{
+    command_engine::{context::ExecutionContext, Command},
     groups::{Rhythm, Voice, VoiceId},
-    model::controller::Command,
+    managers::{RhythmManager, VoiceManager},
     osc::{OscController, OscSender},
     particle::ParticleSystem,
+    rendering::{GpuSegmentBuffer, RenderState},
     services::sequencer::SequencerService,
-    terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
+    terminals::commands::rhythm::RhythmParamModification,
+    ui::UiState,
     utils::IdGenerator,
     view::RhythmView,
 };
 
-use fps::FpsManager;
-use nannou::{prelude::*, text::Font, wgpu::TextureReshaper};
-use nannou_egui::Egui;
-use nnpipe::renderers::{
-    HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentGpu, SegmentRenderer,
-};
-use nnpipe::*;
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 
-use std::{cell::RefCell, collections::HashMap};
-
-pub type GpuParticleBuffer = Vec<ParticleGpu>;
-pub type GpuSegmentBuffer = Vec<SegmentGpu>;
+use std::collections::HashMap;
 
 pub struct Model {
     pub particle_system: ParticleSystem,
 
-    pub voices: HashMap<VoiceId, Voice>,
-    pub rhythms: HashMap<VoiceId, Rhythm>,
+    // State managers
+    pub voice_manager: VoiceManager,
+    pub rhythm_manager: RhythmManager,
     pub rhythm_view: RhythmView,
 
     // Clock and Sequencers
@@ -48,64 +42,20 @@ pub struct Model {
     pub osc_send: OscSender,
     pub osc_loop: OscSender,
 
-    // Windows' texture reshapers
-    pub render_size: Vec2,
-    pub render_rect: Rect,
-    pub audience_window_id: WindowId,
-    pub performer_window_id: WindowId,
-    pub control_window_id: WindowId,
-    pub audience_reshaper: TextureReshaper,
-    pub performer_reshaper: TextureReshaper,
+    // Rendering state
+    pub render_state: RenderState,
 
-    // Nannou API
-    /// Draw context for UI elements to audience_window only
-    pub audience_draw: nannou::Draw,
-    /// Draw context for UI elements to performer_window only
-    pub performer_draw: nannou::Draw,
-    /// Draw context for drawing UI elements to ui_window only
-    pub control_draw: nannou::Draw,
-
-    // Rendering engine
-    pub gpu_particle_buffer: GpuParticleBuffer,
-    pub gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
-    pub rendering: RefCell<Nnpipe>,
-    pub heatmap_renderer: HeatmapRenderer,
-    pub particle_renderer: ParticleRenderer,
-    pub segment_renderer: SegmentRenderer,
-    pub dpi_scale: f32,
-    pub font: Font,
-
-    // Zero-copy particle rendering counts
-    pub particle_count: usize,
-    pub segment_instance_count: usize,
+    // UI state
+    pub ui_state: UiState,
 
     // Simple ID counter
     pub id_generator: IdGenerator,
 
-    // Egui
-    pub egui: Egui,
-
     // Random
     pub rng: ThreadRng,
 
-    // FPS display
-    pub fps: FpsManager,
-
-    // Debug stuff
-    pub show_bounds: bool,
-    pub show_forces: bool,
-
-    // Command input for NTerminal
-    pub command_input: CommandInput,
-
-    // Terminal view manager for on-screen display
-    pub terminal_manager: RefCell<TerminalViewManager>,
-
     // Unified command queue with priority resolution
     pub command_queue: Vec<Command>,
-
-    // UI state
-    pub active_tab: usize, // 0 = Voices, 1 = NTerminal
 }
 
 impl Drop for Model {
@@ -122,4 +72,213 @@ fn erase_drone(model: &mut Model, id: i32) {
     model.kill_voice(voice_id);
     model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);
+}
+
+// ExecutionContext implementation for Model
+impl ExecutionContext for Model {
+    fn log_command(&mut self, command: &crate::command_engine::Command) {
+        self.ui_state
+            .terminal_manager
+            .borrow_mut()
+            .process_command(command);
+    }
+
+    // Voice state access - delegate to voice_manager
+    fn has_voice(&self, voice_id: VoiceId) -> bool {
+        self.voice_manager.has_voice(voice_id)
+    }
+
+    fn get_voice(&self, voice_id: VoiceId) -> Option<&Voice> {
+        self.voice_manager.get_voice(voice_id)
+    }
+
+    fn get_voice_mut(&mut self, voice_id: VoiceId) -> Option<&mut Voice> {
+        self.voice_manager.get_voice_mut(voice_id)
+    }
+
+    fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice) {
+        self.voice_manager.insert_voice(voice_id, voice);
+    }
+
+    fn remove_voice(&mut self, voice_id: VoiceId) -> Option<Voice> {
+        self.voice_manager.remove_voice(voice_id)
+    }
+
+    fn voices(&self) -> &HashMap<VoiceId, Voice> {
+        self.voice_manager.voices()
+    }
+
+    fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice> {
+        self.voice_manager.voices_mut()
+    }
+
+    // Rhythm state access - delegate to rhythm_manager
+    fn has_rhythm(&self, voice_id: VoiceId) -> bool {
+        self.rhythm_manager.has_rhythm(voice_id)
+    }
+
+    fn get_rhythm(&self, voice_id: VoiceId) -> Option<&Rhythm> {
+        self.rhythm_manager.get_rhythm(voice_id)
+    }
+
+    fn get_rhythm_mut(&mut self, voice_id: VoiceId) -> Option<&mut Rhythm> {
+        self.rhythm_manager.get_rhythm_mut(voice_id)
+    }
+
+    fn insert_rhythm(&mut self, voice_id: VoiceId, rhythm: Rhythm) {
+        self.rhythm_manager.insert_rhythm(voice_id, rhythm);
+    }
+
+    fn remove_rhythm(&mut self, voice_id: VoiceId) -> Option<Rhythm> {
+        self.rhythm_manager.remove_rhythm(voice_id)
+    }
+
+    fn rhythms(&self) -> &HashMap<VoiceId, Rhythm> {
+        self.rhythm_manager.rhythms()
+    }
+
+    fn rhythms_mut(&mut self) -> &mut HashMap<VoiceId, Rhythm> {
+        self.rhythm_manager.rhythms_mut()
+    }
+
+    // Rhythm view access
+    fn rhythm_view(&self) -> &RhythmView {
+        &self.rhythm_view
+    }
+
+    fn rhythm_view_mut(&mut self) -> &mut RhythmView {
+        &mut self.rhythm_view
+    }
+
+    // Wind field access
+    fn wind_field(&mut self) -> &mut crate::forces::WindField {
+        &mut self.particle_system.forces.wind_field
+    }
+
+    // Particle system defaults
+    fn default_particle_color(&self) -> nannou::color::Rgb {
+        self.particle_system.default_particle_color
+    }
+
+    fn global_max_spawn_rate(&self) -> f32 {
+        self.particle_system.global_max_spawn_rate
+    }
+
+    // GPU segment buffer access - delegate to voice_manager
+    fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer> {
+        self.voice_manager.get_segment_buffer(voice_id)
+    }
+
+    fn insert_segment_buffer(
+        &mut self,
+        voice_id: VoiceId,
+        buffer: crate::rendering::GpuSegmentBuffer,
+    ) {
+        self.voice_manager.insert_segment_buffer(voice_id, buffer);
+    }
+
+    fn remove_segment_buffer(
+        &mut self,
+        voice_id: VoiceId,
+    ) -> Option<crate::rendering::GpuSegmentBuffer> {
+        self.voice_manager.remove_segment_buffer(voice_id)
+    }
+
+    // Sequencer service access
+    fn sequencer_service(&mut self) -> &mut SequencerService {
+        &mut self.sequencer_service
+    }
+
+    // OSC communication
+    fn osc_send(&mut self) -> &mut crate::osc::OscSender {
+        &mut self.osc_send
+    }
+
+    // Random number generator
+    fn rng(&mut self) -> &mut rand::rngs::ThreadRng {
+        &mut self.rng
+    }
+
+    // Command queue
+    fn queue_command(&mut self, command: crate::command_engine::Command) {
+        self.command_queue.push(command);
+    }
+
+    // Validation - delegate to managers
+    fn validate_voice_exists(&self, voice_id: VoiceId) -> bool {
+        self.voice_manager.validate_voice_exists(voice_id)
+    }
+
+    fn validate_rhythm_exists(&self, voice_id: VoiceId) -> bool {
+        self.rhythm_manager.validate_rhythm_exists(voice_id)
+    }
+
+    fn validate_circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
+        self.voice_manager
+            .validate_circle_exists(voice_id, circle_id)
+    }
+
+    // Composite operations - delegate to voice_manager with wind field access
+    fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
+        let wind_field = &mut self.particle_system.forces.wind_field;
+        self.voice_manager
+            .remove_circle_from_voice(voice_id, circle_id, wind_field)
+    }
+
+    fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
+        let wind_field = &mut self.particle_system.forces.wind_field;
+        self.voice_manager
+            .remove_all_circles_from_voice(voice_id, wind_field);
+    }
+
+    // Rhythm composite operations - delegate to rhythm_manager with service access
+    fn update_rhythm_sequencer(&mut self, voice_id: VoiceId) {
+        self.rhythm_manager
+            .update_rhythm_sequencer(voice_id, &mut self.sequencer_service);
+    }
+
+    fn rhythm_reroll_wings(&mut self, voice_id: VoiceId) {
+        self.rhythm_manager.rhythm_reroll_wings(
+            voice_id,
+            &mut self.rng,
+            &mut self.sequencer_service,
+        );
+    }
+
+    fn rhythm_add_wings(&mut self, voice_id: VoiceId, count: usize) {
+        self.rhythm_manager
+            .rhythm_add_wings(voice_id, count, &mut self.rng);
+    }
+
+    fn rhythm_stop_sequencer(&mut self, voice_id: VoiceId) {
+        self.rhythm_manager
+            .rhythm_stop_sequencer(voice_id, &mut self.sequencer_service);
+    }
+
+    fn rhythm_modify_all_slots_length(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    ) {
+        self.rhythm_manager
+            .rhythm_modify_all_slots_length(voice_id, modification, &mut self.rng);
+    }
+
+    fn rhythm_modify_all_slots_velocity(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    ) {
+        self.rhythm_manager
+            .rhythm_modify_all_slots_velocity(voice_id, modification, &mut self.rng);
+    }
+
+    fn rhythm_modify_all_slots_cutoff(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    ) {
+        self.rhythm_manager
+            .rhythm_modify_all_slots_cutoff(voice_id, modification, &mut self.rng);
+    }
 }
