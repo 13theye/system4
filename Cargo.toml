@@ -17,7 +17,10 @@ objc2-app-kit = "0.3"
 rand = "0.9"
 rand_distr = "0.5"
 rayon = "1.10"
+reqwest = "0.12"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
 thread-priority = "2"
 
 fps = { path = "../13thlib/fps" }
