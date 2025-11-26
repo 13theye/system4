@@ -1,10 +1,8 @@
 use crate::{
-    services::openai::schema::response::{OpenAIOutputContent, OpenAIOutputItem},
-    services::openai::OpenAIService,
+    services::openai::schema::response::OpenAIOutputItem, services::openai::OpenAIService,
     settings::OpenAIServiceConfig,
 };
 
-use openai_api_rs::v1::chat_completion::Content;
 use serde_json::Value;
 
 pub struct AIRhythm {

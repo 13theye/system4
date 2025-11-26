@@ -112,7 +112,7 @@ impl RhythmManager {
 
         let rhythm = match self.rhythms.entry(voice_id) {
             Entry::Occupied(entry) => {
-                sequencer_service.stop_sequencer(voice_id);
+                //sequencer_service.stop_sequencer(voice_id);
                 entry.into_mut()
             }
             Entry::Vacant(entry) => {
@@ -297,7 +297,7 @@ fn extract_bracketed_rhythm(output_item: &OpenAIOutputItem) -> Option<String> {
                 }
             }
         }
-        OpenAIOutputItem::Reasoning(reasoning) => {}
+        OpenAIOutputItem::Reasoning(_) => {}
     }
 
     if content.is_empty() {
@@ -327,6 +327,13 @@ fn extract_bracketed_rhythm(output_item: &OpenAIOutputItem) -> Option<String> {
     if inner.trim().chars().all(|c| c == 'O' || c == 'X') {
         Some(candidate.to_string())
     } else {
-        None
+        let mut filtered_candidate = String::new();
+        for ch in candidate.chars() {
+            if ch == 'O' || ch == 'X' {
+                filtered_candidate.push(ch);
+            }
+        }
+        filtered_candidate = format!("[{}]", filtered_candidate);
+        Some(filtered_candidate)
     }
 }
