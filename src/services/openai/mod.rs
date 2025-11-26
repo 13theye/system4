@@ -1,3 +1,8 @@
+// Primary OpenAI service module.
+//
+// This module provides a fire-and-poll synchronous façade backed by a Tokio
+// runtime and reqwest.
+
 // src/services/open_ai.rs
 //
 // OpenAI REST API client
@@ -5,10 +10,10 @@
 pub mod schema;
 
 use crate::settings::OpenAIServiceConfig;
-use schema::request::*;
-use schema::response::*;
 
+use openai_api_rs::v1::responses::{CreateResponseRequest, ResponseObject};
 use reqwest::Client;
+use serde_json::json;
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
 
@@ -25,8 +30,8 @@ pub struct OpenAIService {
     // Runtime shutdown channel:
     runtime_shutdown_tx: broadcast::Sender<()>,
     // Task channel
-    task_tx: mpsc::Sender<Option<OpenAIResponse>>,
-    task_rx: mpsc::Receiver<Option<OpenAIResponse>>,
+    task_tx: mpsc::Sender<Option<ResponseObject>>,
+    task_rx: mpsc::Receiver<Option<ResponseObject>>,
 
     // Reqwest client:
     client: Client,
@@ -77,9 +82,10 @@ impl OpenAIService {
                     match generate_response(content, system_prompt, url, model, client).await {
                         Ok(response) => {
                             println!(
-                                "OpenAIService: received successful response of length {}",
-                                response.output.len()
+                                "OpenAIService: received successful response with id: {}",
+                                response.id
                             );
+
                             // Pass message back to OpenAIService main task
                             let _ = tx.send(Some(response)).await;
                         }
@@ -107,7 +113,7 @@ impl OpenAIService {
     }
 
     /// Try to retrieve a completed response, if any.
-    pub fn try_recv(&mut self) -> Option<OpenAIResponse> {
+    pub fn try_recv(&mut self) -> Option<ResponseObject> {
         match self.task_rx.try_recv() {
             Ok(Some(response)) => Some(response),
             Ok(None) | Err(_) => None,
@@ -143,34 +149,37 @@ impl Drop for OpenAIService {
     }
 }
 
-/// Sends a REST AP request via OpenAI API
+/// Sends a REST API request via OpenAI Responses using openai-api-rs types
 async fn generate_response(
     content: String,
     prompt: Option<String>,
     url: String,
     model: String,
     client: Client,
-) -> Result<OpenAIResponse, Box<dyn Error + Send + Sync>> {
-    let reasoning = OpenAIReasoningConfig {
-        effort: OpenAIReasoningEffort::Low,
+) -> Result<ResponseObject, Box<dyn Error + Send + Sync>> {
+    // Build CreateResponseRequest from simple string fields.
+    let mut request = CreateResponseRequest::new();
+    request.model = Some(model);
+
+    // Temporary workaround to append the instructions to the input because the
+    // "instructions" field is not working in LMStudio
+    let content = if let Some(prompt) = prompt {
+        format!("input : {}\ninstructions : {}", content, prompt)
+    } else {
+        content
     };
 
-    // Map the plain model string from config to our enum
-    let model = match model.as_str() {
-        "openai/gpt-oss-20b" => OpenAIModelName::GptOss20b,
-        other => {
-            return Err(format!("Unsupported model name: {}", other).into());
-        }
-    };
+    request.input = Some(json!(content));
 
-    let instructions = prompt.unwrap_or("".to_owned());
+    // There is a bug in LMStudio that prevents instructions from being recognized.
+    /*
+    if let Some(instructions) = prompt {
+        request.instructions = Some(instructions);
+    }
+    */
 
-    let request = OpenAIRequest {
-        model,
-        input: content,
-        instructions,
-        reasoning: Some(reasoning),
-    };
+    // Optional: request low-effort reasoning, matching previous behavior.
+    request.reasoning = Some(json!({ "effort": "low" }));
 
     let request_raw =
         serde_json::to_string(&request).expect("OpenAIService task: failed to serialize request");
@@ -200,16 +209,20 @@ async fn generate_response(
     // Debug: log raw response body before attempting JSON parse
     eprintln!("OpenAIService: raw response body: {}", response_raw);
 
-    let response: OpenAIResponse = serde_json::from_str(&response_raw)?;
+    let response: ResponseObject = serde_json::from_str(&response_raw)?;
 
     // Treat either an explicit "completed" status or a missing status
     // (some backends omit it) as a successful, final response.
     if matches!(response.status.as_deref(), Some("completed") | None) {
+        // If there is an error object, surface it as an Err.
+        if let Some(err) = &response.error {
+            return Err(format!("OpenAI error: {}", err).into());
+        }
         return Ok(response);
     }
 
-    if let Some(err) = response.error {
-        return Err(err.message.into());
+    if let Some(err) = &response.error {
+        return Err(format!("OpenAI error: {}", err).into());
     }
 
     Err(format!(
