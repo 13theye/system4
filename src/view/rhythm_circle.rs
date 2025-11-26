@@ -354,7 +354,7 @@ impl RhythmElement for RhythmRect {
         );
 
         // Get slot parameters for scaling
-        let rhythm_slot = rhythm_params.slots.get(slot);
+        let rhythm_slot = rhythm_params.slot_params.get(slot);
         let length_scale = rhythm_slot.map(|s| s.length).unwrap_or(1.0);
         let velocity_scale = rhythm_slot.map(|s| s.velocity).unwrap_or(1.0);
 

@@ -7,7 +7,7 @@ use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rand_distr::{Distribution, SkewNormal};
 
 use crate::{
-    groups::{RhythmParams, RhythmSlot, RhythmSlotIndexed, VoiceId, VoiceParams},
+    groups::{RhythmParams, RhythmSlotParams, Sequence, VoiceId, VoiceParams},
     particle::emitter::Emitter,
     services::sequencer::SequencerService,
     terminals::commands::rhythm::RangeSize,
@@ -60,18 +60,12 @@ impl Rhythm {
     }
 
     /*************** For AI Rhythm *************************** */
-    /// Future function for gathering RhythmSlots for LLM
-    pub fn as_ai_rhythm(&self) -> Vec<RhythmSlotIndexed> {
-        self.params
-            .slots
-            .iter()
-            .enumerate()
-            .map(|(i, slot)| (i, *slot))
-            .collect()
+    pub fn as_serializable_sequence(&self) -> Sequence {
+        self.params.to_serializable_sequence()
     }
 
     /// Simpler test function that gathers filled slots for LLM
-    pub fn as_test_ai_rhythm(&self) -> String {
+    pub fn as_string_representation(&self) -> String {
         let mut output = String::from("[");
         for i in 0..self.params.capacity {
             if self.params.wings.contains(&i) {
@@ -92,7 +86,10 @@ impl Rhythm {
     pub fn apply_ai_pattern(&mut self, pattern: &str) {
         let trimmed = pattern.trim();
         if !trimmed.starts_with('[') || !trimmed.ends_with(']') || trimmed.len() < 3 {
-            println!("Rhythm::apply_ai_pattern: invalid pattern format: {}", pattern);
+            println!(
+                "Rhythm::apply_ai_pattern: invalid pattern format: {}",
+                pattern
+            );
             return;
         }
 
@@ -227,10 +224,11 @@ impl Rhythm {
         self.params.wings = Rhythm::roll_wings(rng, self.params.capacity, self.params.num_wings);
     }
 
+    /// Slot parameters are pre-initialized up to NUM_SLOTS
     pub fn initialize_slots(&mut self, rng: &mut ThreadRng) {
         for _ in 0..NUM_SLOTS {
             let slot = self.roll_slot(rng);
-            self.params.slots.push(slot);
+            self.params.slot_params.push(slot);
         }
     }
 
@@ -241,11 +239,11 @@ impl Rhythm {
         nums
     }
 
-    pub fn roll_slot(&mut self, rng: &mut ThreadRng) -> RhythmSlot {
+    pub fn roll_slot(&mut self, rng: &mut ThreadRng) -> RhythmSlotParams {
         let length = rng.random_range(self.params.length_range.to_range_inclusive());
         let velocity = rng.random_range(self.params.velocity_range.to_range_inclusive());
         let cutoff = rng.random_range(self.params.cutoff_range.to_range_inclusive());
-        RhythmSlot {
+        RhythmSlotParams {
             length,
             velocity,
             cutoff,
@@ -253,19 +251,19 @@ impl Rhythm {
     }
 
     pub fn set_all_slot_velocity(&mut self, val: f32) {
-        for slot in &mut self.params.slots {
+        for slot in &mut self.params.slot_params {
             slot.velocity = val;
         }
     }
 
     pub fn set_all_slot_length(&mut self, val: f32) {
-        for slot in &mut self.params.slots {
+        for slot in &mut self.params.slot_params {
             slot.length = val;
         }
     }
 
     pub fn set_all_slot_cutoff(&mut self, val: f32) {
-        for slot in &mut self.params.slots {
+        for slot in &mut self.params.slot_params {
             slot.cutoff = val;
         }
     }
@@ -274,11 +272,11 @@ impl Rhythm {
     pub fn randomize_all_slots_length(&mut self, range: RangeSize, rng: &mut ThreadRng) {
         let skew_params = range.to_skew_distribution_params();
         if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
-            for slot in &mut self.params.slots {
+            for slot in &mut self.params.slot_params {
                 slot.length = skew_normal.sample(rng);
             }
         } else {
-            for slot in &mut self.params.slots {
+            for slot in &mut self.params.slot_params {
                 println!("failed at skew");
 
                 slot.length = rng.random_range(range.to_range_inclusive());
@@ -290,11 +288,11 @@ impl Rhythm {
     pub fn randomize_all_slots_velocity(&mut self, range: RangeSize, rng: &mut ThreadRng) {
         let skew_params = range.to_skew_distribution_params();
         if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
-            for slot in &mut self.params.slots {
+            for slot in &mut self.params.slot_params {
                 slot.velocity = skew_normal.sample(rng);
             }
         } else {
-            for slot in &mut self.params.slots {
+            for slot in &mut self.params.slot_params {
                 println!("failed at skew");
 
                 slot.velocity = rng.random_range(range.to_range_inclusive());
@@ -306,11 +304,11 @@ impl Rhythm {
     pub fn randomize_all_slots_cutoff(&mut self, range: RangeSize, rng: &mut ThreadRng) {
         let skew_params = range.to_skew_distribution_params();
         if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
-            for slot in &mut self.params.slots {
+            for slot in &mut self.params.slot_params {
                 slot.cutoff = skew_normal.sample(rng);
             }
         } else {
-            for slot in &mut self.params.slots {
+            for slot in &mut self.params.slot_params {
                 println!("failed at skew");
                 slot.cutoff = rng.random_range(range.to_range_inclusive());
             }
@@ -329,7 +327,7 @@ impl Rhythm {
                 self.set_all_slot_length(value.clamp(0.0, 1.0));
             }
             RhythmParamModification::Relative(delta) => {
-                for slot in &mut self.params.slots {
+                for slot in &mut self.params.slot_params {
                     slot.length = (slot.length + delta).clamp(0.0, 1.0);
                 }
             }
@@ -351,7 +349,7 @@ impl Rhythm {
                 self.set_all_slot_velocity(value.clamp(0.0, 1.0));
             }
             RhythmParamModification::Relative(delta) => {
-                for slot in &mut self.params.slots {
+                for slot in &mut self.params.slot_params {
                     slot.velocity = (slot.velocity + delta).clamp(0.0, 1.0);
                 }
             }
@@ -373,7 +371,7 @@ impl Rhythm {
                 self.set_all_slot_cutoff(value.clamp(0.0, 1.0));
             }
             RhythmParamModification::Relative(delta) => {
-                for slot in &mut self.params.slots {
+                for slot in &mut self.params.slot_params {
                     slot.cutoff = (slot.cutoff + delta).clamp(0.0, 1.0);
                 }
             }

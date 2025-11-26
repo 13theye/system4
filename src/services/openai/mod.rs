@@ -58,7 +58,7 @@ impl OpenAIService {
     }
 
     /// Send a request via OpenAI API
-    pub fn send(&mut self, content: &str) -> Result<(), String> {
+    pub fn send(&mut self, content: String) -> Result<(), String> {
         // Clone the content, system prompt, model name, url, client
         let content = content.to_owned();
         let system_prompt = self.system_prompt.clone();

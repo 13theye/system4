@@ -1,8 +1,11 @@
 use crate::{
-    groups::{Rhythm, VoiceId},
+    groups::{Rhythm, RhythmParams, VoiceId},
     managers::AIRhythm,
     services::{
-        openai::schema::response::{OpenAIOutputContent, OpenAIOutputItem},
+        openai::schema::{
+            response::{OpenAIOutputContent, OpenAIOutputItem},
+            RhythmResponseObject,
+        },
         sequencer::SequencerService,
     },
     settings::OpenAIServiceConfig,
@@ -52,20 +55,127 @@ impl RhythmManager {
             return;
         };
 
-        let current_rhythm = rhythm.as_test_ai_rhythm();
+        let current_rhythm = rhythm;
         println!(
             "RhythmManager: sending rhythm {:?} from {:?} to AI for target {:?}",
-            current_rhythm, sample_voice, target_voice
+            current_rhythm.as_string_representation(),
+            sample_voice,
+            target_voice
         );
 
         // Record which voice the AI result should be applied to.
         self.pending_ai_voice = Some(target_voice);
-        self.ai_rhythm.send_openai(&current_rhythm);
+        self.ai_rhythm
+            .send_openai(rhythm.as_serializable_sequence());
     }
 
     /// Poll the AI service for completed responses, extract the first-line
     /// rhythm pattern, and apply it to the voice that initiated the request.
     pub fn poll_ai(
+        &mut self,
+        now: Instant,
+        sequencer_service: &mut SequencerService,
+        rhythm_view: &mut RhythmView,
+        rng: &mut ThreadRng,
+    ) {
+        let output_items = self.ai_rhythm.poll_openai();
+        if output_items.is_empty() {
+            return;
+        }
+
+        // Determine which voice this AI result belongs to.
+        let Some(voice_id) = self.pending_ai_voice.take() else {
+            println!("RhythmManager: received AI rhythm text but no pending voice; ignoring");
+            return;
+        };
+
+        // Find the first text that contains a parsable rhythm on its first line.
+        let mut rhythm_params: Option<RhythmParams> = None;
+        for output_item in &output_items {
+            if let OpenAIOutputItem::Message(message) = output_item {
+                let message_str = serde_json::to_string_pretty(message).unwrap();
+                println!("RhythmManager: AI response received:");
+                println!("{}", message_str);
+            }
+
+            if let Some(pattern) = extract_rhythm_params(output_item) {
+                rhythm_params = Some(pattern);
+                break;
+            }
+        }
+
+        let Some(rhythm_params) = rhythm_params else {
+            println!(
+                "RhythmManager: AI response for {:?} did not contain a valid RhythmParams: {:?}",
+                voice_id, output_items
+            );
+            return;
+        };
+
+        println!(
+            "RhythmManager: applying AI rhythm {} to {:?}",
+            &rhythm_params.as_test_ai_rhythm(),
+            voice_id
+        );
+
+        // Ensure a Rhythm exists for the target voice; if not, create one
+        // with default values before applying the AI pattern.
+        use std::collections::hash_map::Entry;
+
+        let rhythm = match self.rhythms.entry(voice_id) {
+            Entry::Occupied(entry) => {
+                //sequencer_service.stop_sequencer(voice_id);
+                entry.into_mut()
+            }
+            Entry::Vacant(entry) => {
+                let config = RhythmConfig::get_defaults_for_voice(voice_id);
+                let resolved = config.merge_with_defaults();
+                let params = resolved.to_rhythm_params();
+                let mut rhythm = Rhythm::new_with_params(voice_id, params);
+
+                // Initialize default slots and wings so the rhythm is fully
+                // functional before we override wings via the AI pattern.
+                rhythm.initialize_slots(rng);
+                rhythm.randomize_wings(rng);
+
+                // Hook up sequencer and callbacks.
+                rhythm.add_sequencer(sequencer_service);
+                if let Some(data_rx) = sequencer_service.get_data_rx(voice_id) {
+                    rhythm.set_sequencer_data_rx(data_rx);
+                }
+
+                // Create a default formation for this voice.
+                let radius = if voice_id == VoiceId::Voice1 {
+                    800.0
+                } else {
+                    450.0
+                };
+
+                rhythm_view.add_formation(
+                    voice_id,
+                    RhythmFormationType::Circle { radius },
+                    rhythm.get_params(),
+                    now,
+                );
+
+                entry.insert(rhythm)
+            }
+        };
+
+        // Apply the AI-derived pattern, then keep sequencer and view in sync.
+        rhythm.set_params(rhythm_params);
+        rhythm.update_sequencer(sequencer_service);
+        rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), now);
+
+        // Schedule Voice2 to start when Voice1 hits slot 0 on the next
+        // whole-note boundary. This keeps both voices time- and
+        // sequence-aligned without restarting Voice1.
+        sequencer_service.sync_start_sequencer_to_voice(voice_id, VoiceId::Voice1);
+    }
+
+    /// Poll the AI service for completed responses, extract the first-line
+    /// rhythm pattern, and apply it to the voice that initiated the request.
+    pub fn poll_ai_text_based_rhythm(
         &mut self,
         now: Instant,
         sequencer_service: &mut SequencerService,
@@ -342,4 +452,50 @@ fn extract_bracketed_rhythm(output_item: &OpenAIOutputItem) -> Option<String> {
         filtered_candidate = format!("[{}]", filtered_candidate);
         Some(filtered_candidate)
     }
+}
+
+/// Extracts a RhythmParams from an AI response text.
+///
+/// The OpenAI model sometimes wraps the JSON object in Markdown code fences
+/// (e.g. ```json ... ```). This helper is tolerant of such wrappers by
+/// extracting the first JSON object found in the text.
+fn extract_rhythm_params(output_item: &OpenAIOutputItem) -> Option<RhythmParams> {
+    match output_item {
+        OpenAIOutputItem::Message(message) => {
+            for output_content in &message.content {
+                if let OpenAIOutputContent::OutputText { text } = output_content {
+                    // Some models return the JSON wrapped in Markdown code
+                    // fences (```json ... ```). To be robust, we extract the
+                    // substring from the first '{' to the last '}' and attempt
+                    // to parse that as JSON.
+                    let trimmed = text.trim();
+
+                    let json_candidate =
+                        if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
+                            // SAFETY: `start` and `end` are valid byte indices
+                            // returned by `find`/`rfind` on the same &str.
+                            &trimmed[start..=end]
+                        } else {
+                            trimmed
+                        };
+
+                    match serde_json::from_str::<RhythmResponseObject>(json_candidate) {
+                        Ok(object) => {
+                            return Some(RhythmParams::from_sequence(object.sequence));
+                        }
+                        Err(e) => {
+                            println!(
+                                "Failed to parse RhythmResponseObject from text. Candidate JSON: '{}'. Error: {}",
+                                json_candidate,
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        OpenAIOutputItem::Reasoning(_) => {}
+    }
+
+    None
 }

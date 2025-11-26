@@ -35,7 +35,7 @@ pub struct FormatObject {
 impl Default for FormatObject {
     fn default() -> Self {
         let schema = schema_for!(RhythmResponseObject);
-        let description = String::from("The schema describes parameters needed to create a rhythm sequence. The field \"capacity\" is the length of the sequence. The field \"wings\" is an array containing the 0-indexed positions of active notes in the sequence. The fields \"velocity\", \"length\", and \"cutoff\" are each arrays of parameters corresponding to notes in the rhythm sequence. Each parameter is a number from 0.0 to 1.0. Finally, the \"haiku\" field is a string containing the haiku that you are asked to generate in the prompt.");
+        let description = String::from("The schema describes parameters needed to create a rhythm sequence. The length of the sequence in beat subdivisions is equal to the length of the array. The \"rhythm\" field is a string representing the rhythm sequence enclosed in square brackets. O is note off, and X is note on. The field \"index\" is the 0-indexed positions of a note in the sequence. The fields \"velocity\", \"length\", and \"cutoff\" are parameters describing notes in the rhythm sequence. Each parameter is a number from 0.0 to 1.0. Finally, the \"haiku\" field is a string containing the haiku that you are asked to generate in the prompt.");
 
         Self {
             typ: "json_schema".to_owned(),

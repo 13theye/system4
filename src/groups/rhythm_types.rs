@@ -5,12 +5,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::terminals::commands::rhythm::RangeSize;
 
-/// Defines the parameters of a single sequencer step. Each parameter is a number from 0.0 to 1.0.
+/// Defines the velocity, length, and cutoffparameters of a single sequencer step. Each parameter is a number from 0.0 to 1.0.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
-pub struct RhythmSlot {
+pub struct RhythmSlotParams {
     pub velocity: f32,
     pub length: f32,
     pub cutoff: f32,
+}
+
+/// Serializable sequencer step. Each parameter is a number from 0.0 to 1.0.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
+pub struct RhythmSlot {
+    pub index: usize,
+    pub velocity: f32,
+    pub length: f32,
+    pub cutoff: f32,
+}
+
+/// Serializable sequence.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct Sequence {
+    pub rhythm: String,
+    pub content: Vec<RhythmSlot>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,7 +48,7 @@ pub struct RhythmParams {
     // A LIFO buffer of wings that have been removed. Facilitates undo
     pub wings_buffer: Vec<usize>,
     // The OSC parameters to be sent for each slot
-    pub slots: Vec<RhythmSlot>,
+    pub slot_params: Vec<RhythmSlotParams>,
 }
 
 impl Default for RhythmParams {
@@ -46,7 +62,7 @@ impl Default for RhythmParams {
             cutoff_range: RangeSize::default(),
             wings: Vec::new(),
             wings_buffer: Vec::new(),
-            slots: Vec::new(),
+            slot_params: Vec::new(),
         }
     }
 }
@@ -69,10 +85,101 @@ impl RhythmParams {
             cutoff_range: pitch_range,
             wings: Vec::new(),
             wings_buffer: Vec::new(),
-            slots: Vec::new(),
+            slot_params: Vec::new(),
         }
     }
-}
 
-/// A serializable version of `RhythmSlot`
-pub type RhythmSlotIndexed = (usize, RhythmSlot);
+    pub fn to_serializable_sequence(&self) -> Sequence {
+        let mut content = Vec::with_capacity(self.capacity);
+
+        for i in 0..self.capacity {
+            let slot = RhythmSlot {
+                index: i,
+                velocity: self.slot_params[i].velocity,
+                length: self.slot_params[i].length,
+                cutoff: self.slot_params[i].cutoff,
+            };
+            content.insert(i, slot);
+        }
+
+        let rhythm = self.as_test_ai_rhythm();
+
+        Sequence { rhythm, content }
+    }
+
+    /// Simpler test function that gathers filled slots for LLM
+    pub fn as_test_ai_rhythm(&self) -> String {
+        let mut output = String::from("[");
+        for i in 0..self.capacity {
+            if self.wings.contains(&i) {
+                output.push('X');
+            } else {
+                output.push('O');
+            }
+        }
+        output.push(']');
+
+        output
+    }
+
+    pub fn from_sequence(sequence: Sequence) -> Self {
+        use std::collections::HashMap;
+
+        // Derive capacity from the rhythm string itself so we always match the
+        // number of beat positions (including both X and O), regardless of how
+        // many entries the model puts into `content`.
+        let rhythm_chars: Vec<char> = sequence
+            .rhythm
+            .chars()
+            .filter(|c| *c == 'X' || *c == 'O')
+            .collect();
+        let capacity = rhythm_chars.len();
+
+        // Start from defaults so we inherit sensible subdivision and ranges,
+        // then override capacity and fill slot/wings data from the sequence.
+        let mut output = Self::default();
+        output.capacity = capacity;
+        output.slot_params = Vec::with_capacity(capacity);
+        output.wings.clear();
+        output.wings_buffer.clear();
+
+        // Build a lookup table from index -> slot parameters so we can handle
+        // sparse `content` arrays where only active slots are provided.
+        let mut slot_map: HashMap<usize, RhythmSlotParams> = HashMap::new();
+        for slot in &sequence.content {
+            slot_map.insert(
+                slot.index,
+                RhythmSlotParams {
+                    velocity: slot.velocity,
+                    length: slot.length,
+                    cutoff: slot.cutoff,
+                },
+            );
+        }
+
+        // For every beat position 0..capacity, either take the model-provided
+        // parameters or fall back to a neutral default.
+        for i in 0..capacity {
+            if let Some(params) = slot_map.get(&i) {
+                output.slot_params.push(*params);
+            } else {
+                output.slot_params.push(RhythmSlotParams {
+                    velocity: 0.5,
+                    length: 0.5,
+                    cutoff: 0.5,
+                });
+            }
+        }
+
+        // Wings (active slots) are determined purely by the rhythm string.
+        output.wings.clear();
+        for (i, c) in rhythm_chars.iter().enumerate() {
+            if *c == 'X' {
+                output.wings.push(i);
+            }
+        }
+
+        output.num_wings = output.wings.len();
+        output
+    }
+}

@@ -132,7 +132,7 @@ impl Sequencer {
         };
 
         // Don't send if the slot is missing
-        let Some(slot) = self.params.slots.get(beat) else {
+        let Some(slot) = self.params.slot_params.get(beat) else {
             return;
         };
 

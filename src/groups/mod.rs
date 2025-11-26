@@ -10,4 +10,4 @@ pub mod rhythm;
 pub use rhythm::Rhythm;
 
 pub mod rhythm_types;
-pub use rhythm_types::{RhythmParams, RhythmSlot, RhythmSlotIndexed};
+pub use rhythm_types::{RhythmParams, RhythmSlot, RhythmSlotParams, Sequence};
