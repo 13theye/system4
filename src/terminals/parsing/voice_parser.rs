@@ -37,9 +37,7 @@ impl VoiceParser {
             "newCircle" => Self::parse_new_circle_from_voice(tokens, position, voice_id),
             "removeCircle" => Self::parse_remove_circle_from_voice(tokens, position, voice_id),
             "clear" => Self::parse_clear_from_voice(tokens, position, voice_id),
-            "generateRhythm" => {
-                Self::parse_generate_rhythm_from_voice(tokens, position, voice_id)
-            }
+            "generate" => Self::parse_generate_rhythm_from_voice(tokens, position, voice_id),
             _ => {
                 // Check if this is a parameter modification command
                 match categorize_parameter(&sub_command) {

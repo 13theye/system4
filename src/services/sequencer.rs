@@ -62,19 +62,12 @@ impl Sequencer {
 
     /// Start the sequencer with the current column set to 0.
     pub fn start(&mut self) {
-        if !self.state.is_advancing {
-            self.state.is_advancing = true;
-            self.state.is_sending = true;
-            self.next_beat = Some(0);
+        self.state.is_advancing = true;
+        self.state.is_sending = true;
+        self.next_beat = Some(0);
 
-            if self.debug {
-                println!("Sequencer: Started sequencer {}", self.id);
-            }
-        } else if self.debug {
-            println!(
-                "Sequencer: Already started sequencer {}, ignoring command.",
-                self.id
-            );
+        if self.debug {
+            println!("Sequencer: Started sequencer {}", self.id);
         }
     }
 
@@ -303,6 +296,17 @@ impl SequencerService {
         }
     }
 
+    /// Stop a specific sequencer immediately.
+    pub fn stop_sequencer(&mut self, id: VoiceId) {
+        let result = self.command_tx.send(SequencerCommand::Stop { id });
+        if self.debug {
+            println!(
+                "SequencerService: Sent Stop command for {:?} with result: {:?}",
+                id, result
+            );
+        }
+    }
+
     /// Schedule a sequencer to start on the next whole-note boundary when a
     /// reference voice is at position 0. This keeps time and sequence aligned
     /// without restarting the reference voice.
@@ -507,33 +511,31 @@ impl SequencerThread {
                 // event where the reference voice is at position 0, then start
                 // only the target voice.
                 if let Some((target_id, reference_id)) = self.pending_sync_start {
-                    if beat_event.subdivisions.contains(&BeatSubdivision::Whole) {
-                        // Check the reference voice's next_beat without taking
-                        // a mutable borrow yet.
-                        let reference_at_zero = self
-                            .sequencers
-                            .get(&reference_id)
-                            .map(|s| s.next_beat == Some(0))
-                            .unwrap_or(false);
+                    // Check the reference voice's next_beat without taking
+                    // a mutable borrow yet.
+                    let reference_at_zero = self
+                        .sequencers
+                        .get(&reference_id)
+                        .map(|s| s.next_beat == Some(0))
+                        .unwrap_or(false);
 
-                        if reference_at_zero {
-                            if let Some(target) = self.sequencers.get_mut(&target_id) {
-                                if self.debug {
-                                    println!(
+                    if reference_at_zero {
+                        if let Some(target) = self.sequencers.get_mut(&target_id) {
+                            if self.debug {
+                                println!(
                                         "SequencerThread: Sync starting target {} relative to reference {}",
                                         target_id, reference_id
                                     );
-                                }
-                                target.start();
-                                self.pending_sync_start = None;
-                            } else if self.debug {
-                                // Target was removed before we could start it; drop the request.
-                                println!(
+                            }
+                            target.start();
+                            self.pending_sync_start = None;
+                        } else if self.debug {
+                            // Target was removed before we could start it; drop the request.
+                            println!(
                                     "SequencerThread: SyncStartToVoice target {:?} missing; clearing request",
                                     target_id
                                 );
-                                self.pending_sync_start = None;
-                            }
+                            self.pending_sync_start = None;
                         }
                     }
                 }

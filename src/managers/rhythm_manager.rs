@@ -1,7 +1,10 @@
 use crate::{
     groups::{Rhythm, VoiceId},
     managers::AIRhythm,
-    services::sequencer::SequencerService,
+    services::{
+        openai::schema::response::{OpenAIOutputContent, OpenAIOutputItem},
+        sequencer::SequencerService,
+    },
     settings::OpenAIServiceConfig,
     terminals::commands::rhythm::{RhythmConfig, RhythmParamModification},
     view::rhythm_view::RhythmView,
@@ -69,8 +72,8 @@ impl RhythmManager {
         rhythm_view: &mut RhythmView,
         rng: &mut ThreadRng,
     ) {
-        let texts = self.ai_rhythm.poll_openai();
-        if texts.is_empty() {
+        let output_items = self.ai_rhythm.poll_openai();
+        if output_items.is_empty() {
             return;
         }
 
@@ -82,8 +85,8 @@ impl RhythmManager {
 
         // Find the first text that contains a parsable rhythm on its first line.
         let mut rhythm_pattern: Option<String> = None;
-        for text in &texts {
-            if let Some(pattern) = extract_bracketed_rhythm(text) {
+        for output_item in &output_items {
+            if let Some(pattern) = extract_bracketed_rhythm(output_item) {
                 rhythm_pattern = Some(pattern);
                 break;
             }
@@ -93,7 +96,7 @@ impl RhythmManager {
             println!(
                 "RhythmManager: AI response for {:?} did not contain a valid rhythm on the first line: {:?}",
                 voice_id,
-                texts
+                output_items
             );
             return;
         };
@@ -108,7 +111,10 @@ impl RhythmManager {
         use std::collections::hash_map::Entry;
 
         let rhythm = match self.rhythms.entry(voice_id) {
-            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Occupied(entry) => {
+                //sequencer_service.stop_sequencer(voice_id);
+                entry.into_mut()
+            }
             Entry::Vacant(entry) => {
                 let config = RhythmConfig::get_defaults_for_voice(voice_id);
                 let resolved = config.merge_with_defaults();
@@ -140,11 +146,6 @@ impl RhythmManager {
                     now,
                 );
 
-                // Schedule Voice2 to start when Voice1 hits slot 0 on the next
-                // whole-note boundary. This keeps both voices time- and
-                // sequence-aligned without restarting Voice1.
-                sequencer_service.sync_start_sequencer_to_voice(voice_id, VoiceId::Voice1);
-
                 entry.insert(rhythm)
             }
         };
@@ -153,6 +154,11 @@ impl RhythmManager {
         rhythm.apply_ai_pattern(&pattern);
         rhythm.update_sequencer(sequencer_service);
         rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), now);
+
+        // Schedule Voice2 to start when Voice1 hits slot 0 on the next
+        // whole-note boundary. This keeps both voices time- and
+        // sequence-aligned without restarting Voice1.
+        sequencer_service.sync_start_sequencer_to_voice(voice_id, VoiceId::Voice1);
     }
 
     // Rhythm state access
@@ -280,8 +286,28 @@ impl RhythmManager {
 /// Expected format on the first line: `[OXXOOXXOO]` (any combination of
 /// 'O' and 'X' characters inside square brackets). Returns the full
 /// bracketed string if valid, otherwise None.
-fn extract_bracketed_rhythm(text: &str) -> Option<String> {
-    let first_line = text.lines().next()?.trim();
+fn extract_bracketed_rhythm(output_item: &OpenAIOutputItem) -> Option<String> {
+    let mut content: Vec<&String> = Vec::new();
+
+    match output_item {
+        OpenAIOutputItem::Message(message) => {
+            for output_content in &message.content {
+                if let OpenAIOutputContent::OutputText { text } = output_content {
+                    content.push(text);
+                }
+            }
+        }
+        OpenAIOutputItem::Reasoning(_) => {}
+    }
+
+    if content.is_empty() {
+        return None;
+    }
+
+    // Find the content text with the relevant response
+    let relevant_response = content.iter().find(|&c| c.contains('['))?;
+
+    let first_line = relevant_response.lines().next()?.trim();
 
     let start = first_line.find('[')?;
     let end_rel = first_line[start..].find(']')?;
@@ -298,9 +324,16 @@ fn extract_bracketed_rhythm(text: &str) -> Option<String> {
         return None;
     }
 
-    if inner.chars().all(|c| c == 'O' || c == 'X') {
+    if inner.trim().chars().all(|c| c == 'O' || c == 'X') {
         Some(candidate.to_string())
     } else {
-        None
+        let mut filtered_candidate = String::new();
+        for ch in candidate.chars() {
+            if ch == 'O' || ch == 'X' {
+                filtered_candidate.push(ch);
+            }
+        }
+        filtered_candidate = format!("[{}]", filtered_candidate);
+        Some(filtered_candidate)
     }
 }

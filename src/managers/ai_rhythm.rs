@@ -1,9 +1,9 @@
 use crate::{
-    services::openai::{self, OpenAIService},
+    services::openai::schema::response::OpenAIOutputItem, services::openai::OpenAIService,
     settings::OpenAIServiceConfig,
 };
 
-use openai::schema::response::{OpenAIOutputContent, OpenAIOutputItem};
+use serde_json::Value;
 
 pub struct AIRhythm {
     ai_service: OpenAIService,
@@ -24,28 +24,47 @@ impl AIRhythm {
 
     /// Polls OpenAIService for any completed responses and extracts text content.
     ///
-    /// Returns a Vec of all OutputText strings found in the response. The
-    /// caller is responsible for interpreting the content.
-    pub fn poll_openai(&mut self) -> Vec<String> {
-        let mut texts = Vec::new();
+    /// Returns a Vec of all text strings found in "Output Message" and
+    /// "Reasoning" objects in the `output` array of the ResponseObject.
+    pub fn poll_openai(&mut self) -> Vec<OpenAIOutputItem> {
+        let mut output = Vec::new();
 
         if let Some(response) = self.ai_service.try_recv() {
-            println!(
-                "AIRhythm: received OpenAI response with {} output item(s)",
-                response.output.len()
-            );
+            match response.output {
+                Some(Value::Array(items)) => {
+                    println!(
+                        "AIRhythm: received OpenAI response with {} output item(s)",
+                        items.len()
+                    );
 
-            for item in response.output {
-                if let OpenAIOutputItem::Message(message) = item {
-                    for content in message.content {
-                        if let OpenAIOutputContent::OutputText { text } = content {
-                            texts.push(text);
+                    for item_val in items {
+                        // Push the output item into the output vector if valid
+                        match serde_json::from_value::<OpenAIOutputItem>(item_val) {
+                            Ok(output_item) => {
+                                output.push(output_item);
+                            }
+
+                            Err(e) => {
+                                println!(
+                                    "AIRhythm: failed to parse output item into OpenAIOutputItem: {}",
+                                    e
+                                );
+                            }
                         }
                     }
+                }
+                Some(other) => {
+                    println!(
+                        "AIRhythm: received OpenAI response with non-array output: {:?}",
+                        other
+                    );
+                }
+                None => {
+                    println!("AIRhythm: received OpenAI response with no output field");
                 }
             }
         }
 
-        texts
+        output
     }
 }
