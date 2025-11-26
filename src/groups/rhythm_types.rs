@@ -1,11 +1,12 @@
 //use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::terminals::commands::rhythm::RangeSize;
 
-/// Defines the parameters of a single rhythm firing
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+/// Defines the parameters of a single sequencer step. Each parameter is a number from 0.0 to 1.0.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
 pub struct RhythmSlot {
     pub velocity: f32,
     pub length: f32,

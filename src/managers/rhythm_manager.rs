@@ -86,6 +86,12 @@ impl RhythmManager {
         // Find the first text that contains a parsable rhythm on its first line.
         let mut rhythm_pattern: Option<String> = None;
         for output_item in &output_items {
+            if let OpenAIOutputItem::Message(message) = output_item {
+                let message_str = serde_json::to_string_pretty(message).unwrap();
+                println!("RhythmManager: AI response received:");
+                println!("{}", message_str);
+            }
+
             if let Some(pattern) = extract_bracketed_rhythm(output_item) {
                 rhythm_pattern = Some(pattern);
                 break;

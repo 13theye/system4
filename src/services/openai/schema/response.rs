@@ -5,11 +5,11 @@
 // parsing the `output` array of a ResponseObject: output messages,
 // reasoning items, and their text content.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// An item in the `output` array. It can be either a standard assistant message
 /// or a reasoning object.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum OpenAIOutputItem {
     Message(OpenAIOutputMessage),
@@ -17,7 +17,7 @@ pub enum OpenAIOutputItem {
 }
 
 /// A single output item of type "message".
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OpenAIOutputMessage {
     pub id: String,
     /// Status of this message item; may be omitted in some responses.
@@ -32,7 +32,7 @@ pub struct OpenAIOutputMessage {
 }
 
 /// A reasoning object in the output array.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OpenAIOutputReasoning {
     pub id: String,
     /// Status of this reasoning item; may be omitted in some responses.
@@ -47,7 +47,7 @@ pub struct OpenAIOutputReasoning {
 }
 
 /// A single content block within an output message.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OpenAIOutputContent {
     /// Textual content.
@@ -61,7 +61,7 @@ pub enum OpenAIOutputContent {
 
 /// One block of reasoning text, used in both `summary` and `content` of
 /// reasoning items.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OpenAIReasoningText {
     pub text: String,
     #[serde(rename = "type")]

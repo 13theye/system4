@@ -9,7 +9,7 @@
 
 pub mod schema;
 
-use crate::settings::OpenAIServiceConfig;
+use crate::{services::openai::schema::request::TextObject, settings::OpenAIServiceConfig};
 
 use openai_api_rs::v1::responses::{CreateResponseRequest, ResponseObject};
 use reqwest::Client;
@@ -21,7 +21,7 @@ pub struct OpenAIService {
     // LLM system prompt
     pub system_prompt: Option<String>,
 
-    // Model name, url
+    // Model name, url, schema
     pub model: String,
     pub url: String,
 
@@ -163,8 +163,15 @@ async fn generate_response(
 
     // Temporary workaround to append the instructions to the input because the
     // "instructions" field is not working in LMStudio
+
+    let text_object = TextObject::default();
+    let text = serde_json::to_string(&text_object).unwrap();
+
     let content = if let Some(prompt) = prompt {
-        format!("input : {}\ninstructions : {}", content, prompt)
+        format!(
+            "input : {}\ninstructions : {}\n text: {}",
+            content, prompt, text
+        )
     } else {
         content
     };
@@ -181,8 +188,14 @@ async fn generate_response(
     // Optional: request low-effort reasoning, matching previous behavior.
     request.reasoning = Some(json!({ "effort": "low" }));
 
-    let request_raw =
-        serde_json::to_string(&request).expect("OpenAIService task: failed to serialize request");
+    // Format object
+    /*
+    let text = TextObject::default();
+    request.text = Some(json!(text));
+    */
+
+    let request_raw = serde_json::to_string_pretty(&request)
+        .expect("OpenAIService task: failed to serialize request");
 
     // Debug: log request body before sending
     println!("OpenAIService: request body: {}", request_raw);
