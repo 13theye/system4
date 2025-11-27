@@ -202,7 +202,7 @@ impl Model {
                     "Terminal: invoking RhythmManager::send_to_ai() for generateRhythm on {:?}",
                     target_voice
                 );
-                self.rhythm_manager.send_to_ai();
+                self.rhythm_manager.request_ai_rhythm();
             }
         }
     }

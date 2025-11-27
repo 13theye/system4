@@ -1,13 +1,7 @@
 use crate::{
     groups::{Rhythm, RhythmParams, VoiceId},
-    managers::AIRhythm,
-    services::{
-        openai::schema::{
-            response::{OpenAIOutputContent, OpenAIOutputItem},
-            RhythmObject,
-        },
-        sequencer::SequencerService,
-    },
+    managers::{AIRhythm, AiRhythmResult},
+    services::sequencer::SequencerService,
     settings::OpenAIServiceConfig,
     terminals::commands::rhythm::{RhythmConfig, RhythmParamModification},
     view::rhythm_view::RhythmView,
@@ -25,9 +19,6 @@ use std::time::Instant;
 pub struct RhythmManager {
     rhythms: HashMap<VoiceId, Rhythm>,
     ai_rhythm: AIRhythm,
-    /// Voice for which we most recently sent an AI rhythm request.
-    /// We assume a single in-flight AI request at a time.
-    pending_ai_voice: Option<VoiceId>,
 }
 
 impl RhythmManager {
@@ -35,15 +26,13 @@ impl RhythmManager {
         Self {
             rhythms: HashMap::new(),
             ai_rhythm: AIRhythm::new(config),
-            pending_ai_voice: None,
         }
     }
 
-    /************ AI Rhythm *************************** */
     /// Send the current rhythm state for Voice1 to the AI service.
     ///
     /// The AI-generated rhythm will be applied to Voice2.
-    pub fn send_to_ai(&mut self) {
+    pub fn request_ai_rhythm(&mut self) {
         let sample_voice = VoiceId::Voice1;
         let target_voice = VoiceId::Voice2;
 
@@ -62,12 +51,9 @@ impl RhythmManager {
             target_voice
         );
 
-        let rhythm_object = current_rhythm.as_serializable_object();
-        println!("RhythmManager: sending object: \n{:#?}", rhythm_object);
-
-        // Record which voice the AI result should be applied to.
-        self.pending_ai_voice = Some(target_voice);
-        self.ai_rhythm.send_openai(rhythm_object);
+        // Delegate AI request construction and sending to AIRhythm.
+        self.ai_rhythm
+            .request_rhythm_for_voice(current_rhythm.get_params(), target_voice);
     }
 
     /// Poll the AI service for completed responses, extract the first valid
@@ -79,45 +65,34 @@ impl RhythmManager {
         rhythm_view: &mut RhythmView,
         rng: &mut ThreadRng,
     ) {
-        let output_items = self.ai_rhythm.poll_openai();
-        if output_items.is_empty() {
+        let results: Vec<AiRhythmResult> = self.ai_rhythm.poll_results();
+        if results.is_empty() {
             return;
         }
 
-        // Determine which voice this AI result belongs to.
-        let Some(voice_id) = self.pending_ai_voice.take() else {
-            println!(
-                "RhythmManager: (warning) received AI rhythm text but no pending voice; ignoring"
+        for result in results {
+            self.apply_rhythm_params_to_voice(
+                result.target_voice,
+                result.params,
+                now,
+                sequencer_service,
+                rhythm_view,
+                rng,
             );
-            return;
-        };
-
-        // Find the first instance of the Message type of OpenAIOutputItem
-        let mut rhythm_params: Option<RhythmParams> = None;
-        for output_item in &output_items {
-            print_output_item(output_item);
-            if let Some(pattern) = extract_rhythm_params(output_item) {
-                rhythm_params = Some(pattern);
-                break;
-            }
         }
+    }
 
-        let Some(rhythm_params) = rhythm_params else {
-            println!(
-                "RhythmManager: AI response for {:?} did not contain a valid RhythmParams: {:#?}",
-                voice_id, output_items
-            );
-            return;
-        };
-
-        println!(
-            "RhythmManager: applying AI rhythm {} to {:?}",
-            &rhythm_params.as_test_ai_rhythm(),
-            voice_id
-        );
-
-        // Ensure a Rhythm exists for the target voice; if not, create one
-        // with default values before applying the AI pattern.
+    /// Ensure a Rhythm exists for the target voice, then apply AI-derived
+    /// `RhythmParams` and keep sequencer and view in sync.
+    fn apply_rhythm_params_to_voice(
+        &mut self,
+        voice_id: VoiceId,
+        rhythm_params: RhythmParams,
+        now: Instant,
+        sequencer_service: &mut SequencerService,
+        rhythm_view: &mut RhythmView,
+        rng: &mut ThreadRng,
+    ) {
         use std::collections::hash_map::Entry;
 
         let rhythm = match self.rhythms.entry(voice_id) {
@@ -157,13 +132,18 @@ impl RhythmManager {
             }
         };
 
-        // Apply the AI-derived pattern, then keep sequencer and view in sync.
+        println!(
+            "RhythmManager: applying AI rhythm {} to {:?}",
+            rhythm_params.as_test_ai_rhythm(),
+            voice_id
+        );
+
         rhythm.set_params(rhythm_params);
         rhythm.update_sequencer(sequencer_service);
         rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), now);
 
-        // Schedule Voice2 to start when Voice1 hits slot 0 on the next
-        // whole-note boundary. This keeps both voices time- and
+        // Schedule the target voice to start when Voice1 hits slot 0 on the
+        // next whole-note boundary. This keeps both voices time- and
         // sequence-aligned without restarting Voice1.
         sequencer_service.sync_start_to_voice(voice_id, VoiceId::Voice1);
     }
@@ -284,74 +264,6 @@ impl RhythmManager {
     ) {
         if let Some(rhythm) = self.rhythms.get_mut(&voice_id) {
             rhythm.modify_all_slots_cutoff(modification, rng);
-        }
-    }
-}
-
-/// Extracts a RhythmParams from an AI response text.
-///
-/// The OpenAI model sometimes wraps the JSON object in Markdown code fences
-/// (e.g. ```json ... ```). This helper is tolerant of such wrappers by
-/// extracting the first JSON object found in the text.
-fn extract_rhythm_params(output_item: &OpenAIOutputItem) -> Option<RhythmParams> {
-    match output_item {
-        OpenAIOutputItem::Message(message) => {
-            for output_content in &message.content {
-                if let OpenAIOutputContent::OutputText { text } = output_content {
-                    // Some models return the JSON wrapped in Markdown code
-                    // fences (```json ... ```). To be robust, we extract the
-                    // substring from the first '{' to the last '}' and attempt
-                    // to parse that as JSON.
-                    let trimmed = text.trim();
-
-                    let json_candidate =
-                        if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
-                            // SAFETY: `start` and `end` are valid byte indices
-                            // returned by `find`/`rfind` on the same &str.
-                            &trimmed[start..=end]
-                        } else {
-                            trimmed
-                        };
-
-                    match serde_json::from_str::<RhythmObject>(json_candidate) {
-                        Ok(object) => {
-                            return Some(RhythmParams::from_rhythm_response_object(object));
-                        }
-                        Err(e) => {
-                            println!(
-                                "Failed to parse RhythmResponseObject from text. Candidate JSON: '{}'. Error: {}",
-                                json_candidate,
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        OpenAIOutputItem::Reasoning(_) => {}
-    }
-
-    None
-}
-
-fn print_output_item(output_item: &OpenAIOutputItem) {
-    match output_item {
-        OpenAIOutputItem::Message(message) => {
-            println!("RhythmManager: AI output message received");
-            for (idx, output_content) in message.content.iter().enumerate() {
-                if let OpenAIOutputContent::OutputText { text } = output_content {
-                    println!("\n--- OutputText #{idx} raw ---");
-                    println!("{}", text); // shows real newlines if they’re actual '\n' chars
-                }
-            }
-        }
-        OpenAIOutputItem::Reasoning(reasoning) => {
-            println!("RhythmManager: AI output reasoning received");
-            for (idx, text) in reasoning.content.iter().enumerate() {
-                let inner_text = &text.text;
-                println!("\n--- Reasoning Text #{idx} raw ---");
-                println!("{}", inner_text); // shows real newlines if they’re actual '\n' chars
-            }
         }
     }
 }
