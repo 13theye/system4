@@ -1,6 +1,7 @@
 use crate::{
-    groups::Sequence, services::openai::schema::response::OpenAIOutputItem,
-    services::openai::OpenAIService, settings::OpenAIServiceConfig,
+    services::openai::schema::{response::OpenAIOutputItem, RhythmObject},
+    services::openai::OpenAIService,
+    settings::OpenAIServiceConfig,
 };
 
 use serde_json::Value;
@@ -17,10 +18,10 @@ impl AIRhythm {
     }
 
     /// Send a request to OpenAI.
-    pub fn send_openai(&mut self, sequence: Sequence) {
-        let sequence_str = serde_json::to_string(&sequence).unwrap();
+    pub fn send_openai(&mut self, object: RhythmObject) {
+        let object_str = serde_json::to_string(&object).unwrap();
         println!("AIRhythm: starting OpenAI request");
-        self.ai_service.send(sequence_str).unwrap();
+        self.ai_service.send(object_str).unwrap();
     }
 
     /// Polls OpenAIService for any completed responses and extracts text content.

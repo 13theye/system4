@@ -7,9 +7,9 @@ use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rand_distr::{Distribution, SkewNormal};
 
 use crate::{
-    groups::{RhythmParams, RhythmSlotParams, Sequence, VoiceId, VoiceParams},
+    groups::{RhythmParams, RhythmSlotParams, VoiceId, VoiceParams},
     particle::emitter::Emitter,
-    services::sequencer::SequencerService,
+    services::{openai::schema::RhythmObject, sequencer::SequencerService},
     terminals::commands::rhythm::RangeSize,
 };
 
@@ -60,8 +60,8 @@ impl Rhythm {
     }
 
     /*************** For AI Rhythm *************************** */
-    pub fn as_serializable_sequence(&self) -> Sequence {
-        self.params.to_serializable_sequence()
+    pub fn as_serializable_object(&self) -> RhythmObject {
+        self.params.to_serializable_object()
     }
 
     /// Simpler test function that gathers filled slots for LLM

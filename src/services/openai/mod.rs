@@ -21,6 +21,9 @@ pub struct OpenAIService {
     // LLM system prompt
     pub system_prompt: Option<String>,
 
+    // Response Schema description
+    pub schema_description: Option<String>,
+
     // Model name, url, schema
     pub model: String,
     pub url: String,
@@ -47,6 +50,7 @@ impl OpenAIService {
 
         Self {
             system_prompt: Some(config.system_prompt.to_owned()),
+            schema_description: Some(config.schema_description.to_owned()),
             model: config.model.to_owned(),
             url: config.url.to_owned(),
             runtime: Some(runtime),
@@ -59,9 +63,10 @@ impl OpenAIService {
 
     /// Send a request via OpenAI API
     pub fn send(&mut self, content: String) -> Result<(), String> {
-        // Clone the content, system prompt, model name, url, client
+        // Clone the content, system prompt, schema description, model name, url, client
         let content = content.to_owned();
         let system_prompt = self.system_prompt.clone();
+        let schema_description = self.schema_description.clone();
         let model = self.model.clone();
         let client = self.client.clone();
         let url = self.url.clone();
@@ -79,10 +84,19 @@ impl OpenAIService {
                 };
 
                 let task = async {
-                    match generate_response(content, system_prompt, url, model, client).await {
+                    match generate_response(
+                        content,
+                        system_prompt,
+                        schema_description,
+                        url,
+                        model,
+                        client,
+                    )
+                    .await
+                    {
                         Ok(response) => {
                             println!(
-                                "OpenAIService: received successful response with id: {}",
+                                "OpenAIService: Received successful response with id: {}",
                                 response.id
                             );
 
@@ -153,6 +167,7 @@ impl Drop for OpenAIService {
 async fn generate_response(
     content: String,
     prompt: Option<String>,
+    schema_description: Option<String>,
     url: String,
     model: String,
     client: Client,
@@ -164,7 +179,7 @@ async fn generate_response(
     // Temporary workaround to append the instructions to the input because the
     // "instructions" field is not working in LMStudio
 
-    let text_object = TextObject::default();
+    let text_object = TextObject::new(schema_description);
     let text = serde_json::to_string(&text_object).unwrap();
 
     let content = if let Some(prompt) = prompt {
@@ -197,8 +212,7 @@ async fn generate_response(
     let request_raw = serde_json::to_string_pretty(&request)
         .expect("OpenAIService task: failed to serialize request");
 
-    // Debug: log request body before sending
-    println!("OpenAIService: request body: {}", request_raw);
+    println!("OpenAIService: sending response request");
 
     // Ensure server treats body as JSON
     let response_http = client
@@ -218,9 +232,6 @@ async fn generate_response(
         );
         return Err(format!("HTTP {}: {}", status, response_raw).into());
     }
-
-    // Debug: log raw response body before attempting JSON parse
-    eprintln!("OpenAIService: raw response body: {}", response_raw);
 
     let response: ResponseObject = serde_json::from_str(&response_raw)?;
 

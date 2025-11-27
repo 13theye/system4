@@ -1,32 +1,17 @@
 //use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
-use crate::terminals::commands::rhythm::RangeSize;
+use crate::{
+    services::openai::schema::{RhythmObject, RhythmSlotObject, SequenceObject},
+    terminals::commands::rhythm::RangeSize,
+};
 
 /// Defines the velocity, length, and cutoffparameters of a single sequencer step. Each parameter is a number from 0.0 to 1.0.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy)]
 pub struct RhythmSlotParams {
     pub velocity: f32,
     pub length: f32,
     pub cutoff: f32,
-}
-
-/// Serializable sequencer step. Each parameter is a number from 0.0 to 1.0.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
-pub struct RhythmSlot {
-    pub index: usize,
-    pub velocity: f32,
-    pub length: f32,
-    pub cutoff: f32,
-}
-
-/// Serializable sequence.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct Sequence {
-    pub rhythm: String,
-    pub content: Vec<RhythmSlot>,
 }
 
 #[derive(Debug, Clone)]
@@ -89,11 +74,11 @@ impl RhythmParams {
         }
     }
 
-    pub fn to_serializable_sequence(&self) -> Sequence {
+    pub fn to_serializable_object(&self) -> RhythmObject {
         let mut content = Vec::with_capacity(self.capacity);
 
         for i in 0..self.capacity {
-            let slot = RhythmSlot {
+            let slot = RhythmSlotObject {
                 index: i,
                 velocity: self.slot_params[i].velocity,
                 length: self.slot_params[i].length,
@@ -104,7 +89,13 @@ impl RhythmParams {
 
         let rhythm = self.as_test_ai_rhythm();
 
-        Sequence { rhythm, content }
+        let sequence = SequenceObject { rhythm, content };
+
+        RhythmObject {
+            capacity: self.capacity,
+            sequence,
+            poem: None,
+        }
     }
 
     /// Simpler test function that gathers filled slots for LLM
@@ -122,31 +113,31 @@ impl RhythmParams {
         output
     }
 
-    pub fn from_sequence(sequence: Sequence) -> Self {
+    pub fn from_rhythm_response_object(object: RhythmObject) -> Self {
         use std::collections::HashMap;
 
         // Derive capacity from the rhythm string itself so we always match the
         // number of beat positions (including both X and O), regardless of how
         // many entries the model puts into `content`.
-        let rhythm_chars: Vec<char> = sequence
+        let rhythm_chars: Vec<char> = object
+            .sequence
             .rhythm
             .chars()
             .filter(|c| *c == 'X' || *c == 'O')
             .collect();
-        let capacity = rhythm_chars.len();
 
         // Start from defaults so we inherit sensible subdivision and ranges,
         // then override capacity and fill slot/wings data from the sequence.
-        let mut output = Self::default();
-        output.capacity = capacity;
-        output.slot_params = Vec::with_capacity(capacity);
-        output.wings.clear();
-        output.wings_buffer.clear();
+        let mut output = RhythmParams {
+            capacity: object.capacity,
+            slot_params: Vec::with_capacity(object.capacity),
+            ..Default::default()
+        };
 
         // Build a lookup table from index -> slot parameters so we can handle
         // sparse `content` arrays where only active slots are provided.
         let mut slot_map: HashMap<usize, RhythmSlotParams> = HashMap::new();
-        for slot in &sequence.content {
+        for slot in &object.sequence.content {
             slot_map.insert(
                 slot.index,
                 RhythmSlotParams {
@@ -159,7 +150,7 @@ impl RhythmParams {
 
         // For every beat position 0..capacity, either take the model-provided
         // parameters or fall back to a neutral default.
-        for i in 0..capacity {
+        for i in 0..object.capacity {
             if let Some(params) = slot_map.get(&i) {
                 output.slot_params.push(*params);
             } else {

@@ -63,4 +63,5 @@ pub struct OpenAIServiceConfig {
     pub url: String,
     pub model: String,
     pub system_prompt: String,
+    pub schema_description: String,
 }
