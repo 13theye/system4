@@ -9,11 +9,16 @@
 
 pub mod schema;
 
-use crate::{services::openai::schema::request::TextObject, settings::OpenAIServiceConfig};
+use crate::{
+    services::openai::schema::request::{ReasoningConfigExt, TextConfigExt},
+    settings::OpenAIServiceConfig,
+};
 
-use openai_api_rs::v1::responses::{CreateResponseRequest, ResponseObject};
-use reqwest::Client;
-use serde_json::json;
+use async_openai::{
+    config::OpenAIConfig,
+    types::responses::{self as openai_response},
+    Client,
+};
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
 
@@ -26,25 +31,21 @@ pub struct OpenAIService {
 
     // Model name, url, schema
     pub model: String,
-    pub url: String,
 
     // Strict adherence to OpenAI API request schema
     // Set to false when using LMStudio
-    pub strict_object_adherence: bool,
+    pub strict_request_object_adherence: bool,
 
     // Tokio runtime for async tasks
     runtime: Option<tokio::runtime::Runtime>,
     // Runtime shutdown channel:
     runtime_shutdown_tx: broadcast::Sender<()>,
     // Task channel
-    task_tx: mpsc::Sender<Option<ResponseObject>>,
-    task_rx: mpsc::Receiver<Option<ResponseObject>>,
+    task_tx: mpsc::Sender<Option<openai_response::Response>>,
+    task_rx: mpsc::Receiver<Option<openai_response::Response>>,
 
     // Reqwest client:
-    client: Client,
-
-    // API key
-    api_key: Option<String>,
+    client: Client<OpenAIConfig>,
 }
 
 impl OpenAIService {
@@ -55,18 +56,20 @@ impl OpenAIService {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (task_tx, task_rx) = mpsc::channel(1);
 
+        let openai_config = OpenAIConfig::new()
+            .with_api_key(config.api_key.to_owned().unwrap_or_default())
+            .with_api_base(config.url.to_owned());
+
         Self {
             system_prompt: Some(config.system_prompt.to_owned()),
             schema_description: config.schema_description.clone(),
             model: config.model.to_owned(),
-            url: config.url.to_owned(),
-            strict_object_adherence: config.strict_object_adherence,
+            strict_request_object_adherence: config.strict_request_object_adherence,
             runtime: Some(runtime),
             runtime_shutdown_tx: shutdown_tx,
             task_tx,
             task_rx,
-            client: Client::new(),
-            api_key: config.api_key.to_owned(),
+            client: Client::with_config(openai_config),
         }
     }
 
@@ -78,9 +81,7 @@ impl OpenAIService {
         let schema_description = self.schema_description.clone();
         let model = self.model.clone();
         let client = self.client.clone();
-        let url = self.url.clone();
-        let api_key = self.api_key.clone();
-        let strict_object_adherence = self.strict_object_adherence;
+        let strict_object_adherence = self.strict_request_object_adherence;
 
         if let Some(runtime) = &self.runtime {
             let tx = self.task_tx.clone();
@@ -99,10 +100,8 @@ impl OpenAIService {
                         content,
                         system_prompt,
                         schema_description,
-                        url,
                         model,
-                        client,
-                        api_key,
+                        &client,
                         strict_object_adherence,
                     )
                     .await
@@ -140,7 +139,7 @@ impl OpenAIService {
     }
 
     /// Try to retrieve a completed response, if any.
-    pub fn try_recv(&mut self) -> Option<ResponseObject> {
+    pub fn try_recv(&mut self) -> Option<openai_response::Response> {
         match self.task_rx.try_recv() {
             Ok(Some(response)) => Some(response),
             Ok(None) | Err(_) => None,
@@ -182,14 +181,65 @@ async fn generate_response(
     content: String,
     prompt: Option<String>,
     schema_description: Option<String>,
+    model: String,
+    client: &Client<OpenAIConfig>,
+    // strict adherence to OpenAPI Responses API
+    strict: bool,
+) -> Result<openai_response::Response, Box<dyn Error + Send + Sync>> {
+    let text_config = openai_response::TextConfig::generate_for_system4_schema(schema_description);
+    let reasoning_config = openai_response::ReasoningConfig::generate();
+
+    let request = if !strict {
+        // workaround to append the instructions to the input because the
+        // "instructions" field isn't working in LMStudio
+        let text = serde_json::to_string(&text_config).unwrap_or_default();
+        let content = if let Some(prompt) = prompt {
+            format!(
+                "input : {}\ninstructions : {}\n text: {}",
+                content, prompt, text
+            )
+        } else {
+            format!("input : {}\n text: {}", content, text)
+        };
+
+        openai_response::CreateResponseArgs::default()
+            .model(model)
+            .input(content)
+            .reasoning(reasoning_config)
+            .build()?
+    } else {
+        // strict adherence to OpenAPI Responses API: use all relevant fields
+        openai_response::CreateResponseArgs::default()
+            .model(model)
+            .input(content)
+            .instructions(prompt.unwrap_or_default())
+            .reasoning(reasoning_config)
+            .text(text_config)
+            .build()?
+    };
+
+    println!("OpenAIService: Response Request object:\n{:#?}", request);
+
+    let response = client.responses().create(request).await?;
+
+    Ok(response)
+}
+
+/*
+/// Sends a REST API request via OpenAI Responses using openai-api-rs types
+#[allow(clippy::too_many_arguments)]
+async fn generate_response(
+    content: String,
+    prompt: Option<String>,
+    schema_description: Option<String>,
     url: String,
     model: String,
-    client: Client,
+    client: Client<OpenAIConfig>,
     api_key: Option<String>,
     strict: bool,
 ) -> Result<ResponseObject, Box<dyn Error + Send + Sync>> {
     // Build CreateResponseRequest from simple string fields.
-    let mut request = CreateResponseRequest::new();
+    let mut request = CreateResponse::new();
     request.model = Some(model);
 
     let text_object = TextObject::new(schema_description);
@@ -280,3 +330,4 @@ async fn generate_response(
     )
     .into())
 }
+*/
