@@ -150,6 +150,11 @@ impl AIRhythm {
 
     /// Extract a `RhythmParams` from an AI response item by parsing any JSON
     /// object that matches our `RhythmObject` schema out of its text content.
+    ///
+    /// This is intentionally tolerant of some common LLM "schema drift" issues,
+    /// such as:
+    /// - wrapping the `sequence` field in an array instead of a single object
+    /// - including extra candidate sequences where only one is needed
     fn extract_rhythm_params(&self, output_item: &OpenAIOutputItem) -> Option<RhythmParams> {
         match output_item {
             OpenAIOutputItem::Message(message) => {
@@ -164,20 +169,34 @@ impl AIRhythm {
                         let json_candidate = if let (Some(start), Some(end)) =
                             (trimmed.find('{'), trimmed.rfind('}'))
                         {
-                            // SAFETY: `start` and `end` are valid byte indices
-                            // returned by `find`/`rfind` on the same &str.
                             &trimmed[start..=end]
                         } else {
                             trimmed
                         };
 
-                        match serde_json::from_str::<RhythmObject>(json_candidate) {
-                            Ok(object) => {
-                                return Some(RhythmParams::from_rhythm_response_object(object));
+                        // First parse into a generic Value so we can repair
+                        // common structural issues, then deserialize into
+                        // `RhythmObject` from the normalized value.
+                        match serde_json::from_str::<Value>(json_candidate) {
+                            Ok(raw_val) => {
+                                let normalized = Self::normalize_rhythm_value(raw_val);
+                                match serde_json::from_value::<RhythmObject>(normalized) {
+                                    Ok(object) => {
+                                        return Some(RhythmParams::from_rhythm_response_object(
+                                            object,
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        println!(
+                                            "AIRhythm: failed to deserialize normalized RhythmObject. Error: {}",
+                                            e
+                                        );
+                                    }
+                                }
                             }
                             Err(e) => {
                                 println!(
-                                    "AIRhythm: failed to parse RhythmObject from text. Candidate JSON: '{}'. Error: {}",
+                                    "AIRhythm: failed to parse JSON for RhythmObject. Candidate JSON: '{}'. Error: {}",
                                     json_candidate,
                                     e
                                 );
@@ -190,6 +209,43 @@ impl AIRhythm {
         }
 
         None
+    }
+
+    /// Best-effort normalization of loosely-structured JSON from the model
+    /// into something that matches the `RhythmObject` schema closely enough
+    /// for `serde` to deserialize it.
+    fn normalize_rhythm_value(mut v: Value) -> Value {
+        // If `sequence` is an array, prefer the first entry that looks like a
+        // proper sequence object with a string `rhythm` field.
+        if let Some(seq_val) = v.get_mut("sequence") {
+            if let Value::Array(arr) = seq_val {
+                if !arr.is_empty() {
+                    // Try to find the most "object-like" candidate.
+                    let mut chosen: Option<Value> = None;
+
+                    for candidate in arr.iter() {
+                        if let Value::Object(map) = candidate {
+                            let has_string_rhythm =
+                                map.get("rhythm").map(|r| r.is_string()).unwrap_or(false);
+                            let has_content_array =
+                                map.get("content").map(|c| c.is_array()).unwrap_or(false);
+
+                            if has_string_rhythm && has_content_array {
+                                chosen = Some(candidate.clone());
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback: just take the first element if nothing matched
+                    // our heuristics.
+                    let chosen = chosen.unwrap_or_else(|| arr[0].clone());
+                    *seq_val = chosen;
+                }
+            }
+        }
+
+        v
     }
 
     /// Debug helper: pretty-print the raw AI output item content in a

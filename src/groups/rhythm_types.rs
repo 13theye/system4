@@ -100,7 +100,7 @@ impl RhythmParams {
 
     /// Simpler test function that gathers filled slots for LLM
     pub fn as_test_ai_rhythm(&self) -> String {
-        let mut output = String::from("[");
+        let mut output = String::new();
         for i in 0..self.capacity {
             if self.wings.contains(&i) {
                 output.push('X');
@@ -108,7 +108,6 @@ impl RhythmParams {
                 output.push('O');
             }
         }
-        output.push(']');
 
         output
     }

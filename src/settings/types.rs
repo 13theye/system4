@@ -64,4 +64,6 @@ pub struct OpenAIServiceConfig {
     pub model: String,
     pub system_prompt: String,
     pub schema_description: String,
+    pub strict_object_adherence: bool,
+    pub api_key: Option<String>,
 }

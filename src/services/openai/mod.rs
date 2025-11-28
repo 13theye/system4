@@ -28,6 +28,10 @@ pub struct OpenAIService {
     pub model: String,
     pub url: String,
 
+    // Strict adherence to OpenAI API request schema
+    // Set to false when using LMStudio
+    pub strict_object_adherence: bool,
+
     // Tokio runtime for async tasks
     runtime: Option<tokio::runtime::Runtime>,
     // Runtime shutdown channel:
@@ -38,6 +42,9 @@ pub struct OpenAIService {
 
     // Reqwest client:
     client: Client,
+
+    // API key
+    api_key: Option<String>,
 }
 
 impl OpenAIService {
@@ -53,11 +60,13 @@ impl OpenAIService {
             schema_description: Some(config.schema_description.to_owned()),
             model: config.model.to_owned(),
             url: config.url.to_owned(),
+            strict_object_adherence: config.strict_object_adherence,
             runtime: Some(runtime),
             runtime_shutdown_tx: shutdown_tx,
             task_tx,
             task_rx,
             client: Client::new(),
+            api_key: config.api_key.to_owned(),
         }
     }
 
@@ -70,6 +79,8 @@ impl OpenAIService {
         let model = self.model.clone();
         let client = self.client.clone();
         let url = self.url.clone();
+        let api_key = self.api_key.clone();
+        let strict_object_adherence = self.strict_object_adherence;
 
         if let Some(runtime) = &self.runtime {
             let tx = self.task_tx.clone();
@@ -91,6 +102,8 @@ impl OpenAIService {
                         url,
                         model,
                         client,
+                        api_key,
+                        strict_object_adherence,
                     )
                     .await
                     {
@@ -164,6 +177,7 @@ impl Drop for OpenAIService {
 }
 
 /// Sends a REST API request via OpenAI Responses using openai-api-rs types
+#[allow(clippy::too_many_arguments)]
 async fn generate_response(
     content: String,
     prompt: Option<String>,
@@ -171,43 +185,44 @@ async fn generate_response(
     url: String,
     model: String,
     client: Client,
+    api_key: Option<String>,
+    strict: bool,
 ) -> Result<ResponseObject, Box<dyn Error + Send + Sync>> {
     // Build CreateResponseRequest from simple string fields.
     let mut request = CreateResponseRequest::new();
     request.model = Some(model);
 
-    // Temporary workaround to append the instructions to the input because the
-    // "instructions" field is not working in LMStudio
-
     let text_object = TextObject::new(schema_description);
-    let text = serde_json::to_string(&text_object).unwrap();
 
-    let content = if let Some(prompt) = prompt {
-        format!(
-            "input : {}\ninstructions : {}\n text: {}",
-            content, prompt, text
-        )
+    // Workaround to append the instructions to the input because the
+    // "instructions" field is not working in LMStudio
+    if !strict {
+        let text = serde_json::to_string(&text_object).unwrap_or_default();
+        let content = if let Some(prompt) = prompt {
+            format!(
+                "input : {}\ninstructions : {}\n text: {}",
+                content, prompt, text
+            )
+        } else {
+            format!("input: {}\ntext: {}", content, text)
+        };
+
+        request.input = Some(json!(content));
     } else {
-        content
-    };
+        // Strictly adhere to OpenAI Response Request object schema
+        let text = Some(json!(text_object));
 
-    request.input = Some(json!(content));
-
-    // There is a bug in LMStudio that prevents instructions from being recognized.
-    /*
-    if let Some(instructions) = prompt {
-        request.instructions = Some(instructions);
+        request.input = Some(json!(content));
+        if let Some(prompt) = prompt {
+            request.instructions = Some(serde_json::to_string(&prompt).unwrap_or_default());
+        }
+        request.text = text;
     }
-    */
 
     // Optional: request low-effort reasoning, matching previous behavior.
     request.reasoning = Some(json!({ "effort": "low" }));
 
-    // Format object
-    /*
-    let text = TextObject::default();
-    request.text = Some(json!(text));
-    */
+    println!("OpenAIService: Response Request object:\n{:#?}", request);
 
     let request_raw = serde_json::to_string_pretty(&request)
         .expect("OpenAIService task: failed to serialize request");
@@ -215,12 +230,22 @@ async fn generate_response(
     println!("OpenAIService: sending response request");
 
     // Ensure server treats body as JSON
-    let response_http = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .body(request_raw)
-        .send()
-        .await?;
+    let response_http = if let Some(api_key) = api_key {
+        client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .body(request_raw)
+            .send()
+            .await?
+    } else {
+        client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(request_raw)
+            .send()
+            .await?
+    };
 
     let status = response_http.status();
     let response_raw = response_http.text().await?;
