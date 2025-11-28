@@ -14,7 +14,7 @@ nannou_osc = "0.19"
 nannou_egui = "0.19"
 
 objc2-app-kit = "0.3"
-async-openai = { path = "../../__libraries/async-openai/async-openai", features = ["byot"] }
+async-openai = { version = "0.30", features = ["byot"] }
 rand = "0.9"
 rand_distr = "0.5"
 rayon = "1.10"

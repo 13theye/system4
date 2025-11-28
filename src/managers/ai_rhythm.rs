@@ -1,10 +1,15 @@
 use crate::{
     groups::{RhythmParams, VoiceId},
-    services::openai::{schema::RhythmObject, OpenAIService},
+    services::openai::{
+        schema::{
+            response::{MessageContent, OutputContent},
+            RhythmObject,
+        },
+        OpenAIService,
+    },
     settings::OpenAIServiceConfig,
 };
 
-use async_openai::types::responses as openai_response;
 use serde_json::Value;
 
 /// High-level, domain-specific result from the AI service: a set of rhythm
@@ -101,9 +106,7 @@ impl AIRhythm {
         results
     }
 
-    fn poll_openai(&mut self) -> Vec<openai_response::OutputContent> {
-        use openai_response::OutputContent;
-
+    fn poll_openai(&mut self) -> Vec<OutputContent> {
         let mut output = Vec::new();
 
         if let Some(response) = self.ai_service.try_recv() {
@@ -121,7 +124,6 @@ impl AIRhythm {
                 OutputContent::Reasoning(_) => {
                     output.push(item.clone());
                 }
-                _ => println!("AIRhythm: ignoring unknown output item type"),
             });
         }
 
@@ -181,18 +183,12 @@ impl AIRhythm {
     /// such as:
     /// - wrapping the `sequence` field in an array instead of a single object
     /// - including extra candidate sequences where only one is needed
-    fn extract_rhythm_params(
-        &self,
-        output_item: &openai_response::OutputContent,
-    ) -> Option<RhythmParams> {
-        use openai_response::{Content, OutputContent};
-
+    fn extract_rhythm_params(&self, output_item: &OutputContent) -> Option<RhythmParams> {
         match output_item {
             OutputContent::Message(message) => {
                 for output_content in &message.content {
                     match output_content {
-                        Content::OutputText(output_text) => {
-                            let text = &output_text.text;
+                        MessageContent::OutputText { text } => {
                             // Some models return the JSON wrapped in Markdown code
                             // fences (```json ... ```). To be robust, we extract the
                             // substring from the first '{' to the last '}' and attempt
@@ -236,14 +232,14 @@ impl AIRhythm {
                                 }
                             }
                         }
-                        Content::Refusal(refusal) => {
-                            println!("AIRhythm: received refusal: {}", refusal.refusal);
+                        MessageContent::Refusal { refusal } => {
+                            println!("AIRhythm: received refusal: {}", refusal);
                         }
+                        _ => {}
                     }
                 }
             }
             OutputContent::Reasoning(_) => {}
-            _ => {}
         }
 
         None
@@ -288,16 +284,14 @@ impl AIRhythm {
 
     /// Debug helper: pretty-print the raw AI output item content in a
     /// human-friendly way.
-    fn print_output_content(&self, output_content: &openai_response::OutputContent) {
-        use openai_response::{Content, OutputContent};
-
+    fn print_output_content(&self, output_content: &OutputContent) {
         match output_content {
             OutputContent::Message(output_message) => {
                 println!("AIRhythm: AI output message received");
                 for (idx, output_content) in output_message.content.iter().enumerate() {
-                    if let Content::OutputText(output_text) = output_content {
+                    if let MessageContent::OutputText { text } = output_content {
                         println!("\n--- OutputText #{idx} raw ---");
-                        println!("{}", output_text.text);
+                        println!("{}", text);
                     }
                 }
             }
@@ -308,9 +302,6 @@ impl AIRhythm {
                     println!("\n--- Reasoning Text #{idx} raw ---");
                     println!("{}", inner_text);
                 }
-            }
-            _ => {
-                println!("AIRhythm: ignoring unknown output item type");
             }
         }
     }

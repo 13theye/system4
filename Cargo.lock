@@ -150,6 +150,8 @@ dependencies = [
 [[package]]
 name = "async-openai"
 version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bf39a15c8d613eb61892dc9a287c02277639ebead41ee611ad23aaa613f1a82"
 dependencies = [
  "async-openai-macros",
  "backoff",
@@ -174,6 +176,8 @@ dependencies = [
 [[package]]
 name = "async-openai-macros"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0289cba6d5143bfe8251d57b4a8cac036adf158525a76533a7082ba65ec76398"
 dependencies = [
  "proc-macro2",
  "quote",

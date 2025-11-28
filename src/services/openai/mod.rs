@@ -10,7 +10,10 @@
 pub mod schema;
 
 use crate::{
-    services::openai::schema::request::{ReasoningConfigExt, TextConfigExt},
+    services::openai::schema::{
+        request::{ReasoningConfigExt, TextConfigExt},
+        response::ResponseObject,
+    },
     settings::OpenAIServiceConfig,
 };
 
@@ -41,8 +44,8 @@ pub struct OpenAIService {
     // Runtime shutdown channel:
     runtime_shutdown_tx: broadcast::Sender<()>,
     // Task channel
-    task_tx: mpsc::Sender<Option<openai_response::Response>>,
-    task_rx: mpsc::Receiver<Option<openai_response::Response>>,
+    task_tx: mpsc::Sender<Option<ResponseObject>>,
+    task_rx: mpsc::Receiver<Option<ResponseObject>>,
 
     // Reqwest client:
     client: Client<OpenAIConfig>,
@@ -139,7 +142,7 @@ impl OpenAIService {
     }
 
     /// Try to retrieve a completed response, if any.
-    pub fn try_recv(&mut self) -> Option<openai_response::Response> {
+    pub fn try_recv(&mut self) -> Option<ResponseObject> {
         match self.task_rx.try_recv() {
             Ok(Some(response)) => Some(response),
             Ok(None) | Err(_) => None,
@@ -185,7 +188,7 @@ async fn generate_response(
     client: &Client<OpenAIConfig>,
     // strict adherence to OpenAPI Responses API
     strict: bool,
-) -> Result<openai_response::Response, Box<dyn Error + Send + Sync>> {
+) -> Result<ResponseObject, Box<dyn Error + Send + Sync>> {
     let text_config = openai_response::TextConfig::generate_for_system4_schema(schema_description);
     let reasoning_config = openai_response::ReasoningConfig::generate();
 
@@ -220,7 +223,7 @@ async fn generate_response(
 
     println!("OpenAIService: Response Request object:\n{:#?}", request);
 
-    let response = client.responses().create(request).await?;
+    let response: ResponseObject = client.responses().create_byot(request).await?;
 
     Ok(response)
 }
