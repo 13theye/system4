@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(rename = "rhythm_response_object_schema")]
+#[serde(rename = "rhythm_object_schema")]
 /// Struct describing the JSON response schema desired from OpenAI API
 /// capacity: the number of slots in the sequence
 /// sequence: the sequence object
@@ -26,7 +26,7 @@ pub struct RhythmObject {
 /// l: note length parameter for external sound engine, range: 0.0 to 1.0
 /// c: cutoff parameter for external sound engine, range: 0.0 to 1.0
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
-pub struct RhythmSlotObject {
+pub struct SequenceParametersObject {
     #[serde(rename = "i")]
     pub index: usize,
     #[serde(rename = "v")]
@@ -38,10 +38,10 @@ pub struct RhythmSlotObject {
 }
 
 /// Serializable sequence.
-/// rhythm: the rhythm of the sequence, expressed as a string of "X" and "O" characters. X = note on, O = note off.
-/// content: array of sequencer steps
+/// rhythm: the rhythm of the sequence, expressed as a string of "X" and "O" characters. Length of the string should be equal to capacity of the sequence. X = note on, O = note off.
+/// parameters: array of sound engine parameters for each sequencer step
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SequenceObject {
     pub rhythm: String,
-    pub content: Vec<RhythmSlotObject>,
+    pub parameters: Vec<SequenceParametersObject>,
 }

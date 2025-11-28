@@ -2,7 +2,7 @@
 use prat::BeatSubdivision;
 
 use crate::{
-    services::openai::schema::{RhythmObject, RhythmSlotObject, SequenceObject},
+    services::openai::schema::{RhythmObject, SequenceObject, SequenceParametersObject},
     terminals::commands::rhythm::RangeSize,
 };
 
@@ -78,7 +78,7 @@ impl RhythmParams {
         let mut content = Vec::with_capacity(self.capacity);
 
         for i in 0..self.capacity {
-            let slot = RhythmSlotObject {
+            let slot = SequenceParametersObject {
                 index: i,
                 velocity: self.slot_params[i].velocity,
                 length: self.slot_params[i].length,
@@ -89,7 +89,10 @@ impl RhythmParams {
 
         let rhythm = self.as_test_ai_rhythm();
 
-        let sequence = SequenceObject { rhythm, content };
+        let sequence = SequenceObject {
+            rhythm,
+            parameters: content,
+        };
 
         RhythmObject {
             capacity: self.capacity,
@@ -136,7 +139,7 @@ impl RhythmParams {
         // Build a lookup table from index -> slot parameters so we can handle
         // sparse `content` arrays where only active slots are provided.
         let mut slot_map: HashMap<usize, RhythmSlotParams> = HashMap::new();
-        for slot in &object.sequence.content {
+        for slot in &object.sequence.parameters {
             slot_map.insert(
                 slot.index,
                 RhythmSlotParams {

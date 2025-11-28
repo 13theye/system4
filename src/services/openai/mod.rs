@@ -57,7 +57,7 @@ impl OpenAIService {
 
         Self {
             system_prompt: Some(config.system_prompt.to_owned()),
-            schema_description: Some(config.schema_description.to_owned()),
+            schema_description: config.schema_description.clone(),
             model: config.model.to_owned(),
             url: config.url.to_owned(),
             strict_object_adherence: config.strict_object_adherence,
