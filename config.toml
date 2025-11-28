@@ -16,20 +16,19 @@ target_addr = "127.0.0.1"
 target_port = 50450
 
 [openai_service]
-
-#use the following for local LMStudio
+# use the following for local LMStudio
 url = "http://localhost:1234/v1/responses"
 model = "openai/gpt-oss-20b"
 strict_object_adherence = false
 
-#use the following for Google Gemma
+# use the following for Google Gemma
 #model = "models/gemma-3-27b-it"
 #url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 #api_key = "AIzaSyCvu1Ke0PH_2rGPrqp0V9Mx_iA2AwUPvys"
 #strict_object_adherence = true
 
 # use the following for all AI models
-system_prompt = "We are playing a rhythm game. I will send you a representation of a rhythm, and you will respond with a rhythm that be played with my rhythm. The rhythm is represented as a string of filled and empty slots. Example: OOXOOOXOOOXOOOXO This represents a sequence with a capacity of 16 subdivisions. The X's are the strikes of the rhythm. The rhythm parameters are an array of objects. Each object has the following fields: index, velocity, length, cutoff. Example: [{\"i\": 0, \"v\": 0.5, \"l\": 0.5, \"c\": 0.5}] The index being 0 means it is the first slot in the sequence. The length, velocity, and cutoff values range from 0.0 - 1.0 and represent timbral and envelope parameters used in the external sound engine. The  length of the array should be the same as the capacity of the sequence. Generate a rhythm that will complement my rhythm. Make it complex and interesting. Consider how it will be played with my rhythm. Generate velocity, length, and cutoff parameters for each note, taking care that each note's timbre and envelope complements the notes in my rhythm. Generate a haiku that describes your thought process in creating the rhythm and include it in the \"poem\" field in the schema. You will respond using the rhythm_object_schema provided to you. A detailed explanation of the schema is provided in the \"description\" field of the schema. If you cannot access the schema, respond with \"CAN'T ACCESS SCHEMA\". "
+system_prompt = "We are playing a rhythm game. I will send you a rhythm, and you will generate a rhythm that will complement my rhythm when played at the same time. Make it complex and interesting. Consider how it will be played with my rhythm. Generate velocity, length, and cutoff parameters for each note, taking care that each note's timbre and envelope complements the timbre and envelope of the corresponding notes in my rhythm. The rhythm is represented as a string of filled and empty slots. Example: OOXOOOXOOOXOOOXO This represents a sequence with a capacity of 16 subdivisions. The X's are the strikes of the rhythm, and the O's are silent. The rhythm parameters are an array of objects. Each object has the following fields: index, velocity, length, cutoff. Example: [{\"i\": 0, \"v\": 0.5, \"l\": 0.5, \"c\": 0.5}] The index being 0 means it is the first slot in the sequence. The length, velocity, and cutoff values range from 0.0 - 1.0 and represent timbre and envelope parameters used in the external sound engine. The number of the objects in the array should be the same as the capacity of the sequence. Generate a haiku that describes your thought process in creating the rhythm and include it in the \"poem\" field in the schema. The haiku may be quite abstract. Respond in valid JSON using the rhythm_object_schema provided to you. If you cannot access the schema, respond with \"CAN'T ACCESS SCHEMA\". "
 #schema_description = "The schema describes parameters needed to create a rhythm sequence. The \"capacity\" is the length of the sequence in beat subdivisions. The \"rhythm\" field is a String representing the rhythm sequence. O is note off, and X is note on. The number of X's and O's should be equal to capacity. No other characters or whitespace are allowed. The field \"i\" is the 0-indexed positions of a note in the sequence. The fields \"v\", \"l\", and \"c\" are parameters describing the velocity, length, and cutoff of each note in the rhythm sequence. Each parameter is a number from 0.0 to 1.0. The \"poem\" field is a String containing the haiku that you are asked to write in the prompt."
 
 [speed]
