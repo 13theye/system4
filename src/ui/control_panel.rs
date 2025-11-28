@@ -368,16 +368,6 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             );
                                             ui.label("• Commands ending with ';' will execute");
                                             ui.label("• Backspace to edit, Escape to clear");
-                                            /*
-                                            ui.add_space(15.0);
-                                            ui.heading("Syntax Guide");
-                                            ui.add_space(5.0);
-                                            ui.label("• Create: voice(0).makeDrone().params().begin();");
-                                            ui.label("• Modify: voice(0).params().set();");
-                                            ui.label("• Parameters:brightness(), volume(), gravity(), etc");
-                                            ui.label("• Values: strings in \"quotes\", numbers");
-                                            ui.add_space(15.0);
-                                             */
                                         }); // end right column scroll area
                                 }); // end right column
                             }); // end terminal horizontal layout

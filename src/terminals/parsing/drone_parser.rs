@@ -1,10 +1,6 @@
 // src/terminals/parsing/drone_parser.rs
 
-use super::{
-    errors::ParseError,
-    parameter::ParameterValue,
-    utils::ParsingUtils,
-};
+use super::{errors::ParseError, parameter::ParameterValue, utils::ParsingUtils};
 use crate::terminals::{
     commands::{drone::DroneBuilder, TerminalCommand, TerminalCommandBuilder},
     tokens::Token,
@@ -24,7 +20,6 @@ impl DroneParser {
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
         let mut found_set = false;
-        let mut found_add = false;
         let mut is_new_circle = false;
         let mut circle_id: Option<i32> = None;
 
@@ -40,12 +35,6 @@ impl DroneParser {
                     found_set = true;
                     break;
                 }
-                "add" => {
-                    ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
-                    ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
-                    found_add = true;
-                    break;
-                }
                 "listCircles" => {
                     ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
                     ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
@@ -58,7 +47,8 @@ impl DroneParser {
                     is_new_circle = true;
                 }
                 "removeCircle" => {
-                    let circle_id_val = ParsingUtils::parse_parentheses_with_number(tokens, position, "circle ID")?;
+                    let circle_id_val =
+                        ParsingUtils::parse_parentheses_with_number(tokens, position, "circle ID")?;
                     return Ok(TerminalCommand::RemoveCircle {
                         voice_id,
                         circle_id: circle_id_val,
@@ -66,7 +56,11 @@ impl DroneParser {
                 }
                 "circle" => {
                     // Parse circle ID for specific circle modification
-                    circle_id = Some(ParsingUtils::parse_parentheses_with_number(tokens, position, "circle ID")?);
+                    circle_id = Some(ParsingUtils::parse_parentheses_with_number(
+                        tokens,
+                        position,
+                        "circle ID",
+                    )?);
                 }
                 _ => {
                     // Parse method call with parameter
@@ -76,12 +70,8 @@ impl DroneParser {
             }
         }
 
-        if !found_set && !found_add {
-            return Err(if is_new_circle {
-                ParseError::MissingAdd
-            } else {
-                ParseError::MissingSet
-            });
+        if !found_set {
+            return Err(ParseError::MissingSet);
         }
 
         ParsingUtils::parse_optional_semicolon(tokens, position)?;

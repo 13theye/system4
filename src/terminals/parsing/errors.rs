@@ -9,9 +9,7 @@ pub enum ParseError {
     InvalidNumber(String),
     UnterminatedString,
     EmptyInput,
-    MissingBegin,
     MissingSet,
-    MissingAdd,
     UnknownCommand(String),
 }
 
@@ -25,9 +23,7 @@ impl fmt::Display for ParseError {
             ParseError::InvalidNumber(s) => write!(f, "Invalid number: {}", s),
             ParseError::UnterminatedString => write!(f, "Unterminated string"),
             ParseError::EmptyInput => write!(f, "Empty input"),
-            ParseError::MissingBegin => write!(f, "Missing .begin() call"),
             ParseError::MissingSet => write!(f, "Missing .set() call"),
-            ParseError::MissingAdd => write!(f, "Missing .add() call"),
             ParseError::UnknownCommand(cmd) => write!(f, "Unknown command: {}", cmd),
         }
     }

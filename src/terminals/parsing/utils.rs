@@ -75,7 +75,7 @@ impl ParsingUtils {
         }
     }
 
-    /// Parse terminator with semicolon: .begin(); or .set(); or .add();
+    /// Parse terminator with semicolon: .set();
     pub fn parse_terminator(
         tokens: &[Token],
         position: &mut usize,
@@ -103,7 +103,10 @@ impl ParsingUtils {
     }
 
     /// Parse optional semicolon at end
-    pub fn parse_optional_semicolon(tokens: &[Token], position: &mut usize) -> Result<(), ParseError> {
+    pub fn parse_optional_semicolon(
+        tokens: &[Token],
+        position: &mut usize,
+    ) -> Result<(), ParseError> {
         if *position < tokens.len() {
             Self::expect_token(tokens, position, &Token::Semicolon)?;
         }
