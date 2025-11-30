@@ -331,14 +331,12 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.process_command_queue(now);
 
     // Poll AI rhythm responses (if any) and apply them to rhythms
-    model
-        .rhythm_manager
-        .poll_ai(
-            now,
-            &mut model.sequencer_service,
-            &mut model.rhythm_view,
-            &mut model.rng,
-        );
+    model.rhythm_manager.update_ai(
+        now,
+        &mut model.sequencer_service,
+        &mut model.rhythm_view,
+        &mut model.rng,
+    );
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);

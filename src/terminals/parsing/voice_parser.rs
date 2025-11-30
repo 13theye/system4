@@ -69,15 +69,12 @@ impl VoiceParser {
         position: &mut usize,
         voice_id: i32,
     ) -> Result<TerminalCommand, ParseError> {
-        // Parse: voice(voice_id).makeDrone().method().begin();
+        // Parse: voice(voice_id).makeDrone().method();
         ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
         ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
 
         let mut builder = DroneBuilder::new();
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
-
-        // Parse method chain until .begin()
-        Self::parse_method_chain_until_terminator(tokens, position, &mut builder, "begin")?;
 
         Ok(TerminalCommand::CreateDrone(builder.build()))
     }
@@ -87,15 +84,12 @@ impl VoiceParser {
         position: &mut usize,
         voice_id: i32,
     ) -> Result<TerminalCommand, ParseError> {
-        // Parse: voice(voice_id).makeRhythm().method().begin();
+        // Parse: voice(voice_id).makeRhythm().method()
         ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
         ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
 
         let mut builder = RhythmBuilder::new();
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
-
-        // Parse method chain until .begin()
-        Self::parse_method_chain_until_terminator(tokens, position, &mut builder, "begin")?;
 
         // Build the RhythmConfig and validate
         let config = builder.build();
@@ -128,15 +122,12 @@ impl VoiceParser {
         position: &mut usize,
         voice_id: i32,
     ) -> Result<TerminalCommand, ParseError> {
-        // Parse: voice(voice_id).newCircle().parameters().add();
+        // Parse: voice(voice_id).newCircle().parameters()
         ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
         ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
 
         let mut builder = DroneBuilder::new();
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
-
-        // Parse method chain until .add()
-        Self::parse_method_chain_until_terminator(tokens, position, &mut builder, "add")?;
 
         Ok(TerminalCommand::NewCircle {
             voice_id,
@@ -266,39 +257,6 @@ impl VoiceParser {
             (false, false) => Err(ParseError::UnexpectedToken {
                 expected: "valid parameter name".to_string(),
                 found: first_param,
-            }),
-        }
-    }
-
-    /// Generic method chain parser that works with any builder until a terminator
-    fn parse_method_chain_until_terminator<T: TerminalCommandBuilder>(
-        tokens: &[Token],
-        position: &mut usize,
-        builder: &mut T,
-        terminator: &str,
-    ) -> Result<(), ParseError> {
-        while ParsingUtils::is_at_dot(tokens, *position) {
-            ParsingUtils::expect_token(tokens, position, &Token::Dot)?;
-            let method_name = ParsingUtils::expect_identifier_any(tokens, position)?;
-
-            if method_name == terminator {
-                ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
-                ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
-                ParsingUtils::parse_optional_semicolon(tokens, position)?;
-                return Ok(());
-            } else {
-                // Parse method call with parameter
-                let parameter = ParsingUtils::parse_parameter_call(tokens, position)?;
-                builder.set_parameter(&method_name, parameter)?;
-            }
-        }
-
-        match terminator {
-            "begin" => Err(ParseError::MissingBegin),
-            "add" => Err(ParseError::MissingAdd),
-            _ => Err(ParseError::UnexpectedToken {
-                expected: format!(".{}()", terminator),
-                found: "end of input".to_string(),
             }),
         }
     }

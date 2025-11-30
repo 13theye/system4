@@ -132,7 +132,7 @@ impl Sequencer {
         };
 
         // Don't send if the slot is missing
-        let Some(slot) = self.params.slots.get(beat) else {
+        let Some(slot) = self.params.slot_params.get(beat) else {
             return;
         };
 
@@ -310,7 +310,7 @@ impl SequencerService {
     /// Schedule a sequencer to start on the next whole-note boundary when a
     /// reference voice is at position 0. This keeps time and sequence aligned
     /// without restarting the reference voice.
-    pub fn sync_start_sequencer_to_voice(&mut self, id: VoiceId, reference: VoiceId) {
+    pub fn sync_start_to_voice(&mut self, id: VoiceId, reference: VoiceId) {
         let result = self
             .command_tx
             .send(SequencerCommand::SyncStartToVoice { id, reference });
