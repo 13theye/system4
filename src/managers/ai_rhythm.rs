@@ -2,7 +2,7 @@ use crate::{
     groups::{RhythmParams, VoiceId},
     services::openai::{
         schema::{
-            response::{MessageContent, OutputContent},
+            response::{MessageContent, OutputContent, OutputMessage},
             RhythmObject,
         },
         OpenAIService,
@@ -21,6 +21,7 @@ pub struct AiRhythmResult {
 }
 
 pub struct AIRhythm {
+    /// OpenAI REST API handler
     ai_service: OpenAIService,
     /// Voice for which we most recently sent an AI rhythm request.
     /// We assume a single in-flight AI request at a time.
@@ -59,122 +60,72 @@ impl AIRhythm {
 
     /// Poll the underlying OpenAIService and, if a complete AI response is
     /// available, convert it into one or more `AiRhythmResult`s.
-    pub fn poll_results(&mut self) -> Vec<AiRhythmResult> {
-        let mut results = Vec::new();
-        let output_items = self.poll_openai();
-        if output_items.is_empty() {
-            return results;
-        }
+    pub fn poll_results(&mut self) -> Option<Vec<AiRhythmResult>> {
+        // Poll the OpenAI service for completed responses.
+        let output_items = self.poll_openai()?;
 
         // Determine which voice this AI result belongs to.
         let Some(voice_id) = self.pending_ai_voice.take() else {
             println!(
                 "AIRhythm: (warning) received AI rhythm output but no pending voice; ignoring"
             );
-            return results;
+            return None;
         };
 
-        // Find the first message that yields valid RhythmParams.
-        let mut rhythm_params: Option<RhythmParams> = None;
+        let mut results = Vec::new();
+
+        // Attempt to generate a valid RhythmParams from first output item.
         for output_item in &output_items {
             self.print_output_content(output_item);
-            if let Some(params) = self.extract_rhythm_params(output_item) {
-                rhythm_params = Some(params);
+
+            if let OutputContent::Message(message) = output_item {
+                let params = self.extract_rhythm_params(message)?;
+
+                println!(
+                    "AIRhythm: parsed AI rhythm {} for {:?}",
+                    params.as_test_ai_rhythm(),
+                    voice_id
+                );
+
+                results.push(AiRhythmResult {
+                    target_voice: voice_id,
+                    params,
+                });
+
                 break;
             }
         }
 
-        let Some(params) = rhythm_params else {
-            println!(
-                "AIRhythm: AI response for {:?} did not contain a valid RhythmParams: {:?}",
-                voice_id, output_items
-            );
-            return results;
-        };
+        Some(results)
+    }
+
+    fn poll_openai(&mut self) -> Option<Vec<OutputContent>> {
+        let response = self.ai_service.try_recv()?;
+
+        let items = response.output;
+        let mut output = Vec::new();
 
         println!(
-            "AIRhythm: parsed AI rhythm {} for {:?}",
-            params.as_test_ai_rhythm(),
-            voice_id
+            "AIRhythm: received OpenAI response with {} output item(s)",
+            items.len()
         );
 
-        results.push(AiRhythmResult {
-            target_voice: voice_id,
-            params,
+        items.iter().for_each(|item| match item {
+            OutputContent::Message(_) => {
+                output.push(item.clone());
+            }
+            OutputContent::Reasoning(_) => {
+                output.push(item.clone());
+            }
         });
 
-        results
-    }
-
-    fn poll_openai(&mut self) -> Vec<OutputContent> {
-        let mut output = Vec::new();
-
-        if let Some(response) = self.ai_service.try_recv() {
-            let items = response.output;
-
-            println!(
-                "AIRhythm: received OpenAI response with {} output item(s)",
-                items.len()
-            );
-
-            items.iter().for_each(|item| match item {
-                OutputContent::Message(_) => {
-                    output.push(item.clone());
-                }
-                OutputContent::Reasoning(_) => {
-                    output.push(item.clone());
-                }
-            });
+        if output.is_empty() {
+            println!("AIRhythm: no output items found in OpenAI response");
+            return None;
         }
 
-        output
+        Some(output)
     }
-
-    /*
-    /// Low-level helper: poll the OpenAIService and decode its `output` array
-    /// into `OpenAIOutputItem`s.
-    fn poll_openai(&mut self) -> Vec<OpenAIOutputItem> {
-        let mut output = Vec::new();
-
-        if let Some(response) = self.ai_service.try_recv() {
-            match response.output {
-                Some(Value::Array(items)) => {
-                    println!(
-                        "AIRhythm: received OpenAI response with {} output item(s)",
-                        items.len()
-                    );
-
-                    for item_val in items {
-                        // Push the output item into the output vector if valid
-                        match serde_json::from_value::<OpenAIOutputItem>(item_val) {
-                            Ok(output_item) => {
-                                output.push(output_item);
-                            }
-
-                            Err(e) => {
-                                println!(
-                                    "AIRhythm: failed to parse output item into OpenAIOutputItem: {}",
-                                    e
-                                );
-                            }
-                        }
-                    }
-                }
-                Some(other) => {
-                    println!(
-                        "AIRhythm: received OpenAI response with non-array output: {:?}",
-                        other
-                    );
-                }
-                None => {
-                    println!("AIRhythm: received OpenAI response with no output field");
-                }
-            }
-        }
-
-        output
-    }
-     */
 
     /// Extract a `RhythmParams` from an AI response item by parsing any JSON
     /// object that matches our `RhythmObject` schema out of its text content.
@@ -183,65 +134,64 @@ impl AIRhythm {
     /// such as:
     /// - wrapping the `sequence` field in an array instead of a single object
     /// - including extra candidate sequences where only one is needed
-    fn extract_rhythm_params(&self, output_item: &OutputContent) -> Option<RhythmParams> {
-        match output_item {
-            OutputContent::Message(message) => {
-                for output_content in &message.content {
-                    match output_content {
-                        MessageContent::OutputText { text } => {
-                            // Some models return the JSON wrapped in Markdown code
-                            // fences (```json ... ```). To be robust, we extract the
-                            // substring from the first '{' to the last '}' and attempt
-                            // to parse that as JSON.
-                            let trimmed = text.trim();
+    fn extract_rhythm_params(&self, message: &OutputMessage) -> Option<RhythmParams> {
+        for message_content in &message.content {
+            match message_content {
+                MessageContent::OutputText { text } => {
+                    // Some models return the JSON wrapped in Markdown code
+                    // fences (```json ... ```). To be robust, we extract the
+                    // substring from the first '{' to the last '}' and attempt
+                    // to parse that as JSON.
+                    let trimmed = text.trim();
 
-                            let json_candidate = if let (Some(start), Some(end)) =
-                                (trimmed.find('{'), trimmed.rfind('}'))
-                            {
-                                &trimmed[start..=end]
-                            } else {
-                                trimmed
-                            };
+                    let json_candidate =
+                        if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
+                            &trimmed[start..=end]
+                        } else {
+                            trimmed
+                        };
 
-                            // First parse into a generic Value so we can repair
-                            // common structural issues, then deserialize into
-                            // `RhythmObject` from the normalized value.
-                            match serde_json::from_str::<Value>(json_candidate) {
-                                Ok(raw_val) => {
-                                    let normalized = Self::normalize_rhythm_value(raw_val);
-                                    match serde_json::from_value::<RhythmObject>(normalized) {
-                                        Ok(object) => {
-                                            return Some(
-                                                RhythmParams::from_rhythm_response_object(object),
-                                            );
-                                        }
-                                        Err(e) => {
-                                            println!(
+                    // First parse into a generic Value so we can repair
+                    // common structural issues, then deserialize into
+                    // `RhythmObject` from the normalized value.
+                    match serde_json::from_str::<Value>(json_candidate) {
+                        Ok(raw_val) => {
+                            let normalized = Self::normalize_rhythm_value(raw_val);
+                            match serde_json::from_value::<RhythmObject>(normalized) {
+                                Ok(object) => {
+                                    return Some(RhythmParams::from_rhythm_response_object(object));
+                                }
+                                Err(e) => {
+                                    eprintln!(
                                                 "AIRhythm: failed to deserialize normalized RhythmObject. Error: {}",
                                                 e
                                             );
-                                        }
-                                    }
                                 }
-                                Err(e) => {
-                                    println!(
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
                                         "AIRhythm: failed to parse JSON for RhythmObject. Candidate JSON: '{}'. Error: {}",
                                         json_candidate,
                                         e
                                     );
-                                }
-                            }
                         }
-                        MessageContent::Refusal { refusal } => {
-                            println!("AIRhythm: received refusal: {}", refusal);
-                        }
-                        _ => {}
                     }
                 }
+                MessageContent::Refusal { refusal } => {
+                    println!("AIRhythm: received refusal: {}", refusal);
+                }
+                MessageContent::Unknown => {
+                    println!(
+                        "AIRhythm: ignoring unexpected message content type: {:?}",
+                        message_content
+                    );
+                }
             }
-            OutputContent::Reasoning(_) => {}
         }
 
+        // If we did not find a valid RhythmObject:
+        println!("\nAIRhythm: (warning) no valid RhythmObject found in AI response");
         None
     }
 

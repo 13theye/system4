@@ -1,6 +1,6 @@
 use crate::{
     groups::{Rhythm, RhythmParams, VoiceId},
-    managers::{AIRhythm, AiRhythmResult},
+    managers::AIRhythm,
     services::sequencer::SequencerService,
     settings::OpenAIServiceConfig,
     terminals::commands::rhythm::{RhythmConfig, RhythmParamModification},
@@ -57,15 +57,18 @@ impl RhythmManager {
     }
 
     /// Poll the AI service for completed responses, extract the first valid
-    /// rhythm pattern, and apply it to the voice that initiated the request.
-    pub fn poll_ai(
+    /// rhythm pattern (there should only be one), and apply it to the voice that initiated the request.
+    pub fn update_ai(
         &mut self,
         now: Instant,
         sequencer_service: &mut SequencerService,
         rhythm_view: &mut RhythmView,
         rng: &mut ThreadRng,
     ) {
-        let results: Vec<AiRhythmResult> = self.ai_rhythm.poll_results();
+        let Some(results) = self.ai_rhythm.poll_results() else {
+            return;
+        };
+
         if results.is_empty() {
             return;
         }
