@@ -10,7 +10,6 @@ use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
-use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
 use std::fs;
@@ -30,6 +29,7 @@ use system4::{
     },
     ui::{control_panel::update_control_ui, UiState},
     utils::IdGenerator,
+    view::rhythm::{RhythmView, RhythmViewUpdateParams},
 };
 
 // Import terminal processor to bring process_terminal_command method into scope

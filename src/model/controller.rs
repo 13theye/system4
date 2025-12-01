@@ -12,7 +12,7 @@ use crate::{
         },
         Model,
     },
-    view::RhythmFormationType,
+    view::rhythm::RhythmFormationType,
 };
 use nannou::wgpu::{Device, Queue};
 use std::time::Instant;

@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use crate::{
     groups::{RhythmParams, VoiceId},
-    view::{RhythmCircleFormation, RhythmFormation, RhythmLinesFormation},
+    view::rhythm::{RhythmCircleFormation, RhythmFormation, RhythmLinesFormation},
 };
 
 pub enum RhythmFormationType {

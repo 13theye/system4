@@ -17,7 +17,7 @@ use crate::{
     terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
     utils::IdGenerator,
-    view::RhythmView,
+    view::rhythm::RhythmView,
 };
 
 use prat::clockservice::ClockService;

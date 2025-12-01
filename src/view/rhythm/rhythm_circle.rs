@@ -5,7 +5,7 @@ use std::time::Instant;
 use crate::{
     groups::RhythmParams,
     utils::tween,
-    view::{RhythmElement, RhythmFormation, RhythmFormationState, RhythmViewUpdateParams},
+    view::rhythm::{RhythmElement, RhythmFormation, RhythmFormationState, RhythmViewUpdateParams},
 };
 
 const RECT_DEFAULT_R: f32 = 0.7;

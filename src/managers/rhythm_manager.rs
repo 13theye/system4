@@ -4,8 +4,7 @@ use crate::{
     services::sequencer::SequencerService,
     settings::OpenAIServiceConfig,
     terminals::commands::rhythm::{RhythmConfig, RhythmParamModification},
-    view::rhythm_view::RhythmView,
-    view::RhythmFormationType,
+    view::rhythm::{RhythmFormationType, RhythmView},
 };
 use rand::rngs::ThreadRng;
 use std::collections::HashMap;

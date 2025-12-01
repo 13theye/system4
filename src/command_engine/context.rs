@@ -6,7 +6,7 @@ use crate::{
     rendering::GpuSegmentBuffer,
     services::sequencer::SequencerService,
     terminals::commands::rhythm::RhythmParamModification,
-    view::RhythmView,
+    view::rhythm::RhythmView,
 };
 use rand::rngs::ThreadRng;
 use std::collections::HashMap;
