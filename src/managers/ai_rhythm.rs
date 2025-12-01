@@ -26,6 +26,7 @@ pub struct AIRhythm {
     /// Voice for which we most recently sent an AI rhythm request.
     /// We assume a single in-flight AI request at a time.
     pending_ai_voice: Option<VoiceId>,
+    reasoning_text: Option<String>,
 }
 
 impl AIRhythm {
@@ -35,6 +36,7 @@ impl AIRhythm {
         Self {
             ai_service,
             pending_ai_voice: None,
+            reasoning_text: None,
         }
     }
 
@@ -52,7 +54,7 @@ impl AIRhythm {
         println!("{:#?}", object);
         self.pending_ai_voice = Some(target_voice);
 
-        if let Err(e) = self.ai_service.send(object_str) {
+        if let Err(e) = self.ai_service.stream(object_str) {
             println!("AIRhythm: failed to send OpenAI request: {}", e);
             self.pending_ai_voice = None;
         }

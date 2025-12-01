@@ -11,7 +11,7 @@ pub mod schema;
 
 use crate::{
     services::openai::schema::{
-        request::{ReasoningConfigExt, TextConfigExt},
+        request::{ReasoningParamExt, ResponseTextParamExt},
         response::ResponseObject,
     },
     settings::OpenAIServiceConfig,
@@ -19,9 +19,10 @@ use crate::{
 
 use async_openai::{
     config::OpenAIConfig,
-    types::responses::{self as openai_response},
+    types::responses::{self},
     Client,
 };
+use futures::StreamExt;
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
 
@@ -85,6 +86,7 @@ impl OpenAIService {
         let model = self.model.clone();
         let client = self.client.clone();
         let strict_object_adherence = self.strict_request_object_adherence;
+        let streaming = false;
 
         if let Some(runtime) = &self.runtime {
             let tx = self.task_tx.clone();
@@ -99,16 +101,26 @@ impl OpenAIService {
                 };
 
                 let task = async {
-                    match generate_response(
+                    // Generate the response request
+                    let request = generate_request(
                         content,
                         system_prompt,
                         schema_description,
                         model,
-                        &client,
                         strict_object_adherence,
-                    )
-                    .await
-                    {
+                        streaming,
+                    );
+
+                    let request = match request {
+                        Ok(request) => request,
+                        Err(e) => {
+                            eprintln!("OpenAIService: Failed to generate request: {}", e);
+                            return;
+                        }
+                    };
+
+                    // Send the request
+                    match send_response_request(request, &client).await {
                         Ok(response) => {
                             println!(
                                 "OpenAIService: Received successful response with id: {}",
@@ -127,6 +139,87 @@ impl OpenAIService {
                     }
                 };
 
+                // Wait for shutdown signal or task completion
+                tokio::select! {
+                    _ = shutdown => {
+                        println!("...OpenAIService received shutdown signal");
+                    }
+                    _ = task => {
+                        println!("...OpenAIService task completed normally");
+                    }
+                }
+            });
+        }
+
+        Ok(())
+    }
+
+    pub fn stream(&mut self, content: String) -> Result<(), String> {
+        use responses::ResponseStreamEvent;
+
+        // Clone the content, system prompt, schema description, model name, url, client
+        let content = content.to_owned();
+        let system_prompt = self.system_prompt.clone();
+        let schema_description = self.schema_description.clone();
+        let model = self.model.clone();
+        let client = self.client.clone();
+        let strict_object_adherence = self.strict_request_object_adherence;
+        let streaming = true;
+
+        if let Some(runtime) = &self.runtime {
+            let tx = self.task_tx.clone();
+            let mut shutdown_rx = self.runtime_shutdown_tx.subscribe();
+
+            runtime.spawn(async move {
+                println!("OpenAIService: Send task created");
+
+                // Start listening for shutdown signal
+                let shutdown = async {
+                    let _ = shutdown_rx.recv().await;
+                };
+
+                let task = async {
+                    // Generate the response request
+                    let request = generate_request(
+                        content,
+                        system_prompt,
+                        schema_description,
+                        model,
+                        strict_object_adherence,
+                        streaming,
+                    );
+
+                    let request = match request {
+                        Ok(request) => request,
+                        Err(e) => {
+                            eprintln!("OpenAIService: Failed to generate request: {}", e);
+                            return;
+                        }
+                    };
+
+                    // Send the stream request
+                    let stream = send_stream_request(request, &client).await;
+
+                    let Ok(mut stream) = stream else {
+                        return;
+                    };
+
+                    while let Some(result) = stream.next().await {
+                        match result {
+                            Ok(ResponseStreamEvent::ResponseCreated(event)) => {
+                                println!("Response created with id: {}", event.response.id);
+                                break;
+                            }
+                            Ok(ResponseStreamEvent::ResponseOutputTextDelta(event)) => {
+                                println!("Response delta text: {}", event.delta);
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                };
+
+                // Wait for shutdown signal or task completion
                 tokio::select! {
                     _ = shutdown => {
                         println!("...OpenAIService received shutdown signal");
@@ -180,19 +273,19 @@ impl Drop for OpenAIService {
 
 /// Sends a REST API request via OpenAI Responses using openai-api-rs types
 #[allow(clippy::too_many_arguments)]
-async fn generate_response(
+fn generate_request(
     content: String,
     prompt: Option<String>,
     schema_description: Option<String>,
     model: String,
-    client: &Client<OpenAIConfig>,
     // strict adherence to OpenAPI Responses API
     strict: bool,
-) -> Result<ResponseObject, Box<dyn Error + Send + Sync>> {
-    let text_config = openai_response::TextConfig::generate_for_system4_schema(schema_description);
-    let reasoning_config = openai_response::ReasoningConfig::generate();
+    streaming: bool,
+) -> Result<responses::CreateResponse, Box<dyn Error + Send + Sync>> {
+    let text_config = responses::ResponseTextParam::generate_for_system4_schema(schema_description);
+    let reasoning_config = responses::Reasoning::generate();
 
-    let request = if !strict {
+    let mut request = if !strict {
         // workaround to append the instructions to the input because the
         // "instructions" field isn't working in LMStudio
         let text = serde_json::to_string(&text_config).unwrap_or_default();
@@ -205,14 +298,14 @@ async fn generate_response(
             format!("input : {}\n text: {}", content, text)
         };
 
-        openai_response::CreateResponseArgs::default()
+        responses::CreateResponseArgs::default()
             .model(model)
             .input(content)
             .reasoning(reasoning_config)
             .build()?
     } else {
         // strict adherence to OpenAPI Responses API: use all relevant fields
-        openai_response::CreateResponseArgs::default()
+        responses::CreateResponseArgs::default()
             .model(model)
             .input(content)
             .instructions(prompt.unwrap_or_default())
@@ -221,9 +314,28 @@ async fn generate_response(
             .build()?
     };
 
+    // Set streaming flag if true
+    if streaming {
+        request.stream = Some(true);
+    }
+
     println!("OpenAIService: Response Request object:\n{:#?}", request);
 
-    let response: ResponseObject = client.responses().create_byot(request).await?;
+    Ok(request)
+}
 
+async fn send_response_request(
+    request: responses::CreateResponse,
+    client: &Client<OpenAIConfig>,
+) -> Result<ResponseObject, Box<dyn Error + Send + Sync>> {
+    let response: ResponseObject = client.responses().create_byot(request).await?;
     Ok(response)
+}
+
+async fn send_stream_request(
+    request: responses::CreateResponse,
+    client: &Client<OpenAIConfig>,
+) -> Result<responses::ResponseStream, Box<dyn Error + Send + Sync>> {
+    let stream: responses::ResponseStream = client.responses().create_stream_byot(request).await?;
+    Ok(stream)
 }

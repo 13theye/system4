@@ -39,7 +39,7 @@ pub struct ResponseObject {
 
     /// Reasoning configuration echoed back (effort, summary settings).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<responses::ReasoningConfig>,
+    pub reasoning: Option<responses::Reasoning>,
 
     /// The status of the response generation.
     pub status: responses::Status,
@@ -50,7 +50,7 @@ pub struct ResponseObject {
 
     /// Text format configuration echoed back (plain, json_object, json_schema).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<responses::TextConfig>,
+    pub text: Option<responses::ResponseTextParam>,
 
     /// Token usage statistics for this request.
     #[serde(skip_serializing_if = "Option::is_none")]
