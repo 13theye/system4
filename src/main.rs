@@ -222,6 +222,23 @@ fn model(app: &App) -> Model {
 
     terminal_manager.new_terminal_view("main", VoiceId::Voice0, terminal_params);
 
+    // Terminal for AI reasoning text (minimal streaming test)
+    let ai_reasoning_params = TerminalViewParams {
+        origin: vec2(0.0, 1000.0),
+        num_lines: 4,
+        width: 1200.0,
+        line_spacing: 5.0,
+        bright_color: rgba(0.6, 0.9, 0.6, 1.0),
+        regular_color: rgba(0.2, 0.4, 0.2, 0.8),
+        color_fade_secs: 1.0,
+        chars_per_second: 20.0,
+        font: font.clone(),
+        font_size: 26,
+        justification: TerminalViewTextJustification::TopLeft,
+    };
+
+    terminal_manager.new_terminal_view("ai_reasoning", VoiceId::Voice0, ai_reasoning_params);
+
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
         origin: vec2(-1900.0, 1050.0),
@@ -338,6 +355,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         &mut model.rng,
     );
 
+    // Minimal streaming test: update on-screen reasoning text from AI stream
+    model
+        .rhythm_manager
+        .update_ai_reasoning_ui(&mut model.ui_state);
+
     // Update feedback render params
     controller::update_feedback(model, device, queue);
 
@@ -451,7 +473,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Draw all rhythm views
         model.rhythm_view.draw_all(&rendering.draw);
 
-        // Update and draw terminal view as overlay on top of post-processed texture
+        // Update and draw terminal views as overlay on top of post-processed texture
         if let Some(terminal_view) = model
             .ui_state
             .terminal_manager
@@ -459,6 +481,15 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             .get_mut_terminal_view("main")
         {
             terminal_view.update(&rendering.draw);
+        }
+
+        if let Some(ai_view) = model
+            .ui_state
+            .terminal_manager
+            .borrow_mut()
+            .get_mut_terminal_view("ai_reasoning")
+        {
+            ai_view.update(&rendering.draw);
         }
 
         // Update and draw drone parameter displays

@@ -113,6 +113,58 @@ impl AIRhythm {
         self.ai_service.try_recv_stream()
     }
 
+    /// Minimal streaming handler: update in-memory reasoning text from
+    /// ResponseReasoningTextDelta / ResponseReasoningTextDone events.
+    ///
+    /// This is intended as an initial smoke test to ensure we are correctly
+    /// receiving and parsing OpenAI stream events before wiring up full
+    /// rhythm parsing.
+    pub fn update_stream_reasoning(&mut self) {
+        while let Some(event) = self.poll_openai_stream() {
+            match event {
+                StreamEvent::ResponseReasoningTextDelta(e) => {
+                    let buffer = self.reasoning_text.get_or_insert_with(String::new);
+                    buffer.push_str(&e.delta);
+                }
+                StreamEvent::ResponseReasoningTextDone(e) => {
+                    self.reasoning_text = Some(e.text);
+                }
+                StreamEvent::ResponseError(e) => {
+                    eprintln!(
+                        "AIRhythm: received OpenAI stream error event: code={:?}, param={:?}, message={}",
+                        e.code, e.param, e.message
+                    );
+                }
+                StreamEvent::ResponseFailed(e) => {
+                    eprintln!(
+                        "AIRhythm: stream failed. status={:?}, incomplete_details={:?}, error={:?}",
+                        e.response.status, e.response.incomplete_details, e.response.error
+                    );
+                }
+                StreamEvent::ResponseIncomplete(e) => {
+                    eprintln!(
+                        "AIRhythm: stream incomplete. status={:?}, incomplete_details={:?}, error={:?}",
+                        e.response.status, e.response.incomplete_details, e.response.error
+                    );
+                }
+                StreamEvent::ResponseRefusalDelta(e) => {
+                    eprintln!("AIRhythm: model partial refusal text: {}", e.delta);
+                }
+                StreamEvent::ResponseRefusalDone(e) => {
+                    eprintln!("AIRhythm: model refusal: {}", e.refusal);
+                }
+                _ => {
+                    // For this minimal implementation we ignore all other events.
+                }
+            }
+        }
+    }
+
+    /// Get the current accumulated reasoning text, if any.
+    pub fn current_reasoning_text(&self) -> Option<&str> {
+        self.reasoning_text.as_deref()
+    }
+
     /// Extract a `RhythmParams` from an AI response item by parsing any JSON
     /// object that matches our `RhythmObject` schema out of its text content.
     ///

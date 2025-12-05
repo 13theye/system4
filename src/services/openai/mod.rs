@@ -241,29 +241,14 @@ impl OpenAIService {
 
     /// Try to retrieve a completed response, if any.
     pub fn try_recv_response(&mut self) -> Option<ResponseObject> {
-        match self.response_rx.try_recv() {
-            Ok(response) => Some(response),
-            Err(e) => {
-                eprintln!(
-                    "OpenAIService: TryRecvResponseError when retrieving response from tokio thread: {}",
-                    e
-                );
-                None
-            }
-        }
+        self.response_rx.try_recv().ok()
     }
 
     /// Try to retrieve a stream event, if any.
     pub fn try_recv_stream(&mut self) -> Option<StreamEvent> {
         match self.stream_rx.try_recv() {
             Ok(event) => parse_response_stream_event(event),
-            Err(e) => {
-                eprintln!(
-                    "OpenAIService: TryRecvStreamError when retrieving response from tokio thread: {}",
-                    e
-                );
-                None
-            }
+            Err(_) => None,
         }
     }
 
@@ -366,11 +351,9 @@ async fn send_stream_request(
 }
 
 fn parse_response_stream_event(event: responses::ResponseStreamEvent) -> Option<StreamEvent> {
-    match event {
-        responses::ResponseStreamEvent::ResponseCreated(_) => {
-            let stream_event = StreamEvent::from(event);
-            Some(stream_event)
-        }
-        _ => None,
+    let local = StreamEvent::from(event);
+    match local {
+        StreamEvent::Unknown => None,
+        other => Some(other),
     }
 }
