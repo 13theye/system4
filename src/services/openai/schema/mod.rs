@@ -3,6 +3,7 @@
 
 pub mod request;
 pub mod response;
+pub mod stream;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

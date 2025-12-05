@@ -2,7 +2,8 @@ use crate::{
     groups::{RhythmParams, VoiceId},
     services::openai::{
         schema::{
-            response::{MessageContent, OutputContent, OutputMessage},
+            response::{MessageContent, OutputItem, OutputMessage, ResponseObject},
+            stream::StreamEvent,
             RhythmObject,
         },
         OpenAIService,
@@ -64,7 +65,8 @@ impl AIRhythm {
     /// available, convert it into one or more `AiRhythmResult`s.
     pub fn poll_results(&mut self) -> Option<Vec<AiRhythmResult>> {
         // Poll the OpenAI service for completed responses.
-        let output_items = self.poll_openai()?;
+        let response = self.poll_openai_response()?;
+        let output_items = process_response_object(response)?;
 
         // Determine which voice this AI result belongs to.
         let Some(voice_id) = self.pending_ai_voice.take() else {
@@ -80,7 +82,7 @@ impl AIRhythm {
         for output_item in &output_items {
             self.print_output_content(output_item);
 
-            if let OutputContent::Message(message) = output_item {
+            if let OutputItem::Message(message) = output_item {
                 let params = self.extract_rhythm_params(message)?;
 
                 println!(
@@ -101,32 +103,14 @@ impl AIRhythm {
         Some(results)
     }
 
-    fn poll_openai(&mut self) -> Option<Vec<OutputContent>> {
-        let response = self.ai_service.try_recv()?;
+    /// Poll the underlying OpenAIService for completed responses
+    fn poll_openai_response(&mut self) -> Option<ResponseObject> {
+        self.ai_service.try_recv_response()
+    }
 
-        let items = response.output;
-        let mut output = Vec::new();
-
-        println!(
-            "AIRhythm: received OpenAI response with {} output item(s)",
-            items.len()
-        );
-
-        items.iter().for_each(|item| match item {
-            OutputContent::Message(_) => {
-                output.push(item.clone());
-            }
-            OutputContent::Reasoning(_) => {
-                output.push(item.clone());
-            }
-        });
-
-        if output.is_empty() {
-            println!("AIRhythm: no output items found in OpenAI response");
-            return None;
-        }
-
-        Some(output)
+    /// Poll the underlying OpenAIService for `StreamEvent` events
+    fn poll_openai_stream(&mut self) -> Option<StreamEvent> {
+        self.ai_service.try_recv_stream()
     }
 
     /// Extract a `RhythmParams` from an AI response item by parsing any JSON
@@ -189,6 +173,8 @@ impl AIRhythm {
                         message_content
                     );
                 }
+                // Safely ignore ReasoningText
+                MessageContent::ReasoningText { .. } => {}
             }
         }
 
@@ -236,9 +222,9 @@ impl AIRhythm {
 
     /// Debug helper: pretty-print the raw AI output item content in a
     /// human-friendly way.
-    fn print_output_content(&self, output_content: &OutputContent) {
+    fn print_output_content(&self, output_content: &OutputItem) {
         match output_content {
-            OutputContent::Message(output_message) => {
+            OutputItem::Message(output_message) => {
                 println!("AIRhythm: AI output message received");
                 for (idx, output_content) in output_message.content.iter().enumerate() {
                     if let MessageContent::OutputText { text } = output_content {
@@ -247,14 +233,49 @@ impl AIRhythm {
                     }
                 }
             }
-            OutputContent::Reasoning(reasoning_item) => {
+            OutputItem::Reasoning(reasoning_item) => {
                 println!("AIRhythm: AI output reasoning received");
                 for (idx, content) in reasoning_item.content.iter().enumerate() {
-                    let inner_text = &content.text;
+                    let inner_text = content
+                        .iter()
+                        .map(|c| c.text.to_owned())
+                        .collect::<String>();
                     println!("\n--- Reasoning Text #{idx} raw ---");
                     println!("{}", inner_text);
                 }
             }
+            // Safely ignore Unknown content
+            OutputItem::Unknown => {}
         }
     }
+}
+
+/// Process a received OpenAI response into a vector of `OutputItem`s.
+fn process_response_object(response: ResponseObject) -> Option<Vec<OutputItem>> {
+    let items = response.output;
+    let mut output = Vec::new();
+
+    println!(
+        "AIRhythm: received OpenAI response with {} output item(s)",
+        items.len()
+    );
+
+    items.iter().for_each(|item| match item {
+        OutputItem::Message(_) => {
+            output.push(item.clone());
+        }
+        OutputItem::Reasoning(_) => {
+            output.push(item.clone());
+        }
+        OutputItem::Unknown => {
+            println!("AIRhythm: (warning)ignoring unknown output item");
+        }
+    });
+
+    if output.is_empty() {
+        println!("AIRhythm: no output items found in OpenAI response");
+        return None;
+    }
+
+    Some(output)
 }

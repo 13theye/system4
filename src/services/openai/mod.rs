@@ -13,6 +13,7 @@ use crate::{
     services::openai::schema::{
         request::{ReasoningParamExt, ResponseTextParamExt},
         response::ResponseObject,
+        stream::StreamEvent,
     },
     settings::OpenAIServiceConfig,
 };
@@ -44,9 +45,12 @@ pub struct OpenAIService {
     runtime: Option<tokio::runtime::Runtime>,
     // Runtime shutdown channel:
     runtime_shutdown_tx: broadcast::Sender<()>,
-    // Task channel
-    task_tx: mpsc::Sender<Option<ResponseObject>>,
-    task_rx: mpsc::Receiver<Option<ResponseObject>>,
+    // Response Task channel
+    response_tx: mpsc::Sender<ResponseObject>,
+    response_rx: mpsc::Receiver<ResponseObject>,
+    // Stream Task channel
+    stream_tx: mpsc::Sender<responses::ResponseStreamEvent>,
+    stream_rx: mpsc::Receiver<responses::ResponseStreamEvent>,
 
     // Reqwest client:
     client: Client<OpenAIConfig>,
@@ -58,7 +62,8 @@ impl OpenAIService {
             .expect("Failed to start Tokio runtime for OpenAIService");
 
         let (shutdown_tx, _) = broadcast::channel(1);
-        let (task_tx, task_rx) = mpsc::channel(1);
+        let (response_tx, response_rx) = mpsc::channel(1);
+        let (stream_tx, stream_rx) = mpsc::channel(16);
 
         let openai_config = OpenAIConfig::new()
             .with_api_key(config.api_key.to_owned().unwrap_or_default())
@@ -71,8 +76,10 @@ impl OpenAIService {
             strict_request_object_adherence: config.strict_request_object_adherence,
             runtime: Some(runtime),
             runtime_shutdown_tx: shutdown_tx,
-            task_tx,
-            task_rx,
+            response_tx,
+            response_rx,
+            stream_tx,
+            stream_rx,
             client: Client::with_config(openai_config),
         }
     }
@@ -89,7 +96,7 @@ impl OpenAIService {
         let streaming = false;
 
         if let Some(runtime) = &self.runtime {
-            let tx = self.task_tx.clone();
+            let tx = self.response_tx.clone();
             let mut shutdown_rx = self.runtime_shutdown_tx.subscribe();
 
             runtime.spawn(async move {
@@ -128,7 +135,7 @@ impl OpenAIService {
                             );
 
                             // Pass message back to OpenAIService main task
-                            let _ = tx.send(Some(response)).await;
+                            let _ = tx.send(response).await;
                         }
                         Err(e) => {
                             eprintln!("OpenAIService: API error: {}", e);
@@ -155,8 +162,6 @@ impl OpenAIService {
     }
 
     pub fn stream(&mut self, content: String) -> Result<(), String> {
-        use responses::ResponseStreamEvent;
-
         // Clone the content, system prompt, schema description, model name, url, client
         let content = content.to_owned();
         let system_prompt = self.system_prompt.clone();
@@ -167,7 +172,7 @@ impl OpenAIService {
         let streaming = true;
 
         if let Some(runtime) = &self.runtime {
-            let tx = self.task_tx.clone();
+            let tx = self.stream_tx.clone();
             let mut shutdown_rx = self.runtime_shutdown_tx.subscribe();
 
             runtime.spawn(async move {
@@ -206,15 +211,15 @@ impl OpenAIService {
 
                     while let Some(result) = stream.next().await {
                         match result {
-                            Ok(ResponseStreamEvent::ResponseCreated(event)) => {
-                                println!("Response created with id: {}", event.response.id);
-                                break;
+                            Ok(event) => {
+                                let _ = tx.send(event).await;
                             }
-                            Ok(ResponseStreamEvent::ResponseOutputTextDelta(event)) => {
-                                println!("Response delta text: {}", event.delta);
-                                break;
+                            Err(e) => {
+                                eprintln!("OpenAIService: API error: {}", e);
+                                if let Some(source) = e.source() {
+                                    eprintln!("OpenAIService: error source: {}", source);
+                                }
                             }
-                            _ => {}
                         }
                     }
                 };
@@ -235,10 +240,30 @@ impl OpenAIService {
     }
 
     /// Try to retrieve a completed response, if any.
-    pub fn try_recv(&mut self) -> Option<ResponseObject> {
-        match self.task_rx.try_recv() {
-            Ok(Some(response)) => Some(response),
-            Ok(None) | Err(_) => None,
+    pub fn try_recv_response(&mut self) -> Option<ResponseObject> {
+        match self.response_rx.try_recv() {
+            Ok(response) => Some(response),
+            Err(e) => {
+                eprintln!(
+                    "OpenAIService: TryRecvResponseError when retrieving response from tokio thread: {}",
+                    e
+                );
+                None
+            }
+        }
+    }
+
+    /// Try to retrieve a stream event, if any.
+    pub fn try_recv_stream(&mut self) -> Option<StreamEvent> {
+        match self.stream_rx.try_recv() {
+            Ok(event) => parse_response_stream_event(event),
+            Err(e) => {
+                eprintln!(
+                    "OpenAIService: TryRecvStreamError when retrieving response from tokio thread: {}",
+                    e
+                );
+                None
+            }
         }
     }
 
@@ -336,6 +361,16 @@ async fn send_stream_request(
     request: responses::CreateResponse,
     client: &Client<OpenAIConfig>,
 ) -> Result<responses::ResponseStream, Box<dyn Error + Send + Sync>> {
-    let stream: responses::ResponseStream = client.responses().create_stream_byot(request).await?;
+    let stream = client.responses().create_stream_byot(request).await?;
     Ok(stream)
+}
+
+fn parse_response_stream_event(event: responses::ResponseStreamEvent) -> Option<StreamEvent> {
+    match event {
+        responses::ResponseStreamEvent::ResponseCreated(_) => {
+            let stream_event = StreamEvent::from(event);
+            Some(stream_event)
+        }
+        _ => None,
+    }
 }
