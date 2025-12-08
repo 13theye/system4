@@ -4,8 +4,6 @@ use crate::{
     services::sequencer::SequencerService,
     settings::OpenAIServiceConfig,
     terminals::commands::rhythm::{RhythmConfig, RhythmParamModification},
-    terminals::terminal_view::TerminalViewLineFadeMode,
-    ui::UiState,
     view::rhythm::{RhythmFormationType, RhythmView},
 };
 use rand::rngs::ThreadRng;
@@ -66,7 +64,7 @@ impl RhythmManager {
         rhythm_view: &mut RhythmView,
         rng: &mut ThreadRng,
     ) {
-        let Some(results) = self.ai_rhythm.poll_results() else {
+        let Some(results) = self.ai_rhythm.poll_stream() else {
             return;
         };
 
@@ -86,24 +84,9 @@ impl RhythmManager {
         }
     }
 
-    /// Minimal streaming UI integration: update on-screen reasoning text from
-    /// OpenAI stream events.
-    ///
-    /// This reads any pending stream events, updates AIRhythm's internal
-    /// reasoning buffer, and then mirrors that buffer into a dedicated
-    /// terminal view named "ai_reasoning" if it exists.
-    pub fn update_ai_reasoning_ui(&mut self, ui_state: &mut UiState) {
-        // First, pull in any new reasoning events from the OpenAIService.
-        self.ai_rhythm.update_stream_reasoning();
-
-        let Some(text) = self.ai_rhythm.current_reasoning_text() else {
-            return;
-        };
-
-        let mut terminal_manager = ui_state.terminal_manager().borrow_mut();
-        if let Some(view) = terminal_manager.get_mut_terminal_view("ai_reasoning") {
-            view.update_line_at_index(0, text, TerminalViewLineFadeMode::NoFade);
-        }
+    /// Expose current AI reasoning text for UI rendering.
+    pub fn current_ai_reasoning_text(&self) -> Option<&str> {
+        self.ai_rhythm.current_reasoning_text()
     }
 
     /// Ensure a Rhythm exists for the target voice, then apply AI-derived

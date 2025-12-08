@@ -25,7 +25,8 @@ use system4::{
     services::sequencer::SequencerService,
     settings::*,
     terminals::terminal_view::{
-        TerminalViewManager, TerminalViewParams, TerminalViewTextJustification,
+        TerminalViewLineFadeMode, TerminalViewManager, TerminalViewParams,
+        TerminalViewTextJustification,
     },
     ui::{control_panel::update_control_ui, UiState},
     utils::IdGenerator,
@@ -355,11 +356,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         &mut model.rng,
     );
 
-    // Minimal streaming test: update on-screen reasoning text from AI stream
-    model
-        .rhythm_manager
-        .update_ai_reasoning_ui(&mut model.ui_state);
-
     // Update feedback render params
     controller::update_feedback(model, device, queue);
 
@@ -483,13 +479,17 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             terminal_view.update(&rendering.draw);
         }
 
-        if let Some(ai_view) = model
-            .ui_state
-            .terminal_manager
-            .borrow_mut()
-            .get_mut_terminal_view("ai_reasoning")
-        {
-            ai_view.update(&rendering.draw);
+        // Before drawing the AI reasoning terminal, mirror latest reasoning text
+        if let Some(text) = model.rhythm_manager.current_ai_reasoning_text() {
+            if let Some(ai_view) = model
+                .ui_state
+                .terminal_manager
+                .borrow_mut()
+                .get_mut_terminal_view("ai_reasoning")
+            {
+                ai_view.update_line_at_index(0, text, TerminalViewLineFadeMode::NoFade);
+                ai_view.update(&rendering.draw);
+            }
         }
 
         // Update and draw drone parameter displays

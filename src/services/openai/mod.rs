@@ -13,7 +13,7 @@ use crate::{
     services::openai::schema::{
         request::{ReasoningParamExt, ResponseTextParamExt},
         response::ResponseObject,
-        stream::StreamEvent,
+        stream::{ResponseStream, StreamEvent},
     },
     settings::OpenAIServiceConfig,
 };
@@ -49,8 +49,8 @@ pub struct OpenAIService {
     response_tx: mpsc::Sender<ResponseObject>,
     response_rx: mpsc::Receiver<ResponseObject>,
     // Stream Task channel
-    stream_tx: mpsc::Sender<responses::ResponseStreamEvent>,
-    stream_rx: mpsc::Receiver<responses::ResponseStreamEvent>,
+    stream_tx: mpsc::Sender<StreamEvent>,
+    stream_rx: mpsc::Receiver<StreamEvent>,
 
     // Reqwest client:
     client: Client<OpenAIConfig>,
@@ -246,10 +246,7 @@ impl OpenAIService {
 
     /// Try to retrieve a stream event, if any.
     pub fn try_recv_stream(&mut self) -> Option<StreamEvent> {
-        match self.stream_rx.try_recv() {
-            Ok(event) => parse_response_stream_event(event),
-            Err(_) => None,
-        }
+        self.stream_rx.try_recv().ok()
     }
 
     /// Gracefully shuts down the Tokio runtime
@@ -345,15 +342,7 @@ async fn send_response_request(
 async fn send_stream_request(
     request: responses::CreateResponse,
     client: &Client<OpenAIConfig>,
-) -> Result<responses::ResponseStream, Box<dyn Error + Send + Sync>> {
-    let stream = client.responses().create_stream_byot(request).await?;
+) -> Result<ResponseStream, Box<dyn Error + Send + Sync>> {
+    let stream: ResponseStream = client.responses().create_stream_byot(request).await?;
     Ok(stream)
-}
-
-fn parse_response_stream_event(event: responses::ResponseStreamEvent) -> Option<StreamEvent> {
-    let local = StreamEvent::from(event);
-    match local {
-        StreamEvent::Unknown => None,
-        other => Some(other),
-    }
 }

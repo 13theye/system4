@@ -67,7 +67,10 @@ impl From<responses::Response> for ResponseObject {
                 responses::OutputItem::Reasoning(reasoning) => {
                     OutputItem::Reasoning(ReasoningItem::from(reasoning))
                 }
-                _ => OutputItem::Unknown,
+                other => {
+                    let val = serde_json::to_value(other).unwrap_or(serde_json::Value::Null);
+                    OutputItem::Unknown(val)
+                }
             })
             .collect();
 
@@ -99,8 +102,8 @@ impl From<responses::Response> for ResponseObject {
 pub enum OutputItem {
     Message(OutputMessage),
     Reasoning(ReasoningItem),
-    // for any other type that we are not explicitly modeling
-    Unknown,
+    // catchall for any other type that we are not explicitly modeling
+    Unknown(serde_json::Value),
 }
 
 impl From<responses::OutputItem> for OutputItem {
@@ -112,7 +115,10 @@ impl From<responses::OutputItem> for OutputItem {
             responses::OutputItem::Reasoning(reasoning) => {
                 OutputItem::Reasoning(ReasoningItem::from(reasoning))
             }
-            _ => OutputItem::Unknown,
+            other => {
+                let val = serde_json::to_value(&other).unwrap_or(serde_json::Value::Null);
+                OutputItem::Unknown(val)
+            }
         }
     }
 }
@@ -291,6 +297,7 @@ impl From<responses::ResponseUsage> for ResponseUsage {
 
 /// Status of input/output items.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum OutputStatus {
     InProgress,
     Completed,

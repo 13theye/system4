@@ -61,49 +61,116 @@ impl AIRhythm {
         }
     }
 
-    /// Poll the underlying OpenAIService and, if a complete AI response is
-    /// available, convert it into one or more `AiRhythmResult`s.
-    pub fn poll_results(&mut self) -> Option<Vec<AiRhythmResult>> {
+    /// Poll the underlying OpenAIService for streamed events and, if a complete
+    /// AI response is available, convert it into one or more `AiRhythmResult`s.
+    ///
+    /// This also updates `reasoning_text` incrementally from
+    /// `ResponseReasoningTextDelta` / `ResponseReasoningTextDone` events.
+    /// Legacy non-streaming path: poll for a completed `ResponseObject` and
+    /// parse it into AI rhythm results.
+    ///
+    /// Currently unused, but kept as a reference implementation and a future
+    /// pathway for the non-stream Responses API.
+    #[allow(dead_code)]
+    pub fn poll_responses(&mut self) -> Option<Vec<AiRhythmResult>> {
         // Poll the OpenAI service for completed responses.
         let response = self.poll_openai_response()?;
-        let output_items = process_response_object(response)?;
 
         // Determine which voice this AI result belongs to.
         let Some(voice_id) = self.pending_ai_voice.take() else {
             println!(
-                "AIRhythm: (warning) received AI rhythm output but no pending voice; ignoring"
+                "AIRhythm: (warning) received AI rhythm output but no pending voice; ignoring",
             );
             return None;
         };
 
+        let results = self.handle_completed_response(response, voice_id);
+        if results.is_empty() {
+            None
+        } else {
+            Some(results)
+        }
+    }
+
+    /// Streaming path: poll the underlying OpenAIService for streamed events
+    /// and, if a complete AI response is available, convert it into one or more
+    /// `AiRhythmResult`s.
+    ///
+    /// This also updates `reasoning_text` incrementally from
+    /// `ResponseReasoningTextDelta` / `ResponseReasoningTextDone` events.
+    pub fn poll_stream(&mut self) -> Option<Vec<AiRhythmResult>> {
         let mut results = Vec::new();
 
-        // Attempt to generate a valid RhythmParams from first output item.
-        for output_item in &output_items {
-            self.print_output_content(output_item);
+        while let Some(event) = self.poll_openai_stream() {
+            match event {
+                // Incremental reasoning text updates
+                StreamEvent::ResponseReasoningTextDelta(e) => {
+                    let buffer = self.reasoning_text.get_or_insert_with(String::new);
+                    buffer.push_str(&e.delta);
+                }
+                StreamEvent::ResponseReasoningTextDone(e) => {
+                    self.reasoning_text = Some(e.text);
+                }
 
-            if let OutputItem::Message(message) = output_item {
-                let params = self.extract_rhythm_params(message)?;
+                // Final response with full output array
+                StreamEvent::ResponseCompleted(e) => {
+                    let response = e.response;
 
-                println!(
-                    "AIRhythm: parsed AI rhythm {} for {:?}",
-                    params.as_test_ai_rhythm(),
-                    voice_id
-                );
+                    // Determine which voice this AI result belongs to.
+                    let Some(voice_id) = self.pending_ai_voice.take() else {
+                        println!(
+                            "AIRhythm: (warning) received AI rhythm output but no pending voice; ignoring",
+                        );
+                        continue;
+                    };
 
-                results.push(AiRhythmResult {
-                    target_voice: voice_id,
-                    params,
-                });
+                    let mut completed_results = self.handle_completed_response(response, voice_id);
+                    results.append(&mut completed_results);
+                }
 
-                break;
+                // Error / failure / incomplete events
+                StreamEvent::ResponseError(e) => {
+                    eprintln!(
+                        "AIRhythm: received OpenAI stream error event: code={:?}, param={:?}, message={}",
+                        e.code, e.param, e.message
+                    );
+                    self.pending_ai_voice = None;
+                }
+                StreamEvent::ResponseFailed(e) => {
+                    eprintln!(
+                        "AIRhythm: stream failed. status={:?}, incomplete_details={:?}, error={:?}",
+                        e.response.status, e.response.incomplete_details, e.response.error
+                    );
+                    self.pending_ai_voice = None;
+                }
+                StreamEvent::ResponseIncomplete(e) => {
+                    eprintln!(
+                        "AIRhythm: stream incomplete. status={:?}, incomplete_details={:?}, error={:?}",
+                        e.response.status, e.response.incomplete_details, e.response.error
+                    );
+                    self.pending_ai_voice = None;
+                }
+                StreamEvent::ResponseRefusalDelta(e) => {
+                    eprintln!("AIRhythm: model partial refusal text: {}", e.delta);
+                }
+                StreamEvent::ResponseRefusalDone(e) => {
+                    eprintln!("AIRhythm: model refusal: {}", e.refusal);
+                    self.pending_ai_voice = None;
+                }
+
+                // Other events are currently ignored for rhythm generation
+                _ => {}
             }
         }
 
-        Some(results)
+        if results.is_empty() {
+            None
+        } else {
+            Some(results)
+        }
     }
 
-    /// Poll the underlying OpenAIService for completed responses
+    /// Poll the underlying OpenAIService for completed responses (non-stream)
     fn poll_openai_response(&mut self) -> Option<ResponseObject> {
         self.ai_service.try_recv_response()
     }
@@ -113,51 +180,42 @@ impl AIRhythm {
         self.ai_service.try_recv_stream()
     }
 
-    /// Minimal streaming handler: update in-memory reasoning text from
-    /// ResponseReasoningTextDelta / ResponseReasoningTextDone events.
-    ///
-    /// This is intended as an initial smoke test to ensure we are correctly
-    /// receiving and parsing OpenAI stream events before wiring up full
-    /// rhythm parsing.
-    pub fn update_stream_reasoning(&mut self) {
-        while let Some(event) = self.poll_openai_stream() {
-            match event {
-                StreamEvent::ResponseReasoningTextDelta(e) => {
-                    let buffer = self.reasoning_text.get_or_insert_with(String::new);
-                    buffer.push_str(&e.delta);
-                }
-                StreamEvent::ResponseReasoningTextDone(e) => {
-                    self.reasoning_text = Some(e.text);
-                }
-                StreamEvent::ResponseError(e) => {
-                    eprintln!(
-                        "AIRhythm: received OpenAI stream error event: code={:?}, param={:?}, message={}",
-                        e.code, e.param, e.message
+    /// Shared logic for turning a completed `ResponseObject` into
+    /// `AiRhythmResult`s, used by both streaming and non-streaming paths.
+    fn handle_completed_response(
+        &self,
+        response: ResponseObject,
+        voice_id: VoiceId,
+    ) -> Vec<AiRhythmResult> {
+        let mut results = Vec::new();
+
+        let Some(output_items) = process_response_object(response) else {
+            return results;
+        };
+
+        // Attempt to generate a valid RhythmParams from first output item.
+        for output_item in &output_items {
+            self.print_output_content(output_item);
+
+            if let OutputItem::Message(message) = output_item {
+                if let Some(params) = self.extract_rhythm_params(message) {
+                    println!(
+                        "AIRhythm: parsed AI rhythm {} for {:?}",
+                        params.as_test_ai_rhythm(),
+                        voice_id
                     );
-                }
-                StreamEvent::ResponseFailed(e) => {
-                    eprintln!(
-                        "AIRhythm: stream failed. status={:?}, incomplete_details={:?}, error={:?}",
-                        e.response.status, e.response.incomplete_details, e.response.error
-                    );
-                }
-                StreamEvent::ResponseIncomplete(e) => {
-                    eprintln!(
-                        "AIRhythm: stream incomplete. status={:?}, incomplete_details={:?}, error={:?}",
-                        e.response.status, e.response.incomplete_details, e.response.error
-                    );
-                }
-                StreamEvent::ResponseRefusalDelta(e) => {
-                    eprintln!("AIRhythm: model partial refusal text: {}", e.delta);
-                }
-                StreamEvent::ResponseRefusalDone(e) => {
-                    eprintln!("AIRhythm: model refusal: {}", e.refusal);
-                }
-                _ => {
-                    // For this minimal implementation we ignore all other events.
+
+                    results.push(AiRhythmResult {
+                        target_voice: voice_id,
+                        params,
+                    });
+
+                    break;
                 }
             }
         }
+
+        results
     }
 
     /// Get the current accumulated reasoning text, if any.
@@ -297,7 +355,7 @@ impl AIRhythm {
                 }
             }
             // Safely ignore Unknown content
-            OutputItem::Unknown => {}
+            OutputItem::Unknown(_) => {}
         }
     }
 }
@@ -319,8 +377,8 @@ fn process_response_object(response: ResponseObject) -> Option<Vec<OutputItem>> 
         OutputItem::Reasoning(_) => {
             output.push(item.clone());
         }
-        OutputItem::Unknown => {
-            println!("AIRhythm: (warning)ignoring unknown output item");
+        OutputItem::Unknown(value) => {
+            println!("AIRhythm: (warning)ignoring unknown output item: {}", value);
         }
     });
 

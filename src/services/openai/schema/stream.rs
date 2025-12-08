@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::services::openai::schema::response::{MessageContent, OutputItem, ResponseObject};
 
+pub type ResponseStream = std::pin::Pin<
+    Box<dyn futures::Stream<Item = Result<StreamEvent, async_openai::error::OpenAIError>> + Send>,
+>;
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(tag = "type")]
 pub enum StreamEvent {
@@ -75,7 +79,7 @@ impl From<responses::ResponseStreamEvent> for StreamEvent {
             responses::ResponseStreamEvent::ResponseInProgress(event) => {
                 StreamEvent::ResponseInProgress(ResponseInProgressEvent {
                     sequence_number: event.sequence_number,
-                    partial_response: ResponseObject::from(event.response),
+                    response: ResponseObject::from(event.response),
                 })
             }
             responses::ResponseStreamEvent::ResponseCompleted(event) => {
@@ -206,7 +210,7 @@ pub struct ResponseCreatedEvent {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ResponseInProgressEvent {
     pub sequence_number: u64,
-    pub partial_response: ResponseObject,
+    pub response: ResponseObject,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
