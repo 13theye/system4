@@ -17,14 +17,18 @@ impl RhythmParser {
         tokens: &[Token],
         position: &mut usize,
     ) -> Result<TerminalCommand, ParseError> {
-        // Parse: rhythm(voice_id).method().method().set();
+        // Parse: rhythm(voice_id).method().method();
+        // .set() is now optional and may be omitted.
         let voice_id = ParsingUtils::parse_parentheses_with_number(tokens, position, "voice ID")?;
 
         let mut builder = RhythmBuilder::new();
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
-        // Parse method chain until .set()
-        Self::parse_method_chain_until_set(tokens, position, &mut builder)?;
+        // Parse method chain, allowing optional trailing .set()
+        Self::parse_method_chain(tokens, position, &mut builder)?;
+
+        // Consume optional trailing semicolon (or the one after .set())
+        ParsingUtils::parse_optional_semicolon(tokens, position)?;
 
         Ok(TerminalCommand::ModifyRhythmParams {
             voice_id,
@@ -32,8 +36,8 @@ impl RhythmParser {
         })
     }
 
-    /// Parse method chain until .set() terminator
-    fn parse_method_chain_until_set(
+    /// Parse method chain, allowing optional .set() terminator
+    fn parse_method_chain(
         tokens: &[Token],
         position: &mut usize,
         builder: &mut RhythmBuilder,
@@ -43,10 +47,10 @@ impl RhythmParser {
             let method_name = ParsingUtils::expect_identifier_any(tokens, position)?;
 
             if method_name == "set" {
+                // Legacy terminator - optional now
                 ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
                 ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
-                ParsingUtils::parse_optional_semicolon(tokens, position)?;
-                return Ok(());
+                break;
             } else {
                 // Parse method call with parameter
                 let parameter = ParsingUtils::parse_parameter_call(tokens, position)?;
@@ -54,6 +58,6 @@ impl RhythmParser {
             }
         }
 
-        Err(ParseError::MissingSet)
+        Ok(())
     }
 }

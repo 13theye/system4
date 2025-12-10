@@ -19,7 +19,6 @@ impl DroneParser {
         let mut builder = DroneBuilder::new();
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
-        let mut found_set = false;
         let mut is_new_circle = false;
         let mut circle_id: Option<i32> = None;
 
@@ -30,9 +29,9 @@ impl DroneParser {
 
             match method_name.as_str() {
                 "set" => {
+                    // Legacy terminator - optional now
                     ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
                     ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
-                    found_set = true;
                     break;
                 }
                 "listCircles" => {
@@ -70,10 +69,7 @@ impl DroneParser {
             }
         }
 
-        if !found_set {
-            return Err(ParseError::MissingSet);
-        }
-
+        // Optional trailing semicolon (or the one after .set())
         ParsingUtils::parse_optional_semicolon(tokens, position)?;
 
         // Return appropriate command based on the type of operation

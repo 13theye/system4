@@ -30,12 +30,12 @@ impl Terminal {
         let test_commands = vec![
             // Create new drones with makeDrone
             "voice(0).makeDrone().brightness(0.8).outerRadius(600.0);",
-            "voice(3).brightness(0.1).volume(0.5).gravity(0.7).noise(0.2).set();",
+            "voice(3).brightness(0.1).volume(0.5).gravity(0.7).noise(0.2);",
             "voice(0).makeDrone().force(15.5).feedback(0.8).innerRadius(150.0);",
             "voice(0).makeDrone();", // Minimal command with defaults
             // Modify existing drones
-            "voice(0).brightness(0.2).centerX(200.0).centerY(-100.0).set();",
-            "voice(3).volume(0.8).vibration(0.3).set();",
+            "voice(0).brightness(0.2).centerX(200.0).centerY(-100.0);",
+            "voice(3).volume(0.8).vibration(0.3);",
             // List WindCircles for a drone
             "voice(0).listCircles();",
             "voice(3).listCircles();",
@@ -69,8 +69,7 @@ impl Terminal {
             "",                                       // Empty input
             "notdrone(1);",                           // Wrong object name
             "light().brightness(0.5);",               // Unknown command type
-            "drone(\"test\").brightness(0.5).set();", // Wrong parameter type for voice ID
-            "drone(1).brightness(0.5);",              // Should use .set() for modify
+            "drone(\"test\").brightness(0.5);",       // Wrong parameter type for voice ID
         ];
 
         for command in error_commands {
