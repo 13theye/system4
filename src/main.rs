@@ -479,8 +479,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             terminal_view.update(&rendering.draw);
         }
 
-        // Before drawing the AI reasoning terminal, mirror latest reasoning text
-        if let Some(text) = model.rhythm_manager.current_ai_reasoning_text() {
+        // Before drawing the AI reasoning terminal, mirror latest AI status text
+        if let Some(text) = model.rhythm_manager.current_ai_status_text() {
             if let Some(ai_view) = model
                 .ui_state
                 .terminal_manager
@@ -488,6 +488,18 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
                 .get_mut_terminal_view("ai_reasoning")
             {
                 ai_view.update_line_at_index(0, text, TerminalViewLineFadeMode::NoFade);
+                ai_view.update(&rendering.draw);
+            }
+        } else {
+            // If there is no AI status text, clear the AI reasoning terminal so
+            // that old text does not remain on screen.
+            if let Some(ai_view) = model
+                .ui_state
+                .terminal_manager
+                .borrow_mut()
+                .get_mut_terminal_view("ai_reasoning")
+            {
+                ai_view.clear();
                 ai_view.update(&rendering.draw);
             }
         }

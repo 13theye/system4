@@ -85,8 +85,29 @@ impl RhythmManager {
     }
 
     /// Expose current AI reasoning text for UI rendering.
+    ///
+    /// Prefer using `current_ai_status_text` for user-facing display, which
+    /// includes a fallback "AI is thinking..." message while a request is in
+    /// flight but no reasoning text has been streamed yet.
     pub fn current_ai_reasoning_text(&self) -> Option<&str> {
         self.ai_rhythm.current_reasoning_text()
+    }
+
+    /// Expose a user-facing status string for the AI rhythm request.
+    ///
+    /// When a request is pending but no reasoning text has arrived yet,
+    /// this returns "AI is thinking..." so the performer has immediate
+    /// feedback that the system is waiting on the model.
+    pub fn current_ai_status_text(&self) -> Option<&str> {
+        if self.ai_rhythm.is_request_pending() {
+            if let Some(text) = self.ai_rhythm.current_reasoning_text() {
+                Some(text)
+            } else {
+                Some("AI is generating a rhythmic response...")
+            }
+        } else {
+            self.ai_rhythm.current_reasoning_text()
+        }
     }
 
     /// Ensure a Rhythm exists for the target voice, then apply AI-derived
@@ -173,7 +194,14 @@ impl RhythmManager {
     }
 
     pub fn remove_rhythm(&mut self, voice_id: VoiceId) -> Option<Rhythm> {
-        self.rhythms.remove(&voice_id)
+        let removed = self.rhythms.remove(&voice_id);
+
+        // If this voice had an in-flight AI rhythm request, clear its status
+        // so the UI no longer shows reasoning or "AI is thinking..." text
+        // for a rhythm that no longer exists.
+        self.ai_rhythm.clear_status_for_voice(voice_id);
+
+        removed
     }
 
     pub fn rhythms(&self) -> &HashMap<VoiceId, Rhythm> {

@@ -27,6 +27,7 @@ pub struct AIRhythm {
     /// Voice for which we most recently sent an AI rhythm request.
     /// We assume a single in-flight AI request at a time.
     pending_ai_voice: Option<VoiceId>,
+    /// Accumulated reasoning text from the current streamed response, if any.
     reasoning_text: Option<String>,
 }
 
@@ -53,6 +54,9 @@ impl AIRhythm {
 
         println!("AIRhythm: starting OpenAI request for {:?}", target_voice);
         println!("{:#?}", object);
+
+        // Reset any previous reasoning text and mark a new request as pending
+        self.reasoning_text = None;
         self.pending_ai_voice = Some(target_voice);
 
         if let Err(e) = self.ai_service.stream(object_str) {
@@ -221,6 +225,26 @@ impl AIRhythm {
     /// Get the current accumulated reasoning text, if any.
     pub fn current_reasoning_text(&self) -> Option<&str> {
         self.reasoning_text.as_deref()
+    }
+
+    /// Returns true if there is an AI rhythm request currently in flight.
+    pub fn is_request_pending(&self) -> bool {
+        self.pending_ai_voice.is_some()
+    }
+
+    /// Clear any pending request and reasoning text for the given voice.
+    ///
+    /// This is used when a voice's rhythm is cleared so that the UI no longer
+    /// shows stale AI status text.
+    pub fn clear_status_for_voice(&mut self, voice_id: VoiceId) {
+        // Always clear the reasoning text, since it is currently global and
+        // associated with the most recent AI rhythm request.
+        self.reasoning_text = None;
+
+        // If this voice had an in-flight request, also clear the pending flag.
+        if self.pending_ai_voice == Some(voice_id) {
+            self.pending_ai_voice = None;
+        }
     }
 
     /// Extract a `RhythmParams` from an AI response item by parsing any JSON
