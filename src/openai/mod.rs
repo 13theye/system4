@@ -108,8 +108,6 @@ impl OpenAIService {
 
     /// Send a request via OpenAI API
     pub fn send(&mut self, content: String) -> Result<(), String> {
-        let runtime = self.ensure_runtime()?;
-
         // Clone params for async task
         let content = content.to_owned();
         let system_prompt = self.system_prompt.clone();
@@ -121,6 +119,8 @@ impl OpenAIService {
 
         let tx = self.response_tx.clone();
         let mut shutdown_rx = self.runtime_shutdown_tx.subscribe();
+
+        let runtime = self.ensure_runtime()?;
 
         runtime.spawn(async move {
             println!("OpenAIService: Send task created");
@@ -184,8 +184,6 @@ impl OpenAIService {
     }
 
     pub fn stream(&mut self, content: String) -> Result<(), String> {
-        let runtime = self.ensure_runtime()?;
-
         // Clone the content, system prompt, schema description, model name, url, client
         let content = content.to_owned();
         let system_prompt = self.system_prompt.clone();
@@ -197,6 +195,8 @@ impl OpenAIService {
 
         let tx = self.stream_tx.clone();
         let mut shutdown_rx = self.runtime_shutdown_tx.subscribe();
+
+        let runtime = self.ensure_runtime()?;
 
         runtime.spawn(async move {
             println!("OpenAIService: Send task created");
