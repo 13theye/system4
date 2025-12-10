@@ -97,7 +97,8 @@ impl RhythmParams {
         RhythmObject {
             capacity: self.capacity,
             sequence,
-            poem: None,
+            thought_process: String::from(""),
+            feeling: crate::services::openai::schema::FeelingObject::default(),
         }
     }
 
@@ -108,7 +109,7 @@ impl RhythmParams {
             if self.wings.contains(&i) {
                 output.push('X');
             } else {
-                output.push('O');
+                output.push('_');
             }
         }
 
@@ -125,7 +126,7 @@ impl RhythmParams {
             .sequence
             .rhythm
             .chars()
-            .filter(|c| *c == 'X' || *c == 'O')
+            .filter(|c| *c == 'X' || *c == '_')
             .collect();
 
         // Start from defaults so we inherit sensible subdivision and ranges,

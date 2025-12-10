@@ -184,7 +184,7 @@ pub enum MessageContent {
     OutputText { text: String },
     /// Refusal message when the model declines to answer.
     Refusal { refusal: String },
-    /// Reasoning text from the model.
+    /// Reasoning content
     ReasoningText { text: String },
     #[serde(other)]
     /// Any other content type we are not explicitly modeling.
@@ -217,6 +217,7 @@ impl From<responses::OutputContent> for MessageContent {
             responses::OutputContent::Refusal(refusal_content) => MessageContent::Refusal {
                 refusal: refusal_content.refusal.to_owned(),
             },
+
             responses::OutputContent::ReasoningText(reasoning_text_content) => {
                 MessageContent::ReasoningText {
                     text: reasoning_text_content.text.to_owned(),

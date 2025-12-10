@@ -104,11 +104,11 @@ impl AIRhythm {
         while let Some(event) = self.poll_openai_stream() {
             match event {
                 // Incremental reasoning text updates
-                StreamEvent::ResponseReasoningTextDelta(e) => {
+                StreamEvent::ResponseOutputTextDelta(e) => {
                     let buffer = self.reasoning_text.get_or_insert_with(String::new);
                     buffer.push_str(&e.delta);
                 }
-                StreamEvent::ResponseReasoningTextDone(e) => {
+                StreamEvent::ResponseOutputTextDone(e) => {
                     self.reasoning_text = Some(e.text);
                 }
 
@@ -335,27 +335,42 @@ impl AIRhythm {
     fn print_output_content(&self, output_content: &OutputItem) {
         match output_content {
             OutputItem::Message(output_message) => {
-                println!("AIRhythm: AI output message received");
+                println!("AIRhythm: AI OutputItem::Message received");
                 for (idx, output_content) in output_message.content.iter().enumerate() {
-                    if let MessageContent::OutputText { text } = output_content {
-                        println!("\n--- OutputText #{idx} raw ---");
-                        println!("{}", text);
+                    match output_content {
+                        MessageContent::OutputText { text } => {
+                            println!("\n--- Message::OutputText #{idx} raw ---");
+                            println!("{}", text);
+                        }
+
+                        MessageContent::ReasoningText { text } => {
+                            println!("\n--- Message::ReasoningText #{idx} raw ---");
+                            println!("{}", text);
+                        }
+
+                        MessageContent::Refusal { refusal } => {
+                            println!("\n--- Message::Refusal #{idx} raw ---");
+                            println!("{}", refusal);
+                        }
+                        _ => {}
                     }
                 }
             }
             OutputItem::Reasoning(reasoning_item) => {
-                println!("AIRhythm: AI output reasoning received");
+                println!("AIRhythm: AI OutputItem::Reasoning received");
                 for (idx, content) in reasoning_item.content.iter().enumerate() {
                     let inner_text = content
                         .iter()
                         .map(|c| c.text.to_owned())
                         .collect::<String>();
-                    println!("\n--- Reasoning Text #{idx} raw ---");
+                    println!("\n--- Reasoning::Reasoning Text #{idx} raw ---");
                     println!("{}", inner_text);
                 }
             }
             // Safely ignore Unknown content
-            OutputItem::Unknown(_) => {}
+            OutputItem::Unknown(val) => {
+                println!("AIRhythm: ignoring unknown output item: {}", val);
+            }
         }
     }
 }

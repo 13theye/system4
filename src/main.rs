@@ -217,7 +217,7 @@ fn model(app: &App) -> Model {
         color_fade_secs: 1.0,
         chars_per_second: 6.0,
         font: font.clone(),
-        font_size: 32,
+        font_size: 40,
         justification: TerminalViewTextJustification::TopLeft,
     };
 
@@ -225,16 +225,16 @@ fn model(app: &App) -> Model {
 
     // Terminal for AI reasoning text (minimal streaming test)
     let ai_reasoning_params = TerminalViewParams {
-        origin: vec2(0.0, 1000.0),
-        num_lines: 4,
-        width: 1200.0,
-        line_spacing: 5.0,
+        origin: vec2(0.0, 0.0),
+        num_lines: 8,
+        width: 1400.0,
+        line_spacing: 40.0,
         bright_color: rgba(0.6, 0.9, 0.6, 1.0),
         regular_color: rgba(0.2, 0.4, 0.2, 0.8),
         color_fade_secs: 1.0,
         chars_per_second: 20.0,
         font: font.clone(),
-        font_size: 26,
+        font_size: 32,
         justification: TerminalViewTextJustification::TopLeft,
     };
 
@@ -251,7 +251,7 @@ fn model(app: &App) -> Model {
         color_fade_secs: 1.5,
         chars_per_second: 6.0, // Faster typing for parameters
         font: font.clone(),
-        font_size: 22,
+        font_size: 28,
         justification: TerminalViewTextJustification::TopLeft,
     };
 
@@ -265,7 +265,7 @@ fn model(app: &App) -> Model {
         color_fade_secs: 1.5,
         chars_per_second: 6.0,
         font: font.clone(),
-        font_size: 22,
+        font_size: 28,
         justification: TerminalViewTextJustification::TopRight,
     };
 
