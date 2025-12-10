@@ -362,7 +362,6 @@ pub enum ReasoningEffort {
 impl From<responses::ReasoningEffort> for ReasoningEffort {
     fn from(item: responses::ReasoningEffort) -> Self {
         match item {
-            responses::ReasoningEffort::None => ReasoningEffort::None,
             responses::ReasoningEffort::Minimal => ReasoningEffort::Minimal,
             responses::ReasoningEffort::Low => ReasoningEffort::Low,
             responses::ReasoningEffort::Medium => ReasoningEffort::Medium,

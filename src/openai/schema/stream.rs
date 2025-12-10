@@ -6,7 +6,7 @@
 use async_openai::types::responses::{self};
 use serde::{Deserialize, Serialize};
 
-use crate::services::openai::schema::response::{MessageContent, OutputItem, ResponseObject};
+use crate::openai::schema::response::{MessageContent, OutputItem, ResponseObject};
 
 pub type ResponseStream = std::pin::Pin<
     Box<dyn futures::Stream<Item = Result<StreamEvent, async_openai::error::OpenAIError>> + Send>,

@@ -1,6 +1,6 @@
 use crate::{
     groups::{RhythmParams, VoiceId},
-    services::openai::{
+    openai::{
         schema::{
             response::{MessageContent, OutputItem, OutputMessage, ResponseObject},
             stream::StreamEvent,

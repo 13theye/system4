@@ -1,7 +1,7 @@
 use crate::{
     groups::{Rhythm, RhythmParams, VoiceId},
     managers::AIRhythm,
-    services::sequencer::SequencerService,
+    sequencer::SequencerService,
     settings::OpenAIServiceConfig,
     terminals::commands::rhythm::{RhythmConfig, RhythmParamModification},
     view::rhythm::{RhythmFormationType, RhythmView},

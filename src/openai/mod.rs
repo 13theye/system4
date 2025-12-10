@@ -10,7 +10,7 @@
 pub mod schema;
 
 use crate::{
-    services::openai::schema::{
+    openai::schema::{
         request::{ReasoningParamExt, ResponseTextParamExt},
         response::ResponseObject,
         stream::{ResponseStream, StreamEvent},

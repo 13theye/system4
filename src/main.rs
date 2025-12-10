@@ -22,7 +22,7 @@ use system4::{
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     rendering::RenderState,
-    services::sequencer::SequencerService,
+    sequencer::SequencerService,
     settings::*,
     terminals::terminal_view::{
         TerminalViewLineFadeMode, TerminalViewManager, TerminalViewParams,

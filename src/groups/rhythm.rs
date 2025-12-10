@@ -8,8 +8,9 @@ use rand_distr::{Distribution, SkewNormal};
 
 use crate::{
     groups::{RhythmParams, RhythmSlotParams, VoiceId, VoiceParams},
+    openai::schema::RhythmObject,
     particle::emitter::Emitter,
-    services::{openai::schema::RhythmObject, sequencer::SequencerService},
+    sequencer::SequencerService,
     terminals::commands::rhythm::RangeSize,
 };
 

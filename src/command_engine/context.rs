@@ -4,7 +4,7 @@ use crate::{
     groups::{Rhythm, Voice, VoiceId},
     osc::OscSender,
     rendering::GpuSegmentBuffer,
-    services::sequencer::SequencerService,
+    sequencer::SequencerService,
     terminals::commands::rhythm::RhythmParamModification,
     view::rhythm::RhythmView,
 };

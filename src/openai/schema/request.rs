@@ -6,7 +6,7 @@ use async_openai::types::responses::{
 };
 use schemars::schema_for;
 
-use crate::services::openai::schema::RhythmObject;
+use crate::openai::schema::RhythmObject;
 
 pub trait ResponseTextParamExt {
     fn generate_for_system4_schema(schema_description: Option<String>) -> ResponseTextParam;
