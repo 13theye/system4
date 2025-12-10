@@ -56,6 +56,11 @@ pub struct Model {
 
     // Unified command queue with priority resolution
     pub command_queue: Vec<Command>,
+
+    // Flag indicating that Voice1's rhythm was created/modified this frame
+    // and, if auto-AI is enabled, we should trigger a single AI rhythm
+    // request after all commands have been applied.
+    pub auto_ai_pending_for_voice1: bool,
 }
 
 impl Drop for Model {

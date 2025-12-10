@@ -84,6 +84,11 @@ impl RhythmManager {
         }
     }
 
+    /// Return true if an AI rhythm request is currently in flight.
+    pub fn is_ai_request_pending(&self) -> bool {
+        self.ai_rhythm.is_request_pending()
+    }
+
     /// Expose current AI reasoning text for UI rendering.
     ///
     /// Prefer using `current_ai_status_text` for user-facing display, which

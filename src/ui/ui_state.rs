@@ -30,6 +30,10 @@ pub struct UiState {
 
     // UI state
     pub active_tab: usize, // 0 = Voices, 1 = NTerminal
+
+    /// When enabled, automatically trigger AI rhythm generation for Voice2
+    /// whenever the rhythm for Voice1 is created or modified.
+    pub auto_ai_from_voice1: bool,
 }
 
 impl UiState {
@@ -47,6 +51,7 @@ impl UiState {
             command_input: CommandInput::new(),
             terminal_manager: RefCell::new(terminal_manager),
             active_tab: 0,
+            auto_ai_from_voice1: false,
         }
     }
 

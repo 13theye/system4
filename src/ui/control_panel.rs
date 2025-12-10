@@ -173,6 +173,13 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                     ui.set_min_height(height);
                                     ui.heading("Terminal Interface");
                                     ui.add_space(2.0);
+
+                                    // AI rhythm automation toggle
+                                    ui.checkbox(
+                                        &mut model.ui_state.auto_ai_from_voice1,
+                                        "Auto-generate AI rhythm for voice(2) from Voice1",
+                                    );
+                                    ui.add_space(8.0);
                                     egui::ScrollArea::vertical()
                                         .id_source("terminal_input_scroll")
                                         .auto_shrink([false, false])

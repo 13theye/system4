@@ -304,6 +304,7 @@ fn model(app: &App) -> Model {
         id_generator: IdGenerator::new(),
         rng,
         command_queue: Vec::new(),
+        auto_ai_pending_for_voice1: false,
     }
 }
 

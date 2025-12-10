@@ -39,6 +39,10 @@ impl Model {
             return;
         }
 
+        // Reset per-frame auto-AI flag; it will be set by any Voice1 rhythm
+        // create/modify commands that run in this frame.
+        self.auto_ai_pending_for_voice1 = false;
+
         // Take all commands from queue
         let all_commands: Vec<Command> = self.command_queue.drain(..).collect();
 
@@ -71,6 +75,16 @@ impl Model {
         // (display updates happen automatically in execute_command)
         for command in final_commands {
             self.execute_command(command, now);
+        }
+
+        // After all commands have been applied, trigger at most one AI rhythm
+        // request using the final Voice1 rhythm state, if requested.
+        if self.auto_ai_pending_for_voice1
+            && self.ui_state.auto_ai_from_voice1
+            && self.rhythm_manager.has_rhythm(VoiceId::Voice1)
+            && !self.rhythm_manager.is_ai_request_pending()
+        {
+            self.rhythm_manager.request_ai_rhythm();
         }
     }
 
@@ -188,6 +202,10 @@ impl Model {
 
                     // Phase 3: Start all sequencers to sync on the next beat
                     self.sequencer_service.start_all();
+
+                    // If enabled, automatically trigger AI rhythm generation
+                    // using the current Voice1 rhythm as a source.
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
 
                     let status_message =
                         format!("Voice {} - Created rhythm sequencer", voice_id.to_i32());
@@ -628,6 +646,8 @@ impl Model {
                     rhythm.update_sequencer(&mut self.sequencer_service);
                     self.rhythm_view
                         .reinitialize_formation(voice_id, rhythm.get_params(), now);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             SimpleCommand::RhythmNumWings { voice_id, value } => {
@@ -636,28 +656,38 @@ impl Model {
                     rhythm.reroll_wings(&mut self.rng, &mut self.sequencer_service);
                     self.rhythm_view
                         .reinitialize_formation(voice_id, rhythm.get_params(), now);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             SimpleCommand::RhythmSubdivision { voice_id, value } => {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_subdivision(value);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             // Slot range parameters (for creation)
             SimpleCommand::RhythmLengthRange { voice_id, range } => {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_length_range(range);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             SimpleCommand::RhythmVelocityRange { voice_id, range } => {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_velocity_range(range);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             SimpleCommand::RhythmCutoffRange { voice_id, range } => {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.set_cutoff_range(range);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             // Slot modification parameters (for editing)
@@ -668,6 +698,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.modify_all_slots_length(modification, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             SimpleCommand::RhythmModifyVelocity {
@@ -677,6 +709,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.modify_all_slots_velocity(modification, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
             SimpleCommand::RhythmModifyCutoff {
@@ -686,6 +720,8 @@ impl Model {
                 if let Some(rhythm) = self.rhythm_manager.get_rhythm_mut(voice_id) {
                     rhythm.modify_all_slots_cutoff(modification, &mut self.rng);
                     rhythm.update_sequencer(&mut self.sequencer_service);
+
+                    self.maybe_trigger_auto_ai_for_voice(voice_id);
                 }
             }
         }
@@ -856,6 +892,18 @@ pub fn update_feedback(model: &mut Model, _device: &Device, _queue: &Queue) {
 }
 
 // Implement VoiceValidator trait for Model to enable centralized validation
+impl Model {
+    /// When the auto-AI checkbox is enabled, mark that Voice1's rhythm was
+    /// created or modified this frame. The actual AI request will be sent
+    /// once per frame after all commands are applied, using the final
+    /// parameters.
+    fn maybe_trigger_auto_ai_for_voice(&mut self, voice_id: VoiceId) {
+        if voice_id == VoiceId::Voice1 {
+            self.auto_ai_pending_for_voice1 = true;
+        }
+    }
+}
+
 impl VoiceValidator for Model {
     fn voice_exists(&self, voice_id: VoiceId) -> bool {
         self.voice_manager.has_voice(voice_id) || self.rhythm_manager.has_rhythm(voice_id)
