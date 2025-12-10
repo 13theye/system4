@@ -13,11 +13,11 @@ use crate::{
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     rendering::{GpuSegmentBuffer, RenderState},
-    services::sequencer::SequencerService,
+    sequencer::SequencerService,
     terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
     utils::IdGenerator,
-    view::RhythmView,
+    view::rhythm::RhythmView,
 };
 
 use prat::clockservice::ClockService;

@@ -3,7 +3,7 @@ use crate::{
     groups::{Rhythm, VoiceId},
     model::command_builder::RhythmCommandBuilder,
     terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
-    view::RhythmFormationType,
+    view::rhythm::RhythmFormationType,
 };
 use std::time::Instant;
 

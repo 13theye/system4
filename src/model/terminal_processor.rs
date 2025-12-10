@@ -184,6 +184,26 @@ impl Model {
                 );
                 self.queue_command(clear_command);
             }
+            TerminalCommand::GenerateRhythm { voice_id } => {
+                // For now, only voice(2) uses AIRhythm.
+                if voice_id != 2 {
+                    println!(
+                        "GenerateRhythm is currently only supported for voice(2); received voice({}). Ignoring.",
+                        voice_id
+                    );
+                    return;
+                }
+
+                let target_voice = VoiceId::from_i32(voice_id);
+
+                // Trigger AI rhythm generation sampling from Voice1 and
+                // applying the result to Voice2 (target_voice) once received.
+                println!(
+                    "Terminal: invoking RhythmManager::send_to_ai() for generateRhythm on {:?}",
+                    target_voice
+                );
+                self.rhythm_manager.request_ai_rhythm();
+            }
         }
     }
 }

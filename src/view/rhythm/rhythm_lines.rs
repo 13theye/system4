@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::{
-    groups::rhythm::RhythmParams,
+    groups::RhythmParams,
     utils::tween,
-    view::{RhythmElement, RhythmFormation, RhythmViewUpdateParams},
+    view::rhythm::{RhythmElement, RhythmFormation, RhythmViewUpdateParams},
 };
 
 const LINE_DEFAULT_R: f32 = 0.7;
@@ -107,7 +107,7 @@ impl RhythmFormation for RhythmLinesFormation {
             );
 
             // Get slot parameters for scaling
-            let slot = rhythm_params.slots.get(*wing);
+            let slot = rhythm_params.slot_params.get(*wing);
             let length_scale = slot.map(|s| s.length).unwrap_or(1.0);
             let velocity_scale = slot.map(|s| s.velocity).unwrap_or(1.0);
 

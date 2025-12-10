@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::{
-    groups::{rhythm::RhythmParams, VoiceId},
-    view::{RhythmCircleFormation, RhythmFormation, RhythmLinesFormation},
+    groups::{RhythmParams, VoiceId},
+    view::rhythm::{RhythmCircleFormation, RhythmFormation, RhythmLinesFormation},
 };
 
 pub enum RhythmFormationType {

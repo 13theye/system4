@@ -1,4 +1,4 @@
-// src/services/sequencer.rs
+// src/sequencer/mod.rs
 //
 //
 
@@ -62,19 +62,12 @@ impl Sequencer {
 
     /// Start the sequencer with the current column set to 0.
     pub fn start(&mut self) {
-        if !self.state.is_advancing {
-            self.state.is_advancing = true;
-            self.state.is_sending = true;
-            self.next_beat = Some(0);
+        self.state.is_advancing = true;
+        self.state.is_sending = true;
+        self.next_beat = Some(0);
 
-            if self.debug {
-                println!("Sequencer: Started sequencer {}", self.id);
-            }
-        } else if self.debug {
-            println!(
-                "Sequencer: Already started sequencer {}, ignoring command.",
-                self.id
-            );
+        if self.debug {
+            println!("Sequencer: Started sequencer {}", self.id);
         }
     }
 
@@ -139,7 +132,7 @@ impl Sequencer {
         };
 
         // Don't send if the slot is missing
-        let Some(slot) = self.params.slots.get(beat) else {
+        let Some(slot) = self.params.slot_params.get(beat) else {
             return;
         };
 
@@ -292,6 +285,43 @@ impl SequencerService {
         }
     }
 
+    /// Start a specific sequencer immediately (without whole-note resync).
+    pub fn start_sequencer(&mut self, id: VoiceId) {
+        let result = self.command_tx.send(SequencerCommand::Start { id });
+        if self.debug {
+            println!(
+                "SequencerService: Sent Start command for {:?} with result: {:?}",
+                id, result
+            );
+        }
+    }
+
+    /// Stop a specific sequencer immediately.
+    pub fn stop_sequencer(&mut self, id: VoiceId) {
+        let result = self.command_tx.send(SequencerCommand::Stop { id });
+        if self.debug {
+            println!(
+                "SequencerService: Sent Stop command for {:?} with result: {:?}",
+                id, result
+            );
+        }
+    }
+
+    /// Schedule a sequencer to start on the next whole-note boundary when a
+    /// reference voice is at position 0. This keeps time and sequence aligned
+    /// without restarting the reference voice.
+    pub fn sync_start_to_voice(&mut self, id: VoiceId, reference: VoiceId) {
+        let result = self
+            .command_tx
+            .send(SequencerCommand::SyncStartToVoice { id, reference });
+        if self.debug {
+            println!(
+                "SequencerService: Sent SyncStartToVoice command for {:?} (ref {:?}) with result: {:?}",
+                id, reference, result
+            );
+        }
+    }
+
     /// Update parameters for a specific sequencer.
     pub fn update_sequencer_params(&mut self, id: VoiceId, params: RhythmParams) {
         let result = self
@@ -369,6 +399,10 @@ pub struct SequencerThread {
     // Synchronize on start by starting only on the next whole note
     is_sync_starting: bool,
 
+    // Pending request to sync-start a single sequencer relative to a reference voice
+    // (target_id, reference_id)
+    pending_sync_start: Option<(VoiceId, VoiceId)>,
+
     // Debug
     debug: bool,
 }
@@ -436,6 +470,12 @@ impl SequencerThread {
                     SequencerCommand::StartAll => {
                         self.is_sync_starting = true;
                     }
+                    SequencerCommand::SyncStartToVoice { id, reference } => {
+                        // Defer actual start until beat handling where we can
+                        // see both the clock (whole-note boundary) and the
+                        // reference voice's position.
+                        self.pending_sync_start = Some((id, reference));
+                    }
                     SequencerCommand::Stop { id } => {
                         if let Some(sequencer) = self.sequencers.get_mut(&id) {
                             sequencer.stop();
@@ -465,6 +505,39 @@ impl SequencerThread {
             while let Ok(beat_event) = self.beat_rx.try_recv() {
                 if self.is_sync_starting {
                     self.sync_start_all(&beat_event);
+                }
+
+                // Handle pending single-voice sync start: wait for a whole-note
+                // event where the reference voice is at position 0, then start
+                // only the target voice.
+                if let Some((target_id, reference_id)) = self.pending_sync_start {
+                    // Check the reference voice's next_beat without taking
+                    // a mutable borrow yet.
+                    let reference_at_zero = self
+                        .sequencers
+                        .get(&reference_id)
+                        .map(|s| s.next_beat == Some(0))
+                        .unwrap_or(false);
+
+                    if reference_at_zero {
+                        if let Some(target) = self.sequencers.get_mut(&target_id) {
+                            if self.debug {
+                                println!(
+                                        "SequencerThread: Sync starting target {} relative to reference {}",
+                                        target_id, reference_id
+                                    );
+                            }
+                            target.start();
+                            self.pending_sync_start = None;
+                        } else if self.debug {
+                            // Target was removed before we could start it; drop the request.
+                            println!(
+                                    "SequencerThread: SyncStartToVoice target {:?} missing; clearing request",
+                                    target_id
+                                );
+                            self.pending_sync_start = None;
+                        }
+                    }
                 }
 
                 for sequencer in self.sequencers.values_mut() {
@@ -579,6 +652,12 @@ pub enum SequencerCommand {
         id: VoiceId,
     },
     StartAll,
+    /// Schedule a single sequencer to start on the next whole-note boundary
+    /// when a reference voice is at position 0.
+    SyncStartToVoice {
+        id: VoiceId,
+        reference: VoiceId,
+    },
     Stop {
         id: VoiceId,
     },
@@ -665,6 +744,7 @@ impl<'a> SequencerServiceBuilder<'a> {
             last_tick_time: 0,
             next_tick_time: 0,
             is_sync_starting: false,
+            pending_sync_start: None,
             debug: self.debug,
         };
 
@@ -697,7 +777,3 @@ impl<'a> SequencerServiceBuilder<'a> {
         })
     }
 }
-//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             height,
-//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             data_tx,
-//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             data_rx,
-//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          osc_sender: OscSender,

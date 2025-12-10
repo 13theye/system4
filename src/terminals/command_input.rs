@@ -139,10 +139,10 @@ impl CommandInput {
     /// Get example commands for help text
     pub fn get_examples() -> Vec<&'static str> {
         vec![
-            "makeDrone(1).brightness(0.8).outerRadius(500.0).begin();",
-            "makeDrone(4).force(15.5).noise(0.3).feedback(0.9).begin();",
+            "makeDrone(1).brightness(0.8).outerRadius(500.0);",
+            "makeDrone(4).force(15.5).noise(0.3).feedback(0.9);",
             "drone(1).brightness(0.2).centerX(100.0).centerY(-50.0).set();",
-            "drone(4).newCircle().centerX(-500.0).centerY(200.0).add();",
+            "drone(4).newCircle().centerX(-500.0).centerY(200.0);",
             "drone(1).listCircles();",
             "drone(4).removeCircle(1);",
         ]

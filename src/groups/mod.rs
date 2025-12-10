@@ -7,4 +7,7 @@ pub mod voice;
 pub use voice::{Voice, VoiceParams};
 
 pub mod rhythm;
-pub use rhythm::{Rhythm, RhythmParams};
+pub use rhythm::Rhythm;
+
+pub mod rhythm_types;
+pub use rhythm_types::{RhythmParams, RhythmSlotParams};

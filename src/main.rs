@@ -10,7 +10,6 @@ use nannou::{prelude::*, text::Font};
 use nannou_egui::Egui;
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
-use system4::view::rhythm_view::{RhythmView, RhythmViewUpdateParams};
 use thread_priority::*;
 
 use std::fs;
@@ -19,18 +18,19 @@ use std::time::Instant;
 use system4::{
     groups::VoiceId,
     managers::{RhythmManager, VoiceManager},
-    model::{
-        controller,
-        Model,
-    },
+    model::{controller, Model},
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     rendering::RenderState,
-    services::sequencer::SequencerService,
+    sequencer::SequencerService,
     settings::*,
-    terminals::terminal_view::{TerminalViewManager, TerminalViewParams, TerminalViewTextJustification},
+    terminals::terminal_view::{
+        TerminalViewLineFadeMode, TerminalViewManager, TerminalViewParams,
+        TerminalViewTextJustification,
+    },
     ui::{control_panel::update_control_ui, UiState},
     utils::IdGenerator,
+    view::rhythm::{RhythmView, RhythmViewUpdateParams},
 };
 
 // Import terminal processor to bring process_terminal_command method into scope
@@ -217,11 +217,28 @@ fn model(app: &App) -> Model {
         color_fade_secs: 1.0,
         chars_per_second: 6.0,
         font: font.clone(),
-        font_size: 32,
+        font_size: 40,
         justification: TerminalViewTextJustification::TopLeft,
     };
 
     terminal_manager.new_terminal_view("main", VoiceId::Voice0, terminal_params);
+
+    // Terminal for AI reasoning text (minimal streaming test)
+    let ai_reasoning_params = TerminalViewParams {
+        origin: vec2(0.0, 0.0),
+        num_lines: 8,
+        width: 1400.0,
+        line_spacing: 40.0,
+        bright_color: rgba(0.6, 0.9, 0.6, 1.0),
+        regular_color: rgba(0.2, 0.4, 0.2, 0.8),
+        color_fade_secs: 1.0,
+        chars_per_second: 20.0,
+        font: font.clone(),
+        font_size: 32,
+        justification: TerminalViewTextJustification::TopLeft,
+    };
+
+    terminal_manager.new_terminal_view("ai_reasoning", VoiceId::Voice0, ai_reasoning_params);
 
     // Set up drone parameter displays for each voice
     let drone_params_voice1 = TerminalViewParams {
@@ -234,7 +251,7 @@ fn model(app: &App) -> Model {
         color_fade_secs: 1.5,
         chars_per_second: 6.0, // Faster typing for parameters
         font: font.clone(),
-        font_size: 22,
+        font_size: 28,
         justification: TerminalViewTextJustification::TopLeft,
     };
 
@@ -248,7 +265,7 @@ fn model(app: &App) -> Model {
         color_fade_secs: 1.5,
         chars_per_second: 6.0,
         font: font.clone(),
-        font_size: 22,
+        font_size: 28,
         justification: TerminalViewTextJustification::TopRight,
     };
 
@@ -275,7 +292,7 @@ fn model(app: &App) -> Model {
     Model {
         particle_system,
         voice_manager: VoiceManager::new(),
-        rhythm_manager: RhythmManager::new(),
+        rhythm_manager: RhythmManager::new(&settings.openai_service),
         rhythm_view,
         clock,
         sequencer_service,
@@ -330,6 +347,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Process unified command queue with priority resolution
     model.process_command_queue(now);
+
+    // Poll AI rhythm responses (if any) and apply them to rhythms
+    model.rhythm_manager.update_ai(
+        now,
+        &mut model.sequencer_service,
+        &mut model.rhythm_view,
+        &mut model.rng,
+    );
 
     // Update feedback render params
     controller::update_feedback(model, device, queue);
@@ -444,18 +469,33 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Draw all rhythm views
         model.rhythm_view.draw_all(&rendering.draw);
 
-        // Update and draw terminal view as overlay on top of post-processed texture
+        // Update and draw terminal views as overlay on top of post-processed texture
         if let Some(terminal_view) = model
-            .ui_state.terminal_manager
+            .ui_state
+            .terminal_manager
             .borrow_mut()
             .get_mut_terminal_view("main")
         {
             terminal_view.update(&rendering.draw);
         }
 
+        // Before drawing the AI reasoning terminal, mirror latest reasoning text
+        if let Some(text) = model.rhythm_manager.current_ai_reasoning_text() {
+            if let Some(ai_view) = model
+                .ui_state
+                .terminal_manager
+                .borrow_mut()
+                .get_mut_terminal_view("ai_reasoning")
+            {
+                ai_view.update_line_at_index(0, text, TerminalViewLineFadeMode::NoFade);
+                ai_view.update(&rendering.draw);
+            }
+        }
+
         // Update and draw drone parameter displays
         model
-            .ui_state.terminal_manager
+            .ui_state
+            .terminal_manager
             .borrow_mut()
             .update_drone_parameter_displays(&rendering.draw);
 
@@ -576,7 +616,6 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
     // Note: Text input is now handled directly by egui TextEdit widget
     // through the TextBuffer trait implementation
 }
-
 
 // ************************ Debug display  *************************************
 

@@ -291,7 +291,7 @@ impl RhythmConfig {
     pub fn get_defaults_for_voice(voice: VoiceId) -> Self {
         let (default_capacity, default_num_wings, default_subdivision) = match voice {
             VoiceId::Voice1 => (12, 5, BeatSubdivision::Eighth),
-            VoiceId::Voice2 => (8, 3, BeatSubdivision::Quarter),
+            VoiceId::Voice2 => (0, 0, BeatSubdivision::Eighth),
             _ => (8, 4, BeatSubdivision::Eighth), // Fallback
         };
 

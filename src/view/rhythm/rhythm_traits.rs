@@ -1,7 +1,7 @@
 use nannou::prelude::*;
 use std::time::Instant;
 
-use crate::{groups::rhythm::RhythmParams, view::RhythmViewUpdateParams};
+use crate::{groups::RhythmParams, view::rhythm::RhythmViewUpdateParams};
 
 #[derive(Debug)]
 pub enum RhythmFormationState {

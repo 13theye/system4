@@ -59,6 +59,12 @@ pub enum TerminalCommand {
     Clear {
         voice_id: i32,
     },
+    /// Trigger AI-based rhythm generation for a voice.
+    ///
+    /// Example: voice(2).generateRhythm();
+    GenerateRhythm {
+        voice_id: i32,
+    },
 }
 
 impl fmt::Display for TerminalCommand {
@@ -131,6 +137,9 @@ impl fmt::Display for TerminalCommand {
             }
             TerminalCommand::Clear { voice_id } => {
                 write!(f, "Clear voice {}", voice_id)
+            }
+            TerminalCommand::GenerateRhythm { voice_id } => {
+                write!(f, "GenerateRhythm voice {}", voice_id)
             }
         }
     }
