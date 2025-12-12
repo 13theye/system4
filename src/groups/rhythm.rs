@@ -4,7 +4,7 @@ use crossbeam_channel as channel;
 //use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
-use rand_distr::{Distribution, SkewNormal};
+use rand_distr::{Beta, Distribution};
 
 use crate::{
     groups::{RhythmParams, RhythmSlotParams, VoiceId, VoiceParams},
@@ -271,10 +271,10 @@ impl Rhythm {
 
     /// Randomize all slots' length within a range
     pub fn randomize_all_slots_length(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        let skew_params = range.to_skew_distribution_params();
-        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+        let beta_params = range.to_beta_distribution_params();
+        if let Ok(beta) = Beta::new(beta_params.0, beta_params.1) {
             for slot in &mut self.params.slot_params {
-                slot.length = skew_normal.sample(rng);
+                slot.length = beta.sample(rng);
             }
         } else {
             for slot in &mut self.params.slot_params {
@@ -287,10 +287,10 @@ impl Rhythm {
 
     /// Randomize all slots' velocity within a range
     pub fn randomize_all_slots_velocity(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        let skew_params = range.to_skew_distribution_params();
-        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+        let beta_params = range.to_beta_distribution_params();
+        if let Ok(beta) = Beta::new(beta_params.0, beta_params.1) {
             for slot in &mut self.params.slot_params {
-                slot.velocity = skew_normal.sample(rng);
+                slot.velocity = beta.sample(rng);
             }
         } else {
             for slot in &mut self.params.slot_params {
@@ -303,10 +303,10 @@ impl Rhythm {
 
     /// Randomize all slots' cutoff within a range
     pub fn randomize_all_slots_cutoff(&mut self, range: RangeSize, rng: &mut ThreadRng) {
-        let skew_params = range.to_skew_distribution_params();
-        if let Ok(skew_normal) = SkewNormal::new(skew_params.0, skew_params.1, skew_params.2) {
+        let beta_params = range.to_beta_distribution_params();
+        if let Ok(beta) = Beta::new(beta_params.0, beta_params.1) {
             for slot in &mut self.params.slot_params {
-                slot.cutoff = skew_normal.sample(rng);
+                slot.cutoff = beta.sample(rng);
             }
         } else {
             for slot in &mut self.params.slot_params {

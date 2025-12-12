@@ -37,19 +37,19 @@ impl RangeSize {
         }
     }
 
-    /// converts the named range to parameters for SkewNormal.
-    /// returns (location, scale, shape)
+    /// converts the named range to parameters for Beta Distribution.
+    /// returns (alpha, beta)
     /// All ranges produce values in [0.0, 1.0] with different skew:
     /// - XS, S: skewed toward 0.0
     /// - M: normal distribution (no skew)
     /// - L, XL: skewed toward 1.0
-    pub fn to_skew_distribution_params(&self) -> (f32, f32, f32) {
+    pub fn to_beta_distribution_params(&self) -> (f32, f32) {
         match self {
-            RangeSize::XS => (0.0, 0.25, 8.0),
-            RangeSize::S => (0.0, 0.25, 5.0),
-            RangeSize::M => (0.5, 0.25, 0.0),
-            RangeSize::L => (0.9, 0.25, -5.0),
-            RangeSize::XL => (0.9, 0.25, -8.0),
+            RangeSize::XS => (1.0, 3.0),
+            RangeSize::S => (2.0, 3.5),
+            RangeSize::M => (3.0, 3.0),
+            RangeSize::L => (3.5, 2.0),
+            RangeSize::XL => (3.0, 1.0),
         }
     }
 }
