@@ -2,7 +2,7 @@
 use prat::BeatSubdivision;
 
 use crate::{
-    openai::schema::{RhythmObject, SequenceObject, SequenceParametersObject},
+    openai::schema::{RhythmObject, SequenceObject, SequenceParametersObject, SubdivisionObject},
     terminals::commands::rhythm::RangeSize,
 };
 
@@ -77,6 +77,8 @@ impl RhythmParams {
     pub fn to_serializable_object(&self) -> RhythmObject {
         let mut content = Vec::with_capacity(self.capacity);
 
+        let subdivision = SubdivisionObject::from_beat_subdivision_u8(self.subdivision as u8);
+
         for i in 0..self.capacity {
             let slot = SequenceParametersObject {
                 index: i,
@@ -95,9 +97,10 @@ impl RhythmParams {
         };
 
         RhythmObject {
-            capacity: self.capacity,
-            sequence,
             thought_process: String::from(""),
+            capacity: self.capacity,
+            subdivision,
+            sequence,
             feeling: crate::openai::schema::FeelingObject::default(),
         }
     }
@@ -129,11 +132,21 @@ impl RhythmParams {
             .filter(|c| *c == 'X' || *c == '_')
             .collect();
 
+        let subdivision = match object.subdivision {
+            SubdivisionObject::Quarter => BeatSubdivision::Quarter,
+            SubdivisionObject::Eighth => BeatSubdivision::Eighth,
+            SubdivisionObject::Sixteenth => BeatSubdivision::Sixteenth,
+            SubdivisionObject::Triplet => BeatSubdivision::Triplet,
+            // Default to eighth
+            SubdivisionObject::Invalid => BeatSubdivision::Eighth,
+        };
+
         // Start from defaults so we inherit sensible subdivision and ranges,
         // then override capacity and fill slot/wings data from the sequence.
         let mut output = RhythmParams {
             capacity: object.capacity,
             slot_params: Vec::with_capacity(object.capacity),
+            subdivision,
             ..Default::default()
         };
 

@@ -24,6 +24,7 @@ pub enum RangeSize {
     M = 2,
     L = 3,
     XL = 4,
+    R = 5,
 }
 
 impl RangeSize {
@@ -34,6 +35,7 @@ impl RangeSize {
             RangeSize::M => 0.4..=0.66,
             RangeSize::L => 0.5..=0.88,
             RangeSize::XL => 0.5..=1.0,
+            RangeSize::R => 0.0..=1.0,
         }
     }
 
@@ -50,6 +52,7 @@ impl RangeSize {
             RangeSize::M => (3.0, 3.0),
             RangeSize::L => (3.5, 2.0),
             RangeSize::XL => (3.0, 1.0),
+            RangeSize::R => (1.0, 1.0),
         }
     }
 }
