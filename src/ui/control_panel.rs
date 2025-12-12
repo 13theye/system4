@@ -3,7 +3,7 @@ use super::voice_panel;
 use crate::command_engine::Command;
 use crate::groups::VoiceId;
 use crate::model::Model;
-use crate::terminals::command_input::CommandInput;
+use crate::terminals::{command_input::CommandInput, commands::TerminalCommand};
 use nannou::App;
 
 pub fn update_control_ui(app: &App, model: &mut Model) {
@@ -165,7 +165,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                             }); // end voices horizontal layout
                         }
                         0 => {
-                            // NTerminal tab content - two column layout with scrollbars
+                            // NTerminal tab content - three column layout with scrollbars
                             ui.horizontal(|ui| {
                                 // Left column: Command input and status - column with scrollable content
                                 ui.vertical(|ui| {
@@ -174,12 +174,6 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                     ui.heading("Terminal Interface");
                                     ui.add_space(2.0);
 
-                                    // AI rhythm automation toggle
-                                    ui.checkbox(
-                                        &mut model.ui_state.auto_ai_from_voice1,
-                                        "Auto-generate AI rhythm for voice(2) from Voice1",
-                                    );
-                                    ui.add_space(8.0);
                                     egui::ScrollArea::vertical()
                                         .id_source("terminal_input_scroll")
                                         .auto_shrink([false, false])
@@ -349,6 +343,30 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                 });
                                         }); // end left column scroll area
                                 }); // end left column
+
+                                ui.separator();
+
+                                // Middle column: AI controls
+                                ui.vertical(|ui| {
+                                    ui.set_width(260.0);
+                                    ui.set_min_height(height);
+                                    ui.heading("AI Controls");
+                                    ui.add_space(8.0);
+
+                                    ui.checkbox(
+                                        &mut model.ui_state.auto_ai_from_voice1,
+                                        "Auto-generate AI rhythm\nfor voice(2) from Voice1",
+                                    );
+
+                                    ui.add_space(12.0);
+
+                                    if ui.button("Clear Voice2").clicked() {
+                                        // Equivalent of typing: voice(2).clear();
+                                        terminal_commands_to_process.push(TerminalCommand::Clear {
+                                            voice_id: 2,
+                                        });
+                                    }
+                                }); // end middle column
 
                                 ui.separator();
 

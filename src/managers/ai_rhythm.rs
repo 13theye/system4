@@ -106,6 +106,13 @@ impl AIRhythm {
         let mut results = Vec::new();
 
         while let Some(event) = self.poll_openai_stream() {
+            // If there is no pending target voice, we ignore all remaining
+            // stream events for this request. This prevents late deltas or
+            // completions from updating the UI after a voice has been cleared.
+            if self.pending_ai_voice.is_none() {
+                continue;
+            }
+
             match event {
                 // Incremental reasoning text updates
                 StreamEvent::ResponseOutputTextDelta(e) => {
@@ -232,16 +239,21 @@ impl AIRhythm {
         self.pending_ai_voice.is_some()
     }
 
-    /// Clear any pending request and reasoning text for the given voice.
-    ///
-    /// This is used when a voice's rhythm is cleared so that the UI no longer
-    /// shows stale AI status text.
+    /// Clear any pending request for the given voice and set a simple status
+    /// message indicating that the voice was cleared. Subsequent stream events
+    /// for this request will be ignored.
     pub fn clear_status_for_voice(&mut self, voice_id: VoiceId) {
-        // Always clear the reasoning text, since it is currently global and
-        // associated with the most recent AI rhythm request.
-        self.reasoning_text = None;
+        // Always update the reasoning text so the UI shows a clear message
+        // instead of any previous AI-generated content.
+        if voice_id == VoiceId::Voice2 {
+            // Use the exact copy requested for Voice2.
+            self.reasoning_text = Some("Voice2 cleared".to_string());
+        } else {
+            self.reasoning_text = Some(format!("Voice {} cleared", voice_id.to_i32()));
+        }
 
-        // If this voice had an in-flight request, also clear the pending flag.
+        // If this voice had an in-flight request, also clear the pending flag
+        // so that further stream events are ignored.
         if self.pending_ai_voice == Some(voice_id) {
             self.pending_ai_voice = None;
         }
