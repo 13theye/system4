@@ -56,7 +56,7 @@ impl SubdivisionObject {
 /// vel: velocity parameter for external sound engine, range: 0.0 to 1.0. Truncate to 3 decimal places.
 /// len: note length parameter for external sound engine, range: 0.0 to 1.0. Truncate to 3 decimal places.
 /// cut: cutoff parameter for external sound engine, range: 0.0 to 1.0. Truncate to 3 decimal places.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SequenceParametersObject {
     #[serde(rename = "i")]
     pub index: usize,

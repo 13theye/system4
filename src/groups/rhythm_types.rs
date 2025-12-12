@@ -82,9 +82,9 @@ impl RhythmParams {
         for i in 0..self.capacity {
             let slot = SequenceParametersObject {
                 index: i,
-                velocity: self.slot_params[i].velocity,
-                length: self.slot_params[i].length,
-                cutoff: self.slot_params[i].cutoff,
+                velocity: (self.slot_params[i].velocity * 1000.0).round() / 1000.0,
+                length: (self.slot_params[i].length * 1000.0).round() / 1000.0,
+                cutoff: (self.slot_params[i].cutoff * 1000.0).round() / 1000.0,
             };
             content.insert(i, slot);
         }

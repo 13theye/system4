@@ -256,8 +256,9 @@ fn string_to_range_size(s: String) -> Result<RangeSize, ParseError> {
         "m" => Ok(RangeSize::M),
         "l" => Ok(RangeSize::L),
         "xl" => Ok(RangeSize::XL),
+        "r" => Ok(RangeSize::R),
         _ => Err(ParseError::UnexpectedToken {
-            expected: "xs, s, m, l, or xl".to_string(),
+            expected: "xs, s, m, l, xl, or r".to_string(),
             found: s,
         }),
     }
