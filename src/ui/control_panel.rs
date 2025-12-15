@@ -355,16 +355,23 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
 
                                     ui.checkbox(
                                         &mut model.ui_state.auto_ai_from_voice1,
-                                        "Auto-generate AI rhythm\nfor voice(2) from Voice1",
+                                        "Auto-generate AI rhythm when Voice1 changes",
                                     );
 
                                     ui.add_space(12.0);
 
+                                    if ui.button("Generate Voice2").clicked() {
+                                        // Equivalent of typing: voice(2).generate();
+                                        terminal_commands_to_process
+                                            .push(TerminalCommand::GenerateRhythm { voice_id: 2 });
+                                    }
+
+                                    ui.add_space(8.0);
+
                                     if ui.button("Clear Voice2").clicked() {
                                         // Equivalent of typing: voice(2).clear();
-                                        terminal_commands_to_process.push(TerminalCommand::Clear {
-                                            voice_id: 2,
-                                        });
+                                        terminal_commands_to_process
+                                            .push(TerminalCommand::Clear { voice_id: 2 });
                                     }
                                 }); // end middle column
 
