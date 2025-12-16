@@ -4,7 +4,9 @@ use crate::command_engine::Command;
 use crate::groups::VoiceId;
 use crate::model::Model;
 use crate::terminals::{command_input::CommandInput, commands::TerminalCommand};
+use crate::text::{TextBlock, TextFadeMode, TextPaneId, TextSlot, TextStyle, WrapPolicy};
 use nannou::App;
+use std::time::Instant;
 
 pub fn update_control_ui(app: &App, model: &mut Model) {
     let Some(control_window) = app.window(model.render_state.control_window_id) else {
@@ -216,18 +218,39 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                 .hint_text("Type command here..."),
                                                             );
 
-                                                            // Update terminal display with live command text
+                                                            // Update unified text overlay with live command text
                                                             if response.changed() {
-                                                                model
-                                                                    .ui_state
-                                                                    .terminal_manager
-                                                                    .borrow_mut()
-                                                                    .update_from_command_input(
-                                                                        "main",
-                                                                        &model
-                                                                            .ui_state
-                                                                            .command_input,
-                                                                    );
+                                                                let now = Instant::now();
+                                                                let text = model.ui_state.command_input.display();
+
+                                                                if text.trim().is_empty() {
+                                                                    model
+                                                                        .ui_state
+                                                                        .text_overlay
+                                                                        .borrow_mut()
+                                                                        .clear_live_slot(
+                                                                            TextPaneId::Voice(
+                                                                                VoiceId::Voice0,
+                                                                            ),
+                                                                            TextSlot::CommandInput,
+                                                                        );
+                                                                } else {
+                                                                    model
+                                                                        .ui_state
+                                                                        .text_overlay
+                                                                        .borrow_mut()
+                                                                        .set_live_block(
+                                                                            TextPaneId::Voice(
+                                                                                VoiceId::Voice0,
+                                                                            ),
+                                                                            TextSlot::CommandInput,
+                                                                            TextBlock::new(text)
+                                                                                .style(TextStyle::Normal)
+                                                                                .fade(TextFadeMode::NoFade)
+                                                                                .wrap(WrapPolicy::HardWrap),
+                                                                            now,
+                                                                        );
+                                                                }
                                                             }
 
                                                             // Handle Enter key press through egui input system
@@ -261,13 +284,16 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                         .command_input
                                                                         .clear();
 
-                                                                    // Clear the terminal display
+                                                                    // Clear the live command input overlay
                                                                     model
                                                                         .ui_state
-                                                                        .terminal_manager
+                                                                        .text_overlay
                                                                         .borrow_mut()
-                                                                        .clear_terminal_view(
-                                                                            "main",
+                                                                        .clear_live_slot(
+                                                                            TextPaneId::Voice(
+                                                                                VoiceId::Voice0,
+                                                                            ),
+                                                                            TextSlot::CommandInput,
                                                                         );
                                                                 }
                                                             }

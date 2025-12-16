@@ -82,10 +82,14 @@ fn erase_drone(model: &mut Model, id: i32) {
 // ExecutionContext implementation for Model
 impl ExecutionContext for Model {
     fn log_command(&mut self, command: &crate::command_engine::Command) {
-        self.ui_state
-            .terminal_manager
-            .borrow_mut()
-            .process_command(command);
+        // Prefer the unified text overlay system.
+        let now = std::time::Instant::now();
+        for (voice_id, block) in crate::text::adapters::blocks_for_command(command) {
+            self.ui_state
+                .text_overlay
+                .borrow_mut()
+                .push_history_block(crate::text::TextPaneId::Voice(voice_id), block, now);
+        }
     }
 
     // Voice state access - delegate to voice_manager

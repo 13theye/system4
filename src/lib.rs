@@ -12,6 +12,7 @@ pub mod rendering;
 pub mod sequencer;
 pub mod settings;
 pub mod terminals;
+pub mod text;
 pub mod ui;
 pub mod utils;
 pub mod view;

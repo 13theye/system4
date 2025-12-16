@@ -90,11 +90,14 @@ impl Model {
 
     /// Apply a command immediately without queueing
     pub fn execute_command(&mut self, command: Command, now: Instant) {
-        // Send all commands to terminal display for visualization
-        self.ui_state
-            .terminal_manager
-            .borrow_mut()
-            .process_command(&command);
+        // Route commands into the unified text system.
+        // (This replaces the legacy TerminalViewManager-based command logging.)
+        for (voice_id, block) in crate::text::adapters::blocks_for_command(&command) {
+            self.ui_state
+                .text_overlay
+                .borrow_mut()
+                .push_history_block(crate::text::TextPaneId::Voice(voice_id), block, now);
+        }
 
         match command.command {
             CommandInner::Composite(composite) => match composite {

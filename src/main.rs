@@ -24,9 +24,12 @@ use system4::{
     rendering::RenderState,
     sequencer::SequencerService,
     settings::*,
-    terminals::terminal_view::{
-        TerminalViewLineFadeMode, TerminalViewManager, TerminalViewParams,
-        TerminalViewTextJustification,
+    terminals::terminal_view::TerminalViewManager,
+    text::{
+        layout::{HorizontalJustify, TextBoxAnchor, TextBoxLayout, TextBoxLayoutParams, VerticalFlow},
+        overlay::TextOverlay,
+        view::{TextPaneView, TextPaneViewParams, TextTheme},
+        TextBlock, TextFadeMode, TextPane, TextPaneId, TextSlot, TextStyle, WrapPolicy,
     },
     ui::{control_panel::update_control_ui, UiState},
     utils::IdGenerator,
@@ -203,74 +206,76 @@ fn model(app: &App) -> Model {
         performer_rect.top() - 10.0,
     ));
 
-    // Create terminal view manager
-    let mut terminal_manager = TerminalViewManager::new();
+    // Create terminal view manager (legacy; will be retired)
+    let terminal_manager = TerminalViewManager::new();
 
-    // Set up terminal parameters for command display
-    let terminal_params = TerminalViewParams {
-        origin: vec2(-500.0, 1000.0),
-        num_lines: 7,
-        width: 1000.0,
-        line_spacing: 5.0,
-        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
-        regular_color: rgba(0.2, 0.2, 0.2, 0.8),
-        color_fade_secs: 1.0,
-        chars_per_second: 6.0,
-        font: font.clone(),
-        font_size: 40,
-        justification: TerminalViewTextJustification::TopLeft,
+    // Create new unified text overlay for per-voice panes.
+    let mut text_overlay = TextOverlay::new();
+
+    // Helper to create a text pane + view.
+    let mut add_voice_pane = |voice: VoiceId,
+                             anchor: TextBoxAnchor,
+                             anchor_pos: Vec2,
+                             width: f32,
+                             num_lines: usize,
+                             font_size: u32,
+                             justify: HorizontalJustify,
+                             theme: TextTheme| {
+        let line_spacing = 5.0;
+        let line_height = font_size as f32 + line_spacing * 2.0;
+
+        let layout = TextBoxLayout::new(TextBoxLayoutParams {
+            anchor,
+            anchor_pos,
+            width,
+            num_lines,
+            line_height,
+            vertical_flow: VerticalFlow::TopDown,
+            horizontal_justify: justify,
+        });
+
+        let view = TextPaneView::new(TextPaneViewParams {
+            layout,
+            font: font.clone(),
+            font_size,
+            line_spacing,
+            fade_delay_secs: 1.0,
+            color_fade_secs: 1.5,
+            chars_per_second: 0.0, // default: show immediately for overlay panes
+            theme,
+        });
+
+        let mut pane = TextPane::new(num_lines);
+        pane.set_slot_line_budget(TextSlot::CommandInput, 3);
+        pane.set_slot_line_budget(TextSlot::AiStream, 2);
+
+        text_overlay.insert_pane(TextPaneId::Voice(voice), pane, view);
     };
 
-    terminal_manager.new_terminal_view("main", VoiceId::Voice0, terminal_params);
+    // Voice0 pane (left).
+    add_voice_pane(
+        VoiceId::Voice0,
+        TextBoxAnchor::TopLeft,
+        vec2(-1900.0, 1050.0),
+        1000.0,
+        12,
+        28,
+        HorizontalJustify::Left,
+        TextTheme::default(),
+    );
 
-    // Terminal for AI reasoning text (minimal streaming test)
-    let ai_reasoning_params = TerminalViewParams {
-        origin: vec2(0.0, 0.0),
-        num_lines: 8,
-        width: 1400.0,
-        line_spacing: 40.0,
-        bright_color: rgba(0.6, 0.9, 0.6, 1.0),
-        regular_color: rgba(0.2, 0.4, 0.2, 0.8),
-        color_fade_secs: 1.0,
-        chars_per_second: 20.0,
-        font: font.clone(),
-        font_size: 32,
-        justification: TerminalViewTextJustification::TopLeft,
-    };
+    // Voice3 pane (right).
+    add_voice_pane(
+        VoiceId::Voice3,
+        TextBoxAnchor::TopRight,
+        vec2(1900.0, 1050.0),
+        1000.0,
+        12,
+        28,
+        HorizontalJustify::Right,
+        TextTheme::default(),
+    );
 
-    terminal_manager.new_terminal_view("ai_reasoning", VoiceId::Voice0, ai_reasoning_params);
-
-    // Set up drone parameter displays for each voice
-    let drone_params_voice1 = TerminalViewParams {
-        origin: vec2(-1900.0, 1050.0),
-        num_lines: 50, // Multiple lines for individual parameters
-        width: 1000.0,
-        line_spacing: 5.0,
-        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
-        regular_color: rgba(0.3, 0.3, 0.3, 0.8),
-        color_fade_secs: 1.5,
-        chars_per_second: 6.0, // Faster typing for parameters
-        font: font.clone(),
-        font_size: 28,
-        justification: TerminalViewTextJustification::TopLeft,
-    };
-
-    let drone_params_voice4 = TerminalViewParams {
-        origin: vec2(1900.0, 1050.0),
-        num_lines: 50,
-        width: 1000.0,
-        line_spacing: 5.0,
-        bright_color: rgba(0.7, 0.7, 0.7, 1.0),
-        regular_color: rgba(0.3, 0.3, 0.3, 0.8),
-        color_fade_secs: 1.5,
-        chars_per_second: 6.0,
-        font: font.clone(),
-        font_size: 28,
-        justification: TerminalViewTextJustification::TopRight,
-    };
-
-    terminal_manager.add_drone_parameters_display(VoiceId::Voice0, drone_params_voice1);
-    terminal_manager.add_drone_parameters_display(VoiceId::Voice3, drone_params_voice4);
 
     // Initialize rendering state with all GPU resources and pipelines
     let render_state = RenderState::from_app(
@@ -287,7 +292,7 @@ fn model(app: &App) -> Model {
     );
 
     // Create UI state
-    let ui_state = UiState::new(egui, fps, terminal_manager);
+    let ui_state = UiState::new(egui, fps, terminal_manager, text_overlay);
 
     Model {
         particle_system,
@@ -470,47 +475,29 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Draw all rhythm views
         model.rhythm_view.draw_all(&rendering.draw);
 
-        // Update and draw terminal views as overlay on top of post-processed texture
-        if let Some(terminal_view) = model
-            .ui_state
-            .terminal_manager
-            .borrow_mut()
-            .get_mut_terminal_view("main")
+        // Unified text overlay (new system)
+        let now = Instant::now();
         {
-            terminal_view.update(&rendering.draw);
+            let mut overlay = model.ui_state.text_overlay.borrow_mut();
+
+            // Mirror latest AI status text into Voice0's AI slot (temporary routing).
+            if let Some(text) = model.rhythm_manager.current_ai_status_text() {
+                overlay.set_live_block(
+                    TextPaneId::Voice(VoiceId::Voice0),
+                    TextSlot::AiStream,
+                    TextBlock::new(text)
+                        .style(TextStyle::Ai)
+                        .fade(TextFadeMode::NoFade)
+                        .wrap(WrapPolicy::TruncateTail { max_lines: 2 }),
+                    now,
+                );
+            } else {
+                overlay.clear_live_slot(TextPaneId::Voice(VoiceId::Voice0), TextSlot::AiStream);
+            }
+
+            overlay.update_and_draw_all(&rendering.draw, now);
         }
 
-        // Before drawing the AI reasoning terminal, mirror latest AI status text
-        if let Some(text) = model.rhythm_manager.current_ai_status_text() {
-            if let Some(ai_view) = model
-                .ui_state
-                .terminal_manager
-                .borrow_mut()
-                .get_mut_terminal_view("ai_reasoning")
-            {
-                ai_view.update_line_at_index(0, text, TerminalViewLineFadeMode::NoFade);
-                ai_view.update(&rendering.draw);
-            }
-        } else {
-            // If there is no AI status text, clear the AI reasoning terminal so
-            // that old text does not remain on screen.
-            if let Some(ai_view) = model
-                .ui_state
-                .terminal_manager
-                .borrow_mut()
-                .get_mut_terminal_view("ai_reasoning")
-            {
-                ai_view.clear();
-                ai_view.update(&rendering.draw);
-            }
-        }
-
-        // Update and draw drone parameter displays
-        model
-            .ui_state
-            .terminal_manager
-            .borrow_mut()
-            .update_drone_parameter_displays(&rendering.draw);
 
         // Encode Nannou Draw
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");

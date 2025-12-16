@@ -1,4 +1,7 @@
-use crate::terminals::{command_input::CommandInput, terminal_view::TerminalViewManager};
+use crate::{
+    terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
+    text::overlay::TextOverlay,
+};
 use fps::FpsManager;
 use nannou_egui::Egui;
 use std::cell::RefCell;
@@ -25,8 +28,11 @@ pub struct UiState {
     // Command input for NTerminal
     pub command_input: CommandInput,
 
-    // Terminal view manager for on-screen display
+    // Terminal view manager for on-screen display (legacy; will be retired)
     pub terminal_manager: RefCell<TerminalViewManager>,
+
+    // New unified text overlay (data + view)
+    pub text_overlay: RefCell<TextOverlay>,
 
     // UI state
     pub active_tab: usize, // 0 = Voices, 1 = NTerminal
@@ -42,6 +48,7 @@ impl UiState {
         egui: Egui,
         fps: FpsManager,
         terminal_manager: TerminalViewManager,
+        text_overlay: TextOverlay,
     ) -> Self {
         Self {
             egui,
@@ -50,6 +57,7 @@ impl UiState {
             show_forces: false,
             command_input: CommandInput::new(),
             terminal_manager: RefCell::new(terminal_manager),
+            text_overlay: RefCell::new(text_overlay),
             active_tab: 0,
             auto_ai_from_voice1: false,
         }
