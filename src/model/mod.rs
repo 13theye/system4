@@ -84,11 +84,22 @@ impl ExecutionContext for Model {
     fn log_command(&mut self, command: &crate::command_engine::Command) {
         // Prefer the unified text overlay system.
         let now = std::time::Instant::now();
-        for (voice_id, block) in crate::text::adapters::blocks_for_command(command) {
+
+        // Parameter updates go to the pinned params slot.
+        for (voice_id, key, value) in crate::text::adapters::param_updates_for_command(command) {
             self.ui_state
                 .text_overlay
                 .borrow_mut()
-                .push_history_block(crate::text::TextPaneId::Voice(voice_id), block, now);
+                .apply_param_update(voice_id, key, value, now);
+        }
+
+        // Non-parameter messages go to history.
+        for (voice_id, block) in crate::text::adapters::blocks_for_command(command) {
+            self.ui_state.text_overlay.borrow_mut().push_history_block(
+                crate::text::TextPaneId::Voice(voice_id),
+                block,
+                now,
+            );
         }
     }
 

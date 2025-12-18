@@ -1,10 +1,6 @@
 // src/terminals/parsing/rhythm_parser.rs
 
-use super::{
-    errors::ParseError,
-    parameter::ParameterValue,
-    utils::ParsingUtils,
-};
+use super::{errors::ParseError, parameter::ParameterValue, utils::ParsingUtils};
 use crate::terminals::{
     commands::{rhythm::RhythmBuilder, TerminalCommand, TerminalCommandBuilder},
     tokens::Token,

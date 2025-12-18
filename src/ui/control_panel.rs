@@ -14,7 +14,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
         std::process::exit(1);
     };
     let rect = control_window.rect();
-    let height = rect.h() - 5.0;
+    let height = rect.h() - 25.0;
     let width = rect.w() - 5.0;
 
     // Extract all parameters before creating egui context to avoid borrowing conflicts
@@ -91,147 +91,180 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
 
                 ui.separator();
 
-                // Tab content (top-aligned)
-                ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                    match model.ui_state.active_tab {
-                        1 => {
-                            // Voices tab content with scrollable columns
-                            ui.horizontal(|ui| {
-                                // Voice 0 (col 2) - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(320.0);
-                                    ui.set_min_height(height);
-                                    if model.voice_manager.has_voice(VoiceId::Voice0) {
-                                        let voice0_commands = voice_panel::render_drone_voice_panel(
-                                            ui,
-                                            &voice0_params,
-                                            "Voice 0: Drone",
-                                            "voice0_scroll",
-                                            "voice0_circles_scroll",
-                                        );
-                                        command_queue.extend(voice0_commands);
-                                    } else {
-                                        ui.heading("Voice 0: Drone");
-                                        ui.add_space(10.0);
-                                        ui.label("Voice not active");
-                                    }
-                                }); // end Voice 0 column
+                // Everything to the right of the status column should be vertically scrollable.
+                // (Left column stays fixed for particles/FPS/tab selection.)
+                egui::ScrollArea::vertical()
+                    .id_source("performer_control_right_scroll")
+                    .auto_shrink([false, false])
+                    .max_height(height)
+                    .show(ui, |ui| {
+                        // Tab content (top-aligned)
+                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                            match model.ui_state.active_tab {
+                                1 => {
+                                    // Voices tab content with scrollable columns
+                                    ui.horizontal(|ui| {
+                                        // Voice 0 (col 2) - column with scrollable content
+                                        ui.vertical(|ui| {
+                                            ui.set_width(320.0);
+                                            ui.set_min_height(height);
+                                            if model.voice_manager.has_voice(VoiceId::Voice0) {
+                                                let voice0_commands = voice_panel::render_drone_voice_panel(
+                                                    ui,
+                                                    &voice0_params,
+                                                    "Voice 0: Drone",
+                                                    "voice0_scroll",
+                                                    "voice0_circles_scroll",
+                                                );
+                                                command_queue.extend(voice0_commands);
+                                            } else {
+                                                ui.heading("Voice 0: Drone");
+                                                ui.add_space(10.0);
+                                                ui.label("Voice not active");
+                                            }
+                                        }); // end Voice 0 column
 
-                                // Voice 1 (col 3) - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(320.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("Voice 1: Rhythm");
-                                    ui.add_space(2.0);
-                                    egui::ScrollArea::vertical()
-                                        .id_source("voice1_scroll")
-                                        .auto_shrink([false, false])
-                                        .show(ui, |_ui| {}); // end Voice 2 scroll area
-                                }); // end Voice 2 column
+                                        // Voice 1 (col 3) - column with scrollable content
+                                        ui.vertical(|ui| {
+                                            ui.set_width(320.0);
+                                            ui.set_min_height(height);
+                                            ui.heading("Voice 1: Rhythm");
+                                            ui.add_space(2.0);
+                                            egui::ScrollArea::vertical()
+                                                .id_source("voice1_scroll")
+                                                .auto_shrink([false, false])
+                                                .show(ui, |_ui| {}); // end Voice 1 scroll area
+                                        }); // end Voice 1 column
 
-                                // Voice 2 - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(320.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("Voice 2: Rhythm");
-                                    ui.add_space(2.0);
-                                    egui::ScrollArea::vertical()
-                                        .id_source("voice2_scroll")
-                                        .auto_shrink([false, false])
-                                        .show(ui, |ui| {
-                                            // Voice 3 rhythm controls placeholder
-                                            ui.label("Rhythm controls");
-                                            ui.label("coming soon...");
-                                        }); // end Voice 2 scroll area
-                                }); // end Voice 2 column
-
-                                // Voice 3: Column 5 - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(320.0);
-                                    ui.set_min_height(height);
-                                    if model.voice_manager.has_voice(VoiceId::Voice3) {
-                                        let voice3_commands = voice_panel::render_drone_voice_panel(
-                                            ui,
-                                            &voice3_params,
-                                            "Voice 3: Drone",
-                                            "voice3_scroll",
-                                            "voice3_circles_scroll",
-                                        );
-                                        command_queue.extend(voice3_commands);
-                                    } else {
-                                        ui.heading("Voice 3: Drone");
-                                        ui.add_space(10.0);
-                                        ui.label("Voice not active");
-                                    }
-                                }); // end Voice 3 column
-                            }); // end voices horizontal layout
-                        }
-                        0 => {
-                            // NTerminal tab content - three column layout with scrollbars
-                            ui.horizontal(|ui| {
-                                // Left column: Command input and status - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(480.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("Terminal Interface");
-                                    ui.add_space(2.0);
-
-                                    egui::ScrollArea::vertical()
-                                        .id_source("terminal_input_scroll")
-                                        .auto_shrink([false, false])
-                                        .show(ui, |ui| {
-                                            // Multi-line text input using TextBuffer implementation
-                                            ui.label("Input:");
-                                            ui.add_space(5.0);
-
-                                            // Editable text area using CommandInput as TextBuffer
-                                            egui::Frame::none()
-                                                .fill(egui::Color32::BLACK)
-                                                .stroke(egui::Stroke::new(
-                                                    1.0,
-                                                    egui::Color32::WHITE,
-                                                ))
-                                                .inner_margin(egui::style::Margin::symmetric(
-                                                    8.0, 8.0,
-                                                ))
+                                        // Voice 2 - column with scrollable content
+                                        ui.vertical(|ui| {
+                                            ui.set_width(320.0);
+                                            ui.set_min_height(height);
+                                            ui.heading("Voice 2: Rhythm");
+                                            ui.add_space(2.0);
+                                            egui::ScrollArea::vertical()
+                                                .id_source("voice2_scroll")
+                                                .auto_shrink([false, false])
                                                 .show(ui, |ui| {
-                                                    ui.set_min_size(egui::vec2(280.0, 150.0));
-                                                    ui.set_max_height(150.0);
+                                                    // Voice 2 rhythm controls placeholder
+                                                    ui.label("Rhythm controls");
+                                                    ui.label("coming soon...");
+                                                }); // end Voice 2 scroll area
+                                        }); // end Voice 2 column
 
-                                                    egui::ScrollArea::vertical()
-                                                        .max_width(380.0)
-                                                        .max_height(150.0)
+                                        // Voice 3: Column 5 - column with scrollable content
+                                        ui.vertical(|ui| {
+                                            ui.set_width(320.0);
+                                            ui.set_min_height(height);
+                                            if model.voice_manager.has_voice(VoiceId::Voice3) {
+                                                let voice3_commands = voice_panel::render_drone_voice_panel(
+                                                    ui,
+                                                    &voice3_params,
+                                                    "Voice 3: Drone",
+                                                    "voice3_scroll",
+                                                    "voice3_circles_scroll",
+                                                );
+                                                command_queue.extend(voice3_commands);
+                                            } else {
+                                                ui.heading("Voice 3: Drone");
+                                                ui.add_space(10.0);
+                                                ui.label("Voice not active");
+                                            }
+                                        }); // end Voice 3 column
+                                    }); // end voices horizontal layout
+                                }
+                                0 => {
+                                    // Terminal tab content - 4 per-voice terminals in columns
+                                    ui.vertical(|ui| {
+                                        ui.heading("Terminals (per voice)");
+                                        ui.add_space(6.0);
+
+                                        ui.horizontal(|ui| {
+                                            let voices = [
+                                                VoiceId::Voice0,
+                                                VoiceId::Voice1,
+                                                VoiceId::Voice2,
+                                                VoiceId::Voice3,
+                                            ];
+
+                                            for (i, voice) in voices.iter().copied().enumerate() {
+                                                ui.vertical(|ui| {
+                                                    ui.set_width(220.0);
+                                                    ui.set_min_height(height * 0.55);
+
+                                                    egui::Frame::none()
+                                                        .fill(egui::Color32::from_rgb(10, 10, 10))
+                                                        .stroke(egui::Stroke::new(
+                                                            1.0,
+                                                            egui::Color32::from_rgb(60, 60, 60),
+                                                        ))
+                                                        .inner_margin(egui::style::Margin::symmetric(
+                                                            8.0, 8.0,
+                                                        ))
                                                         .show(ui, |ui| {
-                                                            // Use TextEdit with proper Enter key handling
-                                                            let response = ui.add(
-                                                                egui::TextEdit::multiline(
-                                                                    &mut model
-                                                                        .ui_state
-                                                                        .command_input,
-                                                                )
-                                                                .font(egui::TextStyle::Body)
-                                                                .frame(false)
-                                                                .min_size(egui::vec2(280.0, 150.0))
-                                                                .interactive(true)
-                                                                .desired_width(f32::INFINITY)
-                                                                .lock_focus(true)
-                                                                .hint_text("Type command here..."),
-                                                            );
+                                                            ui.label(format!(
+                                                                "Voice {} terminal",
+                                                                voice.to_i32()
+                                                            ));
+                                                            ui.add_space(5.0);
 
-                                                            // Update unified text overlay with live command text
-                                                            if response.changed() {
+                                                            // Render editor and capture edit/execute events.
+                                                            let (changed, display_text, executed_cmd) = {
+                                                                let input = model
+                                                                    .ui_state
+                                                                    .command_inputs
+                                                                    .get_mut(&voice)
+                                                                    .expect("missing command input for voice");
+
+                                                                let response = ui.add(
+                                                                    egui::TextEdit::multiline(input)
+                                                                        .id_source(format!(
+                                                                            "terminal_input_{}",
+                                                                            voice.to_i32()
+                                                                        ))
+                                                                        .font(egui::TextStyle::Body)
+                                                                        .frame(true)
+                                                                        .min_size(egui::vec2(220.0, 120.0))
+                                                                        .interactive(true)
+                                                                        .desired_width(f32::INFINITY)
+                                                                        .lock_focus(true)
+                                                                        .hint_text(
+                                                                            "Type command (no voice() prefix)...",
+                                                                        ),
+                                                                );
+
+                                                                let should_execute = response.has_focus()
+                                                                    && ui.input(|i| {
+                                                                        i.key_pressed(egui::Key::Enter)
+                                                                    })
+                                                                    && input.is_ready_for_execution();
+
+                                                                let executed = if should_execute {
+                                                                    input.try_execute_as_voice(voice)
+                                                                } else {
+                                                                    None
+                                                                };
+
+                                                                let display = input.display().to_string();
+
+                                                                // Clear editor after a successful execution.
+                                                                if executed.is_some() {
+                                                                    input.clear();
+                                                                }
+
+                                                                (response.changed(), display, executed)
+                                                            };
+
+                                                            // Live overlay update.
+                                                            if changed {
                                                                 let now = Instant::now();
-                                                                let text = model.ui_state.command_input.display();
-
-                                                                if text.trim().is_empty() {
+                                                                if display_text.trim().is_empty() {
                                                                     model
                                                                         .ui_state
                                                                         .text_overlay
                                                                         .borrow_mut()
                                                                         .clear_live_slot(
-                                                                            TextPaneId::Voice(
-                                                                                VoiceId::Voice0,
-                                                                            ),
+                                                                            TextPaneId::Voice(voice),
                                                                             TextSlot::CommandInput,
                                                                         );
                                                                 } else {
@@ -240,11 +273,9 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                         .text_overlay
                                                                         .borrow_mut()
                                                                         .set_live_block(
-                                                                            TextPaneId::Voice(
-                                                                                VoiceId::Voice0,
-                                                                            ),
+                                                                            TextPaneId::Voice(voice),
                                                                             TextSlot::CommandInput,
-                                                                            TextBlock::new(text)
+                                                                            TextBlock::new(display_text)
                                                                                 .style(TextStyle::Normal)
                                                                                 .fade(TextFadeMode::NoFade)
                                                                                 .wrap(WrapPolicy::HardWrap),
@@ -253,186 +284,125 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                 }
                                                             }
 
-                                                            // Handle Enter key press through egui input system
-                                                            // Check for Enter key pressed while the text field has focus
-                                                            if response.has_focus()
-                                                                && ui.input(|i| {
-                                                                    i.key_pressed(egui::Key::Enter)
-                                                                })
-                                                                && model
+                                                            // If we executed a command, queue it and clear the live slot.
+                                                            if let Some(command) = executed_cmd {
+                                                                terminal_commands_to_process.push(command);
+                                                                model
                                                                     .ui_state
-                                                                    .command_input
-                                                                    .is_ready_for_execution()
-                                                            {
-                                                                if let Some(command) = model
-                                                                    .ui_state
-                                                                    .command_input
-                                                                    .try_execute()
-                                                                {
-                                                                    println!(
-                                                                        "Executing command: {:?}",
-                                                                        command
+                                                                    .text_overlay
+                                                                    .borrow_mut()
+                                                                    .clear_live_slot(
+                                                                        TextPaneId::Voice(voice),
+                                                                        TextSlot::CommandInput,
                                                                     );
+                                                            }
 
-                                                                    // Collect terminal command for processing after egui context is dropped
-                                                                    terminal_commands_to_process
-                                                                        .push(command);
+                                                            // Status line.
+                                                            if let Some(input) =
+                                                                model.ui_state.command_inputs.get(&voice)
+                                                            {
+                                                                ui.horizontal(|ui| {
+                                                                    ui.label("Status:");
 
-                                                                    // Clear the input after successful execution
-                                                                    model
-                                                                        .ui_state
-                                                                        .command_input
-                                                                        .clear();
-
-                                                                    // Clear the live command input overlay
-                                                                    model
-                                                                        .ui_state
-                                                                        .text_overlay
-                                                                        .borrow_mut()
-                                                                        .clear_live_slot(
-                                                                            TextPaneId::Voice(
-                                                                                VoiceId::Voice0,
-                                                                            ),
-                                                                            TextSlot::CommandInput,
+                                                                    if let Some(success) = input.last_success() {
+                                                                        ui.colored_label(
+                                                                            egui::Color32::GREEN,
+                                                                            success.to_string(),
                                                                         );
-                                                                }
+                                                                    } else if let Some(error) = input.last_error() {
+                                                                        ui.colored_label(
+                                                                            egui::Color32::RED,
+                                                                            format!("Error: {}", error),
+                                                                        );
+                                                                    } else if input.is_ready_for_execution() {
+                                                                        ui.colored_label(
+                                                                            egui::Color32::LIGHT_GREEN,
+                                                                            "Ready (press Enter)",
+                                                                        );
+                                                                    } else {
+                                                                        ui.colored_label(
+                                                                            egui::Color32::GRAY,
+                                                                            "Editing",
+                                                                        );
+                                                                    }
+                                                                });
                                                             }
                                                         });
                                                 });
 
-                                            ui.add_space(10.0);
-                                            ui.separator();
+                                                if i + 1 < voices.len() {
+                                                    ui.separator();
+                                                }
+                                            }
+                                        });
 
-                                            // Command status display
-                                            ui.horizontal(|ui| {
-                                                ui.label("Status:");
+                                        ui.add_space(12.0);
+                                        ui.separator();
 
-                                                // Priority: Show execution results first
-                                                if let Some(success) =
-                                                    model.ui_state.command_input.last_success()
-                                                {
-                                                    ui.colored_label(
-                                                        egui::Color32::GREEN,
-                                                        format!("✅ {}", success),
+                                        // Keep existing AI controls + Examples below.
+                                        ui.horizontal(|ui| {
+                                            // Middle column: AI controls
+                                            ui.vertical(|ui| {
+                                                ui.set_width(260.0);
+                                                ui.set_min_height(height * 0.35);
+                                                ui.heading("AI Controls");
+                                                ui.add_space(8.0);
+
+                                                ui.checkbox(
+                                                    &mut model.ui_state.auto_ai_from_voice1,
+                                                    "Auto-generate AI rhythm when Voice1 changes",
+                                                );
+
+                                                ui.add_space(12.0);
+
+                                                if ui.button("Generate Voice2").clicked() {
+                                                    terminal_commands_to_process.push(
+                                                        TerminalCommand::GenerateRhythm { voice_id: 2 },
                                                     );
-                                                } else if let Some(error) =
-                                                    model.ui_state.command_input.last_error()
-                                                {
-                                                    ui.colored_label(
-                                                        egui::Color32::RED,
-                                                        format!("❌ Error: {}", error),
-                                                    );
-                                                } else if model
-                                                    .ui_state
-                                                    .command_input
-                                                    .is_ready_for_execution()
-                                                {
-                                                    ui.colored_label(
-                                                        egui::Color32::LIGHT_GREEN,
-                                                        "Ready to execute (press Enter)",
-                                                    );
-                                                } else if model.ui_state.command_input.is_empty() {
-                                                    ui.colored_label(
-                                                        egui::Color32::GRAY,
-                                                        "Ready for input",
-                                                    );
-                                                } else {
-                                                    ui.colored_label(
-                                                        egui::Color32::YELLOW,
-                                                        "Add semicolon (;) to execute",
-                                                    );
+                                                }
+
+                                                ui.add_space(8.0);
+
+                                                if ui.button("Clear Voice2").clicked() {
+                                                    terminal_commands_to_process
+                                                        .push(TerminalCommand::Clear { voice_id: 2 });
                                                 }
                                             });
 
-                                            // Show formatted display preview
-                                            ui.add_space(5.0);
-                                            ui.label("Preview:");
-                                            ui.add_space(2.0);
+                                            ui.separator();
 
-                                            egui::Frame::none()
-                                                .fill(egui::Color32::DARK_GRAY)
-                                                .stroke(egui::Stroke::new(1.0, egui::Color32::GRAY))
-                                                .inner_margin(egui::style::Margin::symmetric(
-                                                    6.0, 6.0,
-                                                ))
-                                                .show(ui, |ui| {
-                                                    let display_text =
-                                                        model.ui_state.command_input.display();
-                                                    if display_text.is_empty() {
-                                                        ui.colored_label(
-                                                            egui::Color32::GRAY,
-                                                            "Command preview will appear here...",
-                                                        );
-                                                    } else {
-                                                        ui.label(display_text);
-                                                    }
-                                                });
-                                        }); // end left column scroll area
-                                }); // end left column
-
-                                ui.separator();
-
-                                // Middle column: AI controls
-                                ui.vertical(|ui| {
-                                    ui.set_width(260.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("AI Controls");
-                                    ui.add_space(8.0);
-
-                                    ui.checkbox(
-                                        &mut model.ui_state.auto_ai_from_voice1,
-                                        "Auto-generate AI rhythm when Voice1 changes",
-                                    );
-
-                                    ui.add_space(12.0);
-
-                                    if ui.button("Generate Voice2").clicked() {
-                                        // Equivalent of typing: voice(2).generate();
-                                        terminal_commands_to_process
-                                            .push(TerminalCommand::GenerateRhythm { voice_id: 2 });
-                                    }
-
-                                    ui.add_space(8.0);
-
-                                    if ui.button("Clear Voice2").clicked() {
-                                        // Equivalent of typing: voice(2).clear();
-                                        terminal_commands_to_process
-                                            .push(TerminalCommand::Clear { voice_id: 2 });
-                                    }
-                                }); // end middle column
-
-                                ui.separator();
-
-                                // Right column: Examples and help - column with scrollable content
-                                ui.vertical(|ui| {
-                                    ui.set_width(550.0);
-                                    ui.set_min_height(height);
-                                    ui.heading("Examples");
-                                    ui.add_space(2.0);
-                                    egui::ScrollArea::vertical()
-                                        .id_source("terminal_help_scroll")
-                                        .auto_shrink([false, false])
-                                        .show(ui, |ui| {
-                                            for example in CommandInput::get_examples() {
-                                                ui.label(format!("• {}", example));
+                                            // Right column: Examples and help
+                                            ui.vertical(|ui| {
+                                                ui.set_width(650.0);
+                                                ui.set_min_height(height * 0.35);
+                                                ui.heading("Examples");
                                                 ui.add_space(2.0);
-                                            }
+                                                egui::ScrollArea::vertical()
+                                                    .id_source("terminal_help_scroll")
+                                                    .auto_shrink([false, false])
+                                                    .show(ui, |ui| {
+                                                        for example in CommandInput::get_examples() {
+                                                            ui.label(format!("• {}", example));
+                                                            ui.add_space(2.0);
+                                                        }
 
-                                            ui.add_space(20.0);
-                                            ui.heading("Controls");
-                                            ui.add_space(5.0);
-                                            ui.label(
-                                                "• Type commands and press Enter to add lines",
-                                            );
-                                            ui.label("• Commands ending with ';' will execute");
-                                            ui.label("• Backspace to edit, Escape to clear");
-                                        }); // end right column scroll area
-                                }); // end right column
-                            }); // end terminal horizontal layout
-                        }
-                        _ => {}
-                    }
-                }); // end top-aligned layout
+                                                        ui.add_space(20.0);
+                                                        ui.heading("Controls");
+                                                        ui.add_space(5.0);
+                                                        ui.label(
+                                                            "• Type commands and press Enter to add lines",
+                                                        );
+                                                        ui.label("• Commands ending with ';' will execute");
+                                                        ui.label("• Backspace to edit, Escape to clear");
+                                                    });
+                                            });
+                                        });
+                                    });
+                                }
+                                _ => {}
+                            }
+                        }); // end top-aligned layout
+                    });
             }); // end main horizontal layout
         });
 

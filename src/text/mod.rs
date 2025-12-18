@@ -11,6 +11,7 @@ pub mod adapters;
 pub mod layout;
 pub mod line_breaker;
 pub mod overlay;
+pub mod params_dashboard;
 pub mod view;
 
 use crate::groups::VoiceId;
@@ -24,8 +25,12 @@ pub enum TextPaneId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextSlot {
+    /// Bottom-most live slot: in-progress command input.
     CommandInput,
+    /// Live slot above command input: streaming output.
     AiStream,
+    /// Top-pinned live slot: stable parameter lines rendered as command-like fragments.
+    Params,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -129,6 +134,14 @@ impl TextRingBuffer {
         }
     }
 
+    pub fn pop_back_n(&mut self, n: usize) {
+        for _ in 0..n {
+            if self.lines.pop_back().is_none() {
+                break;
+            }
+        }
+    }
+
     pub fn capacity(&self) -> usize {
         self.capacity
     }
@@ -183,7 +196,14 @@ impl TextRingBuffer {
 pub struct TextPane {
     capacity_lines: usize,
     history: TextRingBuffer,
+
+    /// Live slots composed at the top of the pane (pinned).
+    top_slots: HashMap<TextSlot, Vec<TextLine>>,
+
+    /// Live slots composed at the bottom of the pane.
     live_slots: HashMap<TextSlot, Vec<TextLine>>,
+
+    /// Max visual lines per slot.
     slot_line_budgets: HashMap<TextSlot, usize>,
 }
 
@@ -192,6 +212,7 @@ impl TextPane {
         Self {
             capacity_lines,
             history: TextRingBuffer::new(capacity_lines),
+            top_slots: HashMap::new(),
             live_slots: HashMap::new(),
             slot_line_budgets: HashMap::new(),
         }
@@ -211,11 +232,20 @@ impl TextPane {
 
     pub fn clear(&mut self) {
         self.history.clear();
+        self.top_slots.clear();
         self.live_slots.clear();
     }
 
     pub fn set_slot_line_budget(&mut self, slot: TextSlot, max_lines: usize) {
         self.slot_line_budgets.insert(slot, max_lines);
+    }
+
+    pub fn clear_top_slot(&mut self, slot: TextSlot) {
+        self.top_slots.remove(&slot);
+    }
+
+    pub fn set_top_slot_lines(&mut self, slot: TextSlot, lines: Vec<TextLine>) {
+        self.top_slots.insert(slot, lines);
     }
 
     pub fn clear_live_slot(&mut self, slot: TextSlot) {
@@ -230,26 +260,68 @@ impl TextPane {
         self.history.extend_lines(lines);
     }
 
+    /// Remove `old_line_count` lines from the end of history (if present) and append `new_lines`.
+    /// This is useful for "status" text that updates frequently but should remain in the
+    /// history stream rather than a live slot.
+    pub fn replace_tail_history_lines(
+        &mut self,
+        old_line_count: usize,
+        new_lines: impl IntoIterator<Item = TextLine>,
+    ) {
+        self.history.pop_back_n(old_line_count);
+        self.history.extend_lines(new_lines);
+    }
+
     /// Compose final visible lines in top-to-bottom order, clipped to pane capacity.
     ///
-    /// Current rule:
-    /// - Allocate bottom-up space to configured live slots (in a deterministic order).
-    /// - Fill the remaining top lines with history (most recent history lines).
+    /// Rule:
+    /// - Allocate top-down space to configured top slots (pinned).
+    /// - Allocate bottom-up space to configured live slots (pinned).
+    /// - Fill the remaining middle region with history (most recent lines).
     pub fn compose(&self) -> Vec<Option<TextLine>> {
         let cap = self.capacity_lines;
         if cap == 0 {
             return Vec::new();
         }
 
-        // Deterministic slot order (so layout doesn't jitter).
-        let slot_order = [TextSlot::CommandInput, TextSlot::AiStream];
+        // Deterministic orders (so layout doesn't jitter).
+        let top_slot_order = [TextSlot::Params];
 
-        // Gather live lines in final bottom order (CommandInput first, then AI below it
-        // or vice versa depending on preferences). We choose: history at top, then
-        // command input, then AI at very bottom.
-        let mut live_lines: Vec<TextLine> = Vec::new();
+        // Bottom-anchored slots. (Command input is intentionally *not* bottom-anchored;
+        // it should float up to the highest available line.)
+        let bottom_slot_order = [TextSlot::AiStream];
 
-        for slot in slot_order {
+        // --- Top pinned lines (head-clip) ---
+        let mut top_lines: Vec<TextLine> = Vec::new();
+        for slot in top_slot_order {
+            let Some(lines) = self.top_slots.get(&slot) else {
+                continue;
+            };
+
+            let max_lines = self
+                .slot_line_budgets
+                .get(&slot)
+                .copied()
+                .unwrap_or(lines.len());
+
+            let clipped = if lines.len() > max_lines {
+                lines[..max_lines].to_vec()
+            } else {
+                lines.clone()
+            };
+
+            top_lines.extend(clipped);
+        }
+
+        if top_lines.len() > cap {
+            top_lines.truncate(cap);
+        }
+
+        let remaining_after_top = cap.saturating_sub(top_lines.len());
+
+        // --- Bottom pinned lines (tail-clip) ---
+        let mut bottom_lines: Vec<TextLine> = Vec::new();
+        for slot in bottom_slot_order {
             let Some(lines) = self.live_slots.get(&slot) else {
                 continue;
             };
@@ -267,17 +339,40 @@ impl TextPane {
                 lines.clone()
             };
 
-            live_lines.extend(clipped);
+            bottom_lines.extend(clipped);
         }
 
-        // Clip live lines to total capacity (keep tail so newest ends at bottom).
-        if live_lines.len() > cap {
-            live_lines = live_lines[live_lines.len() - cap..].to_vec();
+        if bottom_lines.len() > remaining_after_top {
+            bottom_lines = bottom_lines[bottom_lines.len() - remaining_after_top..].to_vec();
         }
 
-        let remaining_for_history = cap.saturating_sub(live_lines.len());
+        // --- Floating command input (tail-clip) ---
+        let mut command_lines: Vec<TextLine> = Vec::new();
+        if let Some(lines) = self.live_slots.get(&TextSlot::CommandInput) {
+            let max_lines = self
+                .slot_line_budgets
+                .get(&TextSlot::CommandInput)
+                .copied()
+                .unwrap_or(lines.len());
 
-        // Take most recent N history lines.
+            command_lines = if lines.len() > max_lines {
+                // default: tail
+                lines[lines.len() - max_lines..].to_vec()
+            } else {
+                lines.clone()
+            };
+        }
+
+        let remaining_for_middle = remaining_after_top.saturating_sub(bottom_lines.len());
+
+        if command_lines.len() > remaining_for_middle {
+            // Keep tail so the most recent portion is visible.
+            command_lines = command_lines[command_lines.len() - remaining_for_middle..].to_vec();
+        }
+
+        let remaining_for_history = remaining_for_middle.saturating_sub(command_lines.len());
+
+        // --- History lines (tail) ---
         let history_vec = self.history.to_vec();
         let history_tail = if history_vec.len() > remaining_for_history {
             history_vec[history_vec.len() - remaining_for_history..].to_vec()
@@ -285,18 +380,41 @@ impl TextPane {
             history_vec
         };
 
-        // Build final vector.
-        let mut out: Vec<Option<TextLine>> = Vec::with_capacity(cap);
-        for line in history_tail {
-            out.push(Some(line));
-        }
-        for line in live_lines {
-            out.push(Some(line));
+        // --- Build output with top + middle(history + command) + bottom ---
+        let top_len = top_lines.len();
+        let bottom_start = cap - bottom_lines.len();
+
+        let mut out: Vec<Option<TextLine>> = vec![None; cap];
+
+        // Fill top.
+        for (i, line) in top_lines.into_iter().enumerate() {
+            out[i] = Some(line);
         }
 
-        // Pad at end if we have fewer than cap lines.
-        while out.len() < cap {
-            out.push(None);
+        // Fill bottom.
+        for (i, line) in bottom_lines.into_iter().enumerate() {
+            out[bottom_start + i] = Some(line);
+        }
+
+        let history_tail_len = history_tail.len();
+
+        // Fill history into the middle region, starting just after top.
+        for (i, line) in history_tail.into_iter().enumerate() {
+            let idx = top_len + i;
+            if idx >= bottom_start {
+                break;
+            }
+            out[idx] = Some(line);
+        }
+
+        // Fill command input immediately after the visible history tail.
+        let command_start = top_len + history_tail_len;
+        for (i, line) in command_lines.into_iter().enumerate() {
+            let idx = command_start + i;
+            if idx >= bottom_start {
+                break;
+            }
+            out[idx] = Some(line);
         }
 
         out

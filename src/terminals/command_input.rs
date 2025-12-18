@@ -3,6 +3,7 @@
 // Multi-line command input for NTerminal
 
 use super::{commands::TerminalCommand, parsing::ParseError, terminal::Terminal};
+use crate::groups::VoiceId;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -38,7 +39,7 @@ impl CommandInput {
         instance
     }
 
-    /// Try to execute the current command text
+    /// Try to execute the current command text (expects full `voice(n)...` syntax).
     pub fn try_execute(&mut self) -> Option<TerminalCommand> {
         match Terminal::parse_command(&self.raw_text) {
             Ok(command) => {
@@ -51,6 +52,43 @@ impl CommandInput {
             Err(error) => {
                 self.last_error = Some(error);
                 self.last_success = None;
+                self.update_display();
+                None
+            }
+        }
+    }
+
+    /// Try to execute this command as if it were targeted at a specific voice.
+    ///
+    /// This enables per-voice terminals without requiring the user to type the
+    /// `voice(n)` prefix.
+    pub fn try_execute_as_voice(&mut self, voice: VoiceId) -> Option<TerminalCommand> {
+        let raw = self.raw_text.trim();
+        if raw.is_empty() {
+            return None;
+        }
+
+        // If the user already provided a voice prefix, accept it as-is.
+        let prefixed = if raw.starts_with("voice(") {
+            raw.to_string()
+        } else if raw.starts_with('.') {
+            format!("voice({}){}", voice.to_i32(), raw)
+        } else {
+            format!("voice({}).{}", voice.to_i32(), raw)
+        };
+
+        match Terminal::parse_command(&prefixed) {
+            Ok(command) => {
+                self.last_error = None;
+                self.last_success = Some(format!("Command executed: {:?}", command));
+                self.pending_command = Some(command.clone());
+                self.update_display();
+                Some(command)
+            }
+            Err(error) => {
+                self.last_error = Some(error);
+                self.last_success = None;
+                self.pending_command = None;
                 self.update_display();
                 None
             }
@@ -139,12 +177,12 @@ impl CommandInput {
     /// Get example commands for help text
     pub fn get_examples() -> Vec<&'static str> {
         vec![
-            "makeDrone(1).brightness(0.8).outerRadius(500.0);",
-            "makeDrone(4).force(15.5).noise(0.3).feedback(0.9);",
-            "drone(1).brightness(0.2).centerX(100.0).centerY(-50.0);",
-            "drone(4).newCircle().centerX(-500.0).centerY(200.0);",
-            "drone(1).listCircles();",
-            "drone(4).removeCircle(1);",
+            "makeDrone().brightness(0.8).outerRadius(500.0);",
+            "makeDrone().force(15.5).noise(0.3).feedback(0.9);",
+            "brightness(0.2).centerX(100.0).centerY(-50.0);",
+            "newCircle().centerX(-500.0).centerY(200.0);",
+            "listCircles();",
+            "removeCircle(1);",
         ]
     }
 

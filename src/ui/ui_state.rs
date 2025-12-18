@@ -1,10 +1,11 @@
 use crate::{
+    groups::VoiceId,
     terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
     text::overlay::TextOverlay,
 };
 use fps::FpsManager;
 use nannou_egui::Egui;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 /// UiState encapsulates all UI and debug-related state.
 /// This includes:
@@ -25,8 +26,8 @@ pub struct UiState {
     pub show_bounds: bool,
     pub show_forces: bool,
 
-    // Command input for NTerminal
-    pub command_input: CommandInput,
+    // Per-voice command inputs
+    pub command_inputs: HashMap<VoiceId, CommandInput>,
 
     // Terminal view manager for on-screen display (legacy; will be retired)
     pub terminal_manager: RefCell<TerminalViewManager>,
@@ -55,7 +56,12 @@ impl UiState {
             fps,
             show_bounds: false,
             show_forces: false,
-            command_input: CommandInput::new(),
+            command_inputs: HashMap::from([
+                (VoiceId::Voice0, CommandInput::new()),
+                (VoiceId::Voice1, CommandInput::new()),
+                (VoiceId::Voice2, CommandInput::new()),
+                (VoiceId::Voice3, CommandInput::new()),
+            ]),
             terminal_manager: RefCell::new(terminal_manager),
             text_overlay: RefCell::new(text_overlay),
             active_tab: 0,

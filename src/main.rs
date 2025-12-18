@@ -26,19 +26,17 @@ use system4::{
     settings::*,
     terminals::terminal_view::TerminalViewManager,
     text::{
-        layout::{HorizontalJustify, TextBoxAnchor, TextBoxLayout, TextBoxLayoutParams, VerticalFlow},
+        layout::{
+            HorizontalJustify, TextBoxAnchor, TextBoxLayout, TextBoxLayoutParams, VerticalFlow,
+        },
         overlay::TextOverlay,
         view::{TextPaneView, TextPaneViewParams, TextTheme},
-        TextBlock, TextFadeMode, TextPane, TextPaneId, TextSlot, TextStyle, WrapPolicy,
+        TextPane, TextPaneId, TextSlot,
     },
     ui::{control_panel::update_control_ui, UiState},
     utils::IdGenerator,
     view::rhythm::{RhythmView, RhythmViewUpdateParams},
 };
-
-// Import terminal processor to bring process_terminal_command method into scope
-#[allow(unused_imports)]
-use system4::model::terminal_processor;
 
 const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
@@ -214,13 +212,13 @@ fn model(app: &App) -> Model {
 
     // Helper to create a text pane + view.
     let mut add_voice_pane = |voice: VoiceId,
-                             anchor: TextBoxAnchor,
-                             anchor_pos: Vec2,
-                             width: f32,
-                             num_lines: usize,
-                             font_size: u32,
-                             justify: HorizontalJustify,
-                             theme: TextTheme| {
+                              anchor: TextBoxAnchor,
+                              anchor_pos: Vec2,
+                              width: f32,
+                              num_lines: usize,
+                              font_size: u32,
+                              justify: HorizontalJustify,
+                              theme: TextTheme| {
         let line_spacing = 5.0;
         let line_height = font_size as f32 + line_spacing * 2.0;
 
@@ -252,30 +250,39 @@ fn model(app: &App) -> Model {
         text_overlay.insert_pane(TextPaneId::Voice(voice), pane, view);
     };
 
-    // Voice0 pane (left).
-    add_voice_pane(
+    // Arrange voice panes as four columns across the full render width.
+    let gutter_x = 40.0;
+    let gutter_y = 40.0;
+    let columns = 4.0;
+
+    let col_w = render_size.x / columns;
+    let pane_w = (col_w - gutter_x).max(200.0);
+
+    let left_edge = -render_size.x / 2.0;
+    let top_y = render_size.y / 2.0 - gutter_y;
+
+    for (i, voice) in [
         VoiceId::Voice0,
-        TextBoxAnchor::TopLeft,
-        vec2(-1900.0, 1050.0),
-        1000.0,
-        12,
-        28,
-        HorizontalJustify::Left,
-        TextTheme::default(),
-    );
-
-    // Voice3 pane (right).
-    add_voice_pane(
+        VoiceId::Voice1,
+        VoiceId::Voice2,
         VoiceId::Voice3,
-        TextBoxAnchor::TopRight,
-        vec2(1900.0, 1050.0),
-        1000.0,
-        12,
-        28,
-        HorizontalJustify::Right,
-        TextTheme::default(),
-    );
-
+    ]
+    .iter()
+    .copied()
+    .enumerate()
+    {
+        let x0 = left_edge + i as f32 * col_w + gutter_x / 2.0;
+        add_voice_pane(
+            voice,
+            TextBoxAnchor::TopLeft,
+            vec2(x0, top_y),
+            pane_w,
+            20,
+            28,
+            HorizontalJustify::Left,
+            TextTheme::default(),
+        );
+    }
 
     // Initialize rendering state with all GPU resources and pipelines
     let render_state = RenderState::from_app(
@@ -480,24 +487,14 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         {
             let mut overlay = model.ui_state.text_overlay.borrow_mut();
 
-            // Mirror latest AI status text into Voice0's AI slot (temporary routing).
-            if let Some(text) = model.rhythm_manager.current_ai_status_text() {
-                overlay.set_live_block(
-                    TextPaneId::Voice(VoiceId::Voice0),
-                    TextSlot::AiStream,
-                    TextBlock::new(text)
-                        .style(TextStyle::Ai)
-                        .fade(TextFadeMode::NoFade)
-                        .wrap(WrapPolicy::TruncateTail { max_lines: 2 }),
-                    now,
-                );
-            } else {
-                overlay.clear_live_slot(TextPaneId::Voice(VoiceId::Voice0), TextSlot::AiStream);
-            }
+            // Always route AI status text into Voice2's history (not live text).
+            overlay.push_ai_status_history_if_changed(
+                model.rhythm_manager.current_ai_status_text(),
+                now,
+            );
 
             overlay.update_and_draw_all(&rendering.draw, now);
         }
-
 
         // Encode Nannou Draw
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
@@ -601,7 +598,21 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
 
                 match key {
                     VirtualKeyCode::Escape => {
-                        model.ui_state.command_input.clear();
+                        for voice in [
+                            VoiceId::Voice0,
+                            VoiceId::Voice1,
+                            VoiceId::Voice2,
+                            VoiceId::Voice3,
+                        ] {
+                            if let Some(input) = model.ui_state.command_inputs.get_mut(&voice) {
+                                input.clear();
+                            }
+                            model
+                                .ui_state
+                                .text_overlay
+                                .borrow_mut()
+                                .clear_live_slot(TextPaneId::Voice(voice), TextSlot::CommandInput);
+                        }
                     }
                     _ => {
                         // Handle character input

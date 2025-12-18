@@ -90,13 +90,21 @@ impl Model {
 
     /// Apply a command immediately without queueing
     pub fn execute_command(&mut self, command: Command, now: Instant) {
-        // Route commands into the unified text system.
-        // (This replaces the legacy TerminalViewManager-based command logging.)
-        for (voice_id, block) in crate::text::adapters::blocks_for_command(&command) {
+        // Route parameter updates into the pinned params slot (top).
+        for (voice_id, key, value) in crate::text::adapters::param_updates_for_command(&command) {
             self.ui_state
                 .text_overlay
                 .borrow_mut()
-                .push_history_block(crate::text::TextPaneId::Voice(voice_id), block, now);
+                .apply_param_update(voice_id, key, value, now);
+        }
+
+        // Route other messages into history.
+        for (voice_id, block) in crate::text::adapters::blocks_for_command(&command) {
+            self.ui_state.text_overlay.borrow_mut().push_history_block(
+                crate::text::TextPaneId::Voice(voice_id),
+                block,
+                now,
+            );
         }
 
         match command.command {
@@ -213,9 +221,9 @@ impl Model {
                     let status_message =
                         format!("Voice {} - Created rhythm sequencer", voice_id.to_i32());
                     println!("{}", status_message);
-                    self.ui_state
-                        .command_input
-                        .set_success_message(status_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_success_message(status_message);
+                    }
                 }
                 CompositeCommand::ModifyDrone { voice_id, config } => {
                     let validation = self.validate_voice(voice_id);
@@ -249,7 +257,9 @@ impl Model {
                         let error_message =
                             format!("Voice {} has no rhythm to modify", voice_id.to_i32());
                         println!("Error: {}", error_message);
-                        self.ui_state.command_input.set_error_message(error_message);
+                        if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                            input.set_error_message(error_message);
+                        }
                         return;
                     }
 
@@ -323,9 +333,9 @@ impl Model {
                         circle_id
                     );
                     println!("{}", status_message);
-                    self.ui_state
-                        .command_input
-                        .set_success_message(status_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_success_message(status_message);
+                    }
                 }
                 CompositeCommand::Clear { voice_id } => {
                     let validation = self.validate_voice(voice_id);
@@ -521,9 +531,9 @@ impl Model {
                 println!("{}", status_message);
 
                 // Send to Performer Control status line
-                self.ui_state
-                    .command_input
-                    .set_success_message(status_message);
+                if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                    input.set_success_message(status_message);
+                }
             }
             SimpleCommand::AddWings { voice_id, count } => {
                 // Check if rhythm exists for this voice
@@ -540,14 +550,16 @@ impl Model {
                         rhythm.get_params().wings.len()
                     );
                     println!("{}", status_message);
-                    self.ui_state
-                        .command_input
-                        .set_success_message(status_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_success_message(status_message);
+                    }
                 } else {
                     let error_message =
                         format!("Voice {} has no rhythm to add wings to", voice_id.to_i32());
                     println!("Error: {}", error_message);
-                    self.ui_state.command_input.set_error_message(error_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_error_message(error_message);
+                    }
                 }
             }
             SimpleCommand::RemoveWings { voice_id, count } => {
@@ -565,16 +577,18 @@ impl Model {
                         rhythm.get_params().wings.len()
                     );
                     println!("{}", status_message);
-                    self.ui_state
-                        .command_input
-                        .set_success_message(status_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_success_message(status_message);
+                    }
                 } else {
                     let error_message = format!(
                         "Voice {} has no rhythm to remove wings from",
                         voice_id.to_i32()
                     );
                     println!("Error: {}", error_message);
-                    self.ui_state.command_input.set_error_message(error_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_error_message(error_message);
+                    }
                 }
             }
             SimpleCommand::ClearRhythm { voice_id } => {
@@ -594,14 +608,16 @@ impl Model {
                         voice_id.to_i32()
                     );
                     println!("{}", status_message);
-                    self.ui_state
-                        .command_input
-                        .set_success_message(status_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_success_message(status_message);
+                    }
                 } else {
                     let error_message =
                         format!("Voice {} has no rhythm to clear", voice_id.to_i32());
                     println!("Error: {}", error_message);
-                    self.ui_state.command_input.set_error_message(error_message);
+                    if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                        input.set_error_message(error_message);
+                    }
                 }
             }
             SimpleCommand::ClearDrone { voice_id } => {
@@ -634,9 +650,9 @@ impl Model {
                     circle_id
                 );
                 println!("{}", status_message);
-                self.ui_state
-                    .command_input
-                    .set_success_message(status_message);
+                if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                    input.set_success_message(status_message);
+                }
             }
             // Rhythm structure parameters
             SimpleCommand::RhythmCapacity { voice_id, value } => {
@@ -934,7 +950,22 @@ impl Model {
             ValidationResult::VoiceNotFound(_) | ValidationResult::CircleNotFound(_, _) => {
                 if let Some(error_msg) = validation.to_error_message() {
                     println!("Error: {}", error_msg);
-                    self.ui_state.command_input.set_success_message(error_msg);
+                    // Route validation errors to the per-voice terminal when possible.
+                    let voice_for_error: Option<VoiceId> = match validation {
+                        ValidationResult::VoiceNotFound(voice_id) => {
+                            Some(VoiceId::from_i32(voice_id))
+                        }
+                        ValidationResult::CircleNotFound(voice_id, _) => {
+                            Some(VoiceId::from_i32(voice_id))
+                        }
+                        ValidationResult::Success => None,
+                    };
+
+                    if let Some(voice_id) = voice_for_error {
+                        if let Some(input) = self.ui_state.command_inputs.get_mut(&voice_id) {
+                            input.set_error_message(error_msg);
+                        }
+                    }
                 }
                 false
             }

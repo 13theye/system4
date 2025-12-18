@@ -51,7 +51,12 @@ impl TextBoxLayout {
     pub fn new(params: TextBoxLayoutParams) -> Self {
         let height = params.line_height * params.num_lines as f32;
         let rect = rect_from_anchor(params.anchor, params.anchor_pos, params.width, height);
-        let line_positions = generate_line_positions(rect, params.num_lines, params.line_height, params.vertical_flow);
+        let line_positions = generate_line_positions(
+            rect,
+            params.num_lines,
+            params.line_height,
+            params.vertical_flow,
+        );
 
         Self {
             rect,
@@ -72,23 +77,40 @@ impl TextBoxLayout {
 
 fn rect_from_anchor(anchor: TextBoxAnchor, anchor_pos: Vec2, width: f32, height: f32) -> Rect {
     match anchor {
-        TextBoxAnchor::TopLeft => {
-            Rect::from_x_y_w_h(anchor_pos.x + width / 2.0, anchor_pos.y - height / 2.0, width, height)
-        }
-        TextBoxAnchor::TopRight => {
-            Rect::from_x_y_w_h(anchor_pos.x - width / 2.0, anchor_pos.y - height / 2.0, width, height)
-        }
-        TextBoxAnchor::BottomLeft => {
-            Rect::from_x_y_w_h(anchor_pos.x + width / 2.0, anchor_pos.y + height / 2.0, width, height)
-        }
-        TextBoxAnchor::BottomRight => {
-            Rect::from_x_y_w_h(anchor_pos.x - width / 2.0, anchor_pos.y + height / 2.0, width, height)
-        }
+        TextBoxAnchor::TopLeft => Rect::from_x_y_w_h(
+            anchor_pos.x + width / 2.0,
+            anchor_pos.y - height / 2.0,
+            width,
+            height,
+        ),
+        TextBoxAnchor::TopRight => Rect::from_x_y_w_h(
+            anchor_pos.x - width / 2.0,
+            anchor_pos.y - height / 2.0,
+            width,
+            height,
+        ),
+        TextBoxAnchor::BottomLeft => Rect::from_x_y_w_h(
+            anchor_pos.x + width / 2.0,
+            anchor_pos.y + height / 2.0,
+            width,
+            height,
+        ),
+        TextBoxAnchor::BottomRight => Rect::from_x_y_w_h(
+            anchor_pos.x - width / 2.0,
+            anchor_pos.y + height / 2.0,
+            width,
+            height,
+        ),
         TextBoxAnchor::Center => Rect::from_x_y_w_h(anchor_pos.x, anchor_pos.y, width, height),
     }
 }
 
-fn generate_line_positions(rect: Rect, num_lines: usize, line_height: f32, flow: VerticalFlow) -> Vec<Vec2> {
+fn generate_line_positions(
+    rect: Rect,
+    num_lines: usize,
+    line_height: f32,
+    flow: VerticalFlow,
+) -> Vec<Vec2> {
     let mut out = Vec::with_capacity(num_lines);
 
     match flow {

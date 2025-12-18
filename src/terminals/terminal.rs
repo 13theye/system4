@@ -64,12 +64,12 @@ impl Terminal {
         // Demonstrate error handling
         println!("Testing error cases:");
         let error_commands = vec![
-            "makeDrone(1);",                          // Missing begin()
-            "makeDrone(\"test\");",                   // Wrong parameter type (should be number)
-            "",                                       // Empty input
-            "notdrone(1);",                           // Wrong object name
-            "light().brightness(0.5);",               // Unknown command type
-            "drone(\"test\").brightness(0.5);",       // Wrong parameter type for voice ID
+            "makeDrone(1);",                    // Missing begin()
+            "makeDrone(\"test\");",             // Wrong parameter type (should be number)
+            "",                                 // Empty input
+            "notdrone(1);",                     // Wrong object name
+            "light().brightness(0.5);",         // Unknown command type
+            "drone(\"test\").brightness(0.5);", // Wrong parameter type for voice ID
         ];
 
         for command in error_commands {

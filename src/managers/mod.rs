@@ -5,4 +5,4 @@ pub use rhythm_manager::RhythmManager;
 pub use voice_manager::VoiceManager;
 
 pub mod ai_rhythm;
-pub use ai_rhythm::{AiRhythmResult, AIRhythm};
+pub use ai_rhythm::{AIRhythm, AiRhythmResult};

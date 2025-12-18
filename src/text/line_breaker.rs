@@ -21,11 +21,7 @@ pub fn estimate_max_chars_per_line(width: f32, font_size: u32) -> usize {
     ((width / avg_char_w).floor() as usize).max(8)
 }
 
-pub fn break_block(
-    block: &TextBlock,
-    now: Instant,
-    max_chars_per_line: usize,
-) -> Vec<TextLine> {
+pub fn break_block(block: &TextBlock, now: Instant, max_chars_per_line: usize) -> Vec<TextLine> {
     // Optional JSON pretty print.
     let mut text = block.text.clone();
     if matches!(block.wrap, WrapPolicy::JsonPrettyPrintIfValid) {
@@ -37,26 +33,25 @@ pub fn break_block(
     }
 
     // First split on explicit newlines.
-    let mut raw_lines: Vec<String> = text
-        .split('\n')
-        .map(|s| s.replace('\t', "    "))
-        .collect();
+    let mut raw_lines: Vec<String> = text.split('\n').map(|s| s.replace('\t', "    ")).collect();
 
     // Apply wrapping within each raw line.
     let mut wrapped: Vec<String> = Vec::new();
     for raw in raw_lines.drain(..) {
         match block.wrap {
+            // Preserve indentation for terminal and JSON pretty-print output,
+            // but still try to avoid splitting words.
             WrapPolicy::HardWrap | WrapPolicy::JsonPrettyPrintIfValid => {
-                wrapped.extend(wrap_line(&raw, max_chars_per_line));
+                wrapped.extend(wrap_line_preserve_indent_word_wrap(&raw, max_chars_per_line));
             }
             WrapPolicy::WordWrap => {
-                wrapped.extend(wrap_line(&raw, max_chars_per_line));
+                wrapped.extend(wrap_line_word_wrap(&raw, max_chars_per_line));
             }
             WrapPolicy::TruncateTail { .. }
             | WrapPolicy::TruncateHead { .. }
             | WrapPolicy::TruncateMiddle { .. } => {
                 // Truncation is applied after wrapping.
-                wrapped.extend(wrap_line(&raw, max_chars_per_line));
+                wrapped.extend(wrap_line_word_wrap(&raw, max_chars_per_line));
             }
         }
     }
@@ -75,7 +70,7 @@ pub fn break_block(
         .collect()
 }
 
-fn wrap_line(line: &str, max_chars: usize) -> Vec<String> {
+fn wrap_line_word_wrap(line: &str, max_chars: usize) -> Vec<String> {
     if max_chars == 0 {
         return Vec::new();
     }
@@ -85,7 +80,8 @@ fn wrap_line(line: &str, max_chars: usize) -> Vec<String> {
         return vec![line.to_string()];
     }
 
-    // Prefer whitespace breaks. This is not perfect for unicode width, but stable.
+    // Prefer whitespace breaks. Note this collapses whitespace; use
+    // `wrap_line_preserve_whitespace` when indentation matters.
     let mut out = Vec::new();
     let mut current = String::new();
 
@@ -125,6 +121,40 @@ fn wrap_line(line: &str, max_chars: usize) -> Vec<String> {
     } else {
         out
     }
+}
+
+fn wrap_line_preserve_indent_word_wrap(line: &str, max_chars: usize) -> Vec<String> {
+    if max_chars == 0 {
+        return Vec::new();
+    }
+
+    let line = line.trim_end_matches('\r');
+    if line.is_empty() {
+        return vec![String::new()];
+    }
+
+    // Preserve leading indentation (spaces) but avoid splitting words.
+    // This is useful for JSON/terminal-like output where indentation carries meaning,
+    // while still keeping text readable.
+    let indent: String = line.chars().take_while(|c| *c == ' ').collect();
+    let rest = &line[indent.len()..];
+
+    // If the indent alone consumes the whole line budget, fall back to hard split.
+    if indent.len() >= max_chars {
+        return hard_split(line, max_chars);
+    }
+
+    let available = max_chars - indent.len();
+
+    // Word-wrap the remainder, then re-apply indentation to each wrapped line.
+    let mut wrapped = wrap_line_word_wrap(rest, available);
+    for l in &mut wrapped {
+        if !indent.is_empty() {
+            *l = format!("{}{}", indent, l);
+        }
+    }
+
+    wrapped
 }
 
 fn hard_split(s: &str, max_chars: usize) -> Vec<String> {

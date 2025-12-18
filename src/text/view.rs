@@ -202,6 +202,7 @@ impl TextPaneView {
             let mut builder = draw
                 .text(&text)
                 .w(self.params.layout.width)
+                .no_line_wrap()
                 .color(state.color)
                 .font_size(self.params.font_size)
                 .font(self.params.font.clone())
@@ -273,9 +274,15 @@ impl TextPaneView {
         match style {
             TextStyle::Normal | TextStyle::Bright => {
                 // Bright is treated as normal but can be forced with NoFade.
-                (self.params.theme.normal_bright, self.params.theme.normal_regular)
+                (
+                    self.params.theme.normal_bright,
+                    self.params.theme.normal_regular,
+                )
             }
-            TextStyle::Error => (self.params.theme.error_bright, self.params.theme.error_regular),
+            TextStyle::Error => (
+                self.params.theme.error_bright,
+                self.params.theme.error_regular,
+            ),
             TextStyle::Ai => (self.params.theme.ai_bright, self.params.theme.ai_regular),
         }
     }
