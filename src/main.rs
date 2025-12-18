@@ -18,18 +18,18 @@ use std::time::Instant;
 use system4::{
     groups::VoiceId,
     managers::{RhythmManager, VoiceManager},
-    model::{controller, Model},
+    model::Model,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
     rendering::RenderState,
     sequencer::SequencerService,
     settings::*,
-    terminals::terminal_view::TerminalViewManager,
     text::{
         layout::{
             HorizontalJustify, TextBoxAnchor, TextBoxLayout, TextBoxLayoutParams, VerticalFlow,
         },
         overlay::TextOverlay,
+        params_dashboard,
         view::{TextPaneView, TextPaneViewParams, TextTheme},
         TextPane, TextPaneId, TextSlot,
     },
@@ -204,11 +204,12 @@ fn model(app: &App) -> Model {
         performer_rect.top() - 10.0,
     ));
 
-    // Create terminal view manager (legacy; will be retired)
-    let terminal_manager = TerminalViewManager::new();
-
     // Create new unified text overlay for per-voice panes.
     let mut text_overlay = TextOverlay::new();
+
+    // Ensure panes can display all pinned parameter lines + one command input line.
+    let params_line_count = params_dashboard::default_tracked_keys().len();
+    let min_pane_lines = params_line_count + 1;
 
     // Helper to create a text pane + view.
     let mut add_voice_pane = |voice: VoiceId,
@@ -243,8 +244,11 @@ fn model(app: &App) -> Model {
             theme,
         });
 
+        let num_lines = num_lines.max(min_pane_lines);
+
         let mut pane = TextPane::new(num_lines);
-        pane.set_slot_line_budget(TextSlot::CommandInput, 3);
+        pane.set_slot_line_budget(TextSlot::Params, params_line_count);
+        pane.set_slot_line_budget(TextSlot::CommandInput, 1);
         pane.set_slot_line_budget(TextSlot::AiStream, 2);
 
         text_overlay.insert_pane(TextPaneId::Voice(voice), pane, view);
@@ -277,7 +281,7 @@ fn model(app: &App) -> Model {
             TextBoxAnchor::TopLeft,
             vec2(x0, top_y),
             pane_w,
-            20,
+            8,
             28,
             HorizontalJustify::Left,
             TextTheme::default(),
@@ -299,7 +303,7 @@ fn model(app: &App) -> Model {
     );
 
     // Create UI state
-    let ui_state = UiState::new(egui, fps, terminal_manager, text_overlay);
+    let ui_state = UiState::new(egui, fps, text_overlay);
 
     Model {
         particle_system,
@@ -340,23 +344,36 @@ fn main() {
 }
 
 // TODO: refactor to use app.duration.since_prev_update or update.since_last
+fn update_feedback(model: &mut Model) {
+    // Read feedback value for segment length before updating particle system
+    let voice1_feedback = model.get_feedback(VoiceId::Voice0);
+    let voice4_feedback = model.get_feedback(VoiceId::Voice3);
+
+    // Update segment length based on Voice1 feedback slider
+    if let Some(voice1) = model.voice_manager.get_voice_mut(VoiceId::Voice0) {
+        voice1.set_segment_length(voice1_feedback);
+    }
+
+    // Update segment length based on Voice4 feedback slider
+    if let Some(voice4) = model.voice_manager.get_voice_mut(VoiceId::Voice3) {
+        voice4.set_segment_length(voice4_feedback);
+    }
+}
+
 fn update(app: &App, model: &mut Model, _update: Update) {
     let now = Instant::now();
 
     // Update FPS counter
     model.ui_state.fps.update();
 
-    // Get GPU resources
-    let window = app.main_window();
-    let device = window.device();
-    let queue = window.queue();
-
     // Update control UI
     update_control_ui(app, model);
 
     // Process OSC commands
-    let mut commands = model.osc.process_messages();
-    model.command_queue.append(&mut commands);
+    let commands = model.osc.process_messages();
+    for cmd in commands {
+        model.queue_command(cmd);
+    }
 
     // Process unified command queue with priority resolution
     model.process_command_queue(now);
@@ -369,8 +386,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         &mut model.rng,
     );
 
-    // Update feedback render params
-    controller::update_feedback(model, device, queue);
+    // Update feedback-derived voice params (segment length)
+    update_feedback(model);
 
     let mut events = Vec::new();
 

@@ -5,7 +5,7 @@
 use crate::{
     groups::VoiceId,
     text::{
-        line_breaker, params_dashboard::ParamsDashboard, params_dashboard::ParamKey, TextBlock,
+        line_breaker, params_dashboard::ParamKey, params_dashboard::ParamsDashboard, TextBlock,
         TextFadeMode, TextLine, TextPane, TextPaneId, TextSlot, TextStyle, WrapPolicy,
     },
 };
@@ -33,12 +33,39 @@ impl TextOverlay {
         Self::default()
     }
 
-    pub fn apply_param_update(&mut self, voice: VoiceId, key: ParamKey, value: f32, now: Instant) {
+    /// Set a top slot from pre-broken `TextLine`s (no wrapping performed).
+    pub fn set_top_lines(&mut self, id: TextPaneId, slot: TextSlot, lines: Vec<TextLine>) {
+        let Some(pane) = self.panes.get_mut(&id) else {
+            return;
+        };
+        pane.set_top_slot_lines(slot, lines);
+    }
+
+    /// Set a live (bottom) slot from pre-broken `TextLine`s (no wrapping performed).
+    pub fn set_live_lines(&mut self, id: TextPaneId, slot: TextSlot, lines: Vec<TextLine>) {
+        let Some(pane) = self.panes.get_mut(&id) else {
+            return;
+        };
+        pane.set_live_slot_lines(slot, lines);
+    }
+
+    /// Clear pinned param state and remove the params slot lines for a voice.
+    pub fn clear_params_dashboard(&mut self, voice: VoiceId) {
         let id = TextPaneId::Voice(voice);
+        self.params_dashboards.remove(&id);
 
         let Some(pane) = self.panes.get_mut(&id) else {
             return;
         };
+        pane.clear_top_slot(TextSlot::Params);
+    }
+
+    pub fn apply_param_update(&mut self, voice: VoiceId, key: ParamKey, value: f32, now: Instant) {
+        let id = TextPaneId::Voice(voice);
+
+        if !self.panes.contains_key(&id) {
+            return;
+        }
 
         let dashboard = self
             .params_dashboards
@@ -51,7 +78,7 @@ impl TextOverlay {
 
         // Keep placeholders so line positions remain stable.
         let lines = dashboard.render_lines(now, true);
-        pane.set_top_slot_lines(TextSlot::Params, lines);
+        self.set_top_lines(id, TextSlot::Params, lines);
     }
 
     pub fn insert_pane(&mut self, id: TextPaneId, pane: TextPane, view: TextPaneView) {
@@ -74,9 +101,6 @@ impl TextOverlay {
         block: TextBlock,
         now: Instant,
     ) {
-        let Some(pane) = self.panes.get_mut(&id) else {
-            return;
-        };
         let Some(view) = self.views.get(&id) else {
             return;
         };
@@ -87,10 +111,14 @@ impl TextOverlay {
         );
 
         let lines: Vec<TextLine> = line_breaker::break_block(&block, now, max_chars);
-        pane.set_top_slot_lines(slot, lines);
+        self.set_top_lines(id, slot, lines);
     }
 
     pub fn clear_top_slot(&mut self, id: TextPaneId, slot: TextSlot) {
+        if slot == TextSlot::Params {
+            self.params_dashboards.remove(&id);
+        }
+
         let Some(pane) = self.panes.get_mut(&id) else {
             return;
         };
@@ -104,9 +132,6 @@ impl TextOverlay {
         block: TextBlock,
         now: Instant,
     ) {
-        let Some(pane) = self.panes.get_mut(&id) else {
-            return;
-        };
         let Some(view) = self.views.get(&id) else {
             return;
         };
@@ -117,7 +142,7 @@ impl TextOverlay {
         );
 
         let lines: Vec<TextLine> = line_breaker::break_block(&block, now, max_chars);
-        pane.set_live_slot_lines(slot, lines);
+        self.set_live_lines(id, slot, lines);
     }
 
     pub fn clear_live_slot(&mut self, id: TextPaneId, slot: TextSlot) {

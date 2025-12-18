@@ -42,7 +42,10 @@ pub fn break_block(block: &TextBlock, now: Instant, max_chars_per_line: usize) -
             // Preserve indentation for terminal and JSON pretty-print output,
             // but still try to avoid splitting words.
             WrapPolicy::HardWrap | WrapPolicy::JsonPrettyPrintIfValid => {
-                wrapped.extend(wrap_line_preserve_indent_word_wrap(&raw, max_chars_per_line));
+                wrapped.extend(wrap_line_preserve_indent_word_wrap(
+                    &raw,
+                    max_chars_per_line,
+                ));
             }
             WrapPolicy::WordWrap => {
                 wrapped.extend(wrap_line_word_wrap(&raw, max_chars_per_line));

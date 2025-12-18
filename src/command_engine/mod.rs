@@ -1,15 +1,19 @@
+pub mod builders;
 pub mod commands;
 pub mod context;
 pub mod handlers;
+pub mod validation;
 
+pub use builders::{DroneCommandBuilder, RhythmCommandBuilder};
 pub use commands::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand};
 pub use context::ExecutionContext;
+pub use validation::{ValidationResult, VoiceValidator};
+
 use handlers::{CircleCommandHandler, DroneCommandHandler, RhythmCommandHandler};
 use std::time::Instant;
 
 #[derive(Default)]
 pub struct CommandEngine {
-    command_queue: Vec<Command>,
     drone_handler: DroneCommandHandler,
     rhythm_handler: RhythmCommandHandler,
     circle_handler: CircleCommandHandler,
@@ -18,23 +22,28 @@ pub struct CommandEngine {
 impl CommandEngine {
     pub fn new() -> Self {
         Self {
-            command_queue: Vec::new(),
             drone_handler: DroneCommandHandler::new(),
             rhythm_handler: RhythmCommandHandler::new(),
             circle_handler: CircleCommandHandler::new(),
         }
     }
 
-    pub fn queue_command(&mut self, command: Command) {
-        self.command_queue.push(command);
-    }
-
-    pub fn process_command_queue(&mut self, ctx: &mut dyn ExecutionContext, now: Instant) {
-        let all_commands: Vec<Command> = self.command_queue.drain(..).collect();
-
-        if all_commands.is_empty() {
+    /// Execute one "tick" worth of commands.
+    ///
+    /// Note: this consumes a snapshot of commands (typically drained from the
+    /// model). Any commands queued via `ExecutionContext::queue_command` during
+    /// execution will be enqueued onto the model for the *next* tick.
+    pub fn process_commands(
+        &self,
+        ctx: &mut dyn ExecutionContext,
+        commands: Vec<Command>,
+        now: Instant,
+    ) {
+        if commands.is_empty() {
             return;
         }
+
+        let all_commands = commands;
 
         let mut final_commands = Vec::new();
         let mut map_osc: std::collections::HashMap<String, (usize, CommandSource)> =
@@ -63,12 +72,7 @@ impl CommandEngine {
         }
     }
 
-    pub fn execute_command(
-        &mut self,
-        ctx: &mut dyn ExecutionContext,
-        command: Command,
-        now: Instant,
-    ) {
+    pub fn execute_command(&self, ctx: &mut dyn ExecutionContext, command: Command, now: Instant) {
         ctx.log_command(&command);
 
         match command.command {
@@ -111,7 +115,7 @@ impl CommandEngine {
     }
 
     fn execute_simple_command(
-        &mut self,
+        &self,
         ctx: &mut dyn ExecutionContext,
         command: SimpleCommand,
         now: Instant,

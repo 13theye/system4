@@ -1,8 +1,4 @@
-use crate::{
-    groups::VoiceId,
-    terminals::{command_input::CommandInput, terminal_view::TerminalViewManager},
-    text::overlay::TextOverlay,
-};
+use crate::{groups::VoiceId, terminals::command_input::CommandInput, text::overlay::TextOverlay};
 use fps::FpsManager;
 use nannou_egui::Egui;
 use std::{cell::RefCell, collections::HashMap};
@@ -13,7 +9,7 @@ use std::{cell::RefCell, collections::HashMap};
 /// - FPS display manager
 /// - Debug visualization flags
 /// - Command input interface
-/// - Terminal view manager
+/// - Text overlay (rendered in audience window)
 /// - UI state (active tabs, etc.)
 pub struct UiState {
     // UI framework
@@ -29,10 +25,7 @@ pub struct UiState {
     // Per-voice command inputs
     pub command_inputs: HashMap<VoiceId, CommandInput>,
 
-    // Terminal view manager for on-screen display (legacy; will be retired)
-    pub terminal_manager: RefCell<TerminalViewManager>,
-
-    // New unified text overlay (data + view)
+    // Unified text overlay (data + view)
     pub text_overlay: RefCell<TextOverlay>,
 
     // UI state
@@ -45,12 +38,7 @@ pub struct UiState {
 
 impl UiState {
     /// Create a new UiState with all UI components
-    pub fn new(
-        egui: Egui,
-        fps: FpsManager,
-        terminal_manager: TerminalViewManager,
-        text_overlay: TextOverlay,
-    ) -> Self {
+    pub fn new(egui: Egui, fps: FpsManager, text_overlay: TextOverlay) -> Self {
         Self {
             egui,
             fps,
@@ -62,7 +50,6 @@ impl UiState {
                 (VoiceId::Voice2, CommandInput::new()),
                 (VoiceId::Voice3, CommandInput::new()),
             ]),
-            terminal_manager: RefCell::new(terminal_manager),
             text_overlay: RefCell::new(text_overlay),
             active_tab: 0,
             auto_ai_from_voice1: false,
@@ -82,10 +69,5 @@ impl UiState {
     /// Set the active tab
     pub fn set_active_tab(&mut self, tab_index: usize) {
         self.active_tab = tab_index;
-    }
-
-    /// Get the terminal manager
-    pub fn terminal_manager(&self) -> &RefCell<TerminalViewManager> {
-        &self.terminal_manager
     }
 }

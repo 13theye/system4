@@ -21,22 +21,16 @@ pub enum ParamKey {
     Voice(&'static str),
 
     /// Circle-level parameter, formatted like `circle(0).gravity(0.70)`.
-    Circle { circle_id: usize, name: &'static str },
+    Circle {
+        circle_id: usize,
+        name: &'static str,
+    },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 struct ParamState {
     value: Option<f32>,
     last_updated: Option<Instant>,
-}
-
-impl Default for ParamState {
-    fn default() -> Self {
-        Self {
-            value: None,
-            last_updated: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

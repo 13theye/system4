@@ -2,12 +2,17 @@
 //
 // The main App Model
 
-pub mod command_builder;
+pub mod command_flow;
+pub mod command_helpers;
 pub mod controller;
+pub mod queries;
 pub mod terminal_processor;
 
 use crate::{
-    command_engine::{context::ExecutionContext, Command},
+    command_engine::{
+        context::ExecutionContext, Command, CommandInner, CommandSource, CompositeCommand,
+        SimpleCommand,
+    },
     groups::{Rhythm, Voice, VoiceId},
     managers::{RhythmManager, VoiceManager},
     osc::{OscController, OscSender},
@@ -24,6 +29,71 @@ use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 
 use std::collections::HashMap;
+
+fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
+    match &command.command {
+        CommandInner::Simple(simple) => match simple {
+            SimpleCommand::Alpha { voice_id, .. }
+            | SimpleCommand::Volume { voice_id, .. }
+            | SimpleCommand::Feedback { voice_id, .. }
+            | SimpleCommand::Vibration { voice_id, .. }
+            | SimpleCommand::MoveEmitters { voice_id, .. }
+            | SimpleCommand::OuterRadius { voice_id, .. }
+            | SimpleCommand::InnerRadius { voice_id, .. }
+            | SimpleCommand::Force { voice_id, .. }
+            | SimpleCommand::Gravity { voice_id, .. }
+            | SimpleCommand::Noise { voice_id, .. }
+            | SimpleCommand::CenterX { voice_id, .. }
+            | SimpleCommand::CenterY { voice_id, .. }
+            | SimpleCommand::ListCircles { voice_id }
+            | SimpleCommand::AddWings { voice_id, .. }
+            | SimpleCommand::RemoveWings { voice_id, .. }
+            | SimpleCommand::ClearRhythm { voice_id }
+            | SimpleCommand::ClearDrone { voice_id }
+            | SimpleCommand::RemoveCircle { voice_id, .. }
+            | SimpleCommand::RhythmCapacity { voice_id, .. }
+            | SimpleCommand::RhythmNumWings { voice_id, .. }
+            | SimpleCommand::RhythmSubdivision { voice_id, .. }
+            | SimpleCommand::RhythmLengthRange { voice_id, .. }
+            | SimpleCommand::RhythmVelocityRange { voice_id, .. }
+            | SimpleCommand::RhythmCutoffRange { voice_id, .. }
+            | SimpleCommand::RhythmModifyLength { voice_id, .. }
+            | SimpleCommand::RhythmModifyVelocity { voice_id, .. }
+            | SimpleCommand::RhythmModifyCutoff { voice_id, .. } => Some(*voice_id),
+        },
+        CommandInner::Composite(comp) => match comp {
+            CompositeCommand::CreateDrone { config } => Some(config.voice),
+            CompositeCommand::CreateRhythm { config } => Some(config.voice),
+            CompositeCommand::ModifyDrone { voice_id, .. }
+            | CompositeCommand::ModifyRhythm { voice_id, .. }
+            | CompositeCommand::NewCircle { voice_id, .. }
+            | CompositeCommand::Clear { voice_id } => Some(*voice_id),
+        },
+    }
+}
+
+fn is_rhythm_shape_or_param_command(command: &Command) -> bool {
+    match &command.command {
+        CommandInner::Composite(comp) => matches!(
+            comp,
+            CompositeCommand::CreateRhythm { .. } | CompositeCommand::ModifyRhythm { .. }
+        ),
+        CommandInner::Simple(simple) => matches!(
+            simple,
+            SimpleCommand::RhythmCapacity { .. }
+                | SimpleCommand::RhythmNumWings { .. }
+                | SimpleCommand::RhythmSubdivision { .. }
+                | SimpleCommand::RhythmLengthRange { .. }
+                | SimpleCommand::RhythmVelocityRange { .. }
+                | SimpleCommand::RhythmCutoffRange { .. }
+                | SimpleCommand::RhythmModifyLength { .. }
+                | SimpleCommand::RhythmModifyVelocity { .. }
+                | SimpleCommand::RhythmModifyCutoff { .. }
+                | SimpleCommand::AddWings { .. }
+                | SimpleCommand::RemoveWings { .. }
+        ),
+    }
+}
 
 pub struct Model {
     pub particle_system: ParticleSystem,
@@ -54,7 +124,7 @@ pub struct Model {
     // Random
     pub rng: ThreadRng,
 
-    // Unified command queue with priority resolution
+    // Pending commands to execute.
     pub command_queue: Vec<Command>,
 
     // Flag indicating that Voice1's rhythm was created/modified this frame
@@ -85,8 +155,42 @@ impl ExecutionContext for Model {
         // Prefer the unified text overlay system.
         let now = std::time::Instant::now();
 
+        // If we receive OSC param updates for a voice that doesn't exist, ignore.
+        // (Prevents params slot noise when no voice is active.)
+        let should_ignore_osc_params_for_voice = |voice_id: VoiceId, source: CommandSource| {
+            source == CommandSource::OSC
+                && !(self.voice_manager.has_voice(voice_id)
+                    || self.rhythm_manager.has_rhythm(voice_id))
+        };
+
+        // Track per-frame auto-AI triggers for Voice1 rhythms.
+        if let Some(voice_id) = voice_id_for_command(command) {
+            if voice_id == VoiceId::Voice1 && is_rhythm_shape_or_param_command(command) {
+                self.auto_ai_pending_for_voice1 = true;
+            }
+        }
+
+        // Clear pinned params when a voice is cleared.
+        if let Some(voice_id) = voice_id_for_command(command) {
+            if matches!(
+                command.command,
+                CommandInner::Simple(SimpleCommand::ClearDrone { .. })
+                    | CommandInner::Simple(SimpleCommand::ClearRhythm { .. })
+                    | CommandInner::Composite(CompositeCommand::Clear { .. })
+            ) {
+                self.ui_state
+                    .text_overlay
+                    .borrow_mut()
+                    .clear_params_dashboard(voice_id);
+            }
+        }
+
         // Parameter updates go to the pinned params slot.
         for (voice_id, key, value) in crate::text::adapters::param_updates_for_command(command) {
+            if should_ignore_osc_params_for_voice(voice_id, command.source) {
+                continue;
+            }
+
             self.ui_state
                 .text_overlay
                 .borrow_mut()
