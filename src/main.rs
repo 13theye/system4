@@ -220,6 +220,8 @@ fn model(app: &App) -> Model {
                               font_size: u32,
                               justify: HorizontalJustify,
                               theme: TextTheme| {
+        let num_lines = num_lines.max(min_pane_lines);
+
         let line_spacing = 5.0;
         let line_height = font_size as f32 + line_spacing * 2.0;
 
@@ -243,8 +245,6 @@ fn model(app: &App) -> Model {
             chars_per_second: 0.0, // default: show immediately for overlay panes
             theme,
         });
-
-        let num_lines = num_lines.max(min_pane_lines);
 
         let mut pane = TextPane::new(num_lines);
         pane.set_slot_line_budget(TextSlot::Params, params_line_count);
