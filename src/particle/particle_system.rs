@@ -270,12 +270,16 @@ impl ParticleSystem {
             let mut write_idx = 0;
 
             for (voice_id, cores) in self.particle_cores.iter() {
-                let computed_offsets = computed_offsets_map.get(voice_id).unwrap();
+                let computed_offsets = computed_offsets_map.get(voice_id);
 
                 for (index, core) in cores.iter().enumerate() {
                     if core.is_alive && core.is_activated {
                         // Use pre-computed offset from physics loop (no recalculation!)
-                        let offset = computed_offsets[index];
+                        let offset = if let Some(computed_offsets) = computed_offsets {
+                            computed_offsets[index]
+                        } else {
+                            vec2(0.0, 0.0)
+                        };
 
                         gpu_particles[write_idx] = core.to_gpu(offset);
                         write_idx += 1;

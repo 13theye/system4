@@ -4,9 +4,9 @@
 
 pub mod command_flow;
 pub mod command_helpers;
-pub mod controller;
 pub mod queries;
 pub mod terminal_processor;
+pub mod validation;
 
 use crate::{
     command_engine::{
@@ -151,7 +151,7 @@ fn erase_drone(model: &mut Model, id: i32) {
 
 // ExecutionContext implementation for Model
 impl ExecutionContext for Model {
-    fn log_command(&mut self, command: &crate::command_engine::Command) {
+    fn log_command(&mut self, command: &Command) {
         // Prefer the unified text overlay system.
         let now = std::time::Instant::now();
 

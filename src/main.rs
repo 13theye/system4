@@ -582,28 +582,6 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
 
 // ******************************* Input Capture *****************************
 
-#[allow(dead_code)]
-fn key_pressed(_app: &App, model: &mut Model, key: Key) {
-    // For now, all human boards are controlled by the same keyboard
-    match key {
-        Key::P => {
-            // Toggle debug and FPS display
-            model.ui_state.show_bounds = !model.ui_state.show_bounds;
-        }
-        Key::C => {
-            model.osc_loop.send_inner_radius(4, 0.5);
-        }
-        Key::R => {
-            model.osc_loop.send_outer_radius(4, 0.5);
-        }
-        Key::V => {
-            model.osc_loop.send_vibration(1, 0.5);
-        }
-
-        _ => {}
-    }
-}
-
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     model.ui_state.egui.handle_raw_event(event);
 
@@ -631,11 +609,11 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
                                 .clear_live_slot(TextPaneId::Voice(voice), TextSlot::CommandInput);
                         }
                     }
-                    _ => {
-                        // Handle character input
-                        // Note: This is simplified - in a real app you'd want proper text input handling
-                        // Note: Enter key handling now moved to egui TextEdit response system
+                    VirtualKeyCode::P => {
+                        // Toggle debug and FPS display
+                        model.ui_state.show_bounds = !model.ui_state.show_bounds;
                     }
+                    _ => {}
                 }
             }
         }

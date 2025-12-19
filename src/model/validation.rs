@@ -1,6 +1,6 @@
-// src/voice/controller.rs
+// src/voice/validation.rs
 //
-// Command extension for Model
+// Validation functions for Model commands and queries
 
 use crate::command_engine::{ValidationResult, VoiceValidator};
 use crate::groups::VoiceId;

@@ -189,7 +189,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
 
                                             for (i, voice) in voices.iter().copied().enumerate() {
                                                 ui.vertical(|ui| {
-                                                    ui.set_width(220.0);
+                                                    ui.set_width(300.0);
                                                     ui.set_min_height(height * 0.55);
 
                                                     egui::Frame::none()
