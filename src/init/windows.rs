@@ -1,0 +1,80 @@
+use nannou::prelude::*;
+
+use system4::settings::Settings;
+
+#[derive(Clone, Copy, Debug)]
+pub struct WindowIds {
+    pub audience: WindowId,
+    pub performer: WindowId,
+    pub control: WindowId,
+}
+
+pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
+    // Create windows
+    let audience = app
+        .new_window()
+        .title("Tacit Group: System_4 0.1.0")
+        .size(
+            settings.audience_window.width,
+            settings.audience_window.height,
+        )
+        .msaa_samples(1)
+        .view(crate::audience_view)
+        .build()
+        .unwrap();
+
+    let performer = app
+        .new_window()
+        .title("System_4 Performance Monitor v0.1.0")
+        .size(
+            settings.performer_window.width,
+            settings.performer_window.height,
+        )
+        .msaa_samples(1)
+        .view(crate::performer_view)
+        .build()
+        .unwrap();
+
+    let control = app
+        .new_window()
+        .title("System_4 Performer Control v0.1.0")
+        .size(
+            settings.control_window.width,
+            settings.control_window.height,
+        )
+        .msaa_samples(1)
+        .raw_event(crate::raw_window_event)
+        .view(crate::control_view)
+        .build()
+        .unwrap();
+
+    let Some(audience_window) = app.window(audience) else {
+        eprintln!("Audience window not found. Exiting app.");
+        std::process::exit(1);
+    };
+    let Some(performer_window) = app.window(performer) else {
+        eprintln!("Performer window not found. Exiting app.");
+        std::process::exit(1);
+    };
+
+    let Some(control_window) = app.window(control) else {
+        eprintln!("Control window not found. Exiting app.");
+        std::process::exit(1);
+    };
+
+    println!(
+        "Audience window scale: {:?}",
+        audience_window.scale_factor()
+    );
+    println!(
+        "Performer window scale: {:?}",
+        performer_window.scale_factor()
+    );
+    println!("Control window scale: {:?}", control_window.scale_factor());
+
+    WindowIds {
+        audience,
+        performer,
+        control,
+    }
+}

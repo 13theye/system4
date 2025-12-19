@@ -5,305 +5,58 @@
 //
 // src/main.rs
 
-use fps::FpsManager;
-use nannou::{prelude::*, text::Font};
-use nannou_egui::Egui;
-use prat::clockservice::ClockService;
+mod init;
+
+use nannou::prelude::*;
 use rand::rngs::ThreadRng;
 use thread_priority::*;
 
-use std::fs;
 use std::time::Instant;
 
 use system4::{
     groups::VoiceId,
     managers::{RhythmManager, VoiceManager},
     model::Model,
-    osc::{OscController, OscSender},
-    particle::ParticleSystem,
-    rendering::RenderState,
-    sequencer::SequencerService,
-    settings::*,
-    text::{
-        layout::{
-            HorizontalJustify, TextBoxAnchor, TextBoxLayout, TextBoxLayoutParams, VerticalFlow,
-        },
-        overlay::TextOverlay,
-        params_dashboard,
-        view::{TextPaneView, TextPaneViewParams, TextTheme},
-        TextPane, TextPaneId, TextSlot,
-    },
-    ui::{control_panel::update_control_ui, UiState},
+    text::{TextPaneId, TextSlot},
+    ui::control_panel::update_control_ui,
     utils::IdGenerator,
     view::rhythm::{RhythmView, RhythmViewUpdateParams},
 };
 
-const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
-const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
-//const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.27, 0.27, 0.26);
-
 fn model(app: &App) -> Model {
-    // Load config
-    let settings = Settings::load().expect("\nSystem 4: FAILED TO LOAD CONFIG.TOML\n");
+    let settings = init::config::load_settings();
 
-    // Main game data elements
     let particle_limit = settings.particles.limit;
-
-    let render_size = vec2(
-        settings.rendering.texture_width as f32,
-        settings.rendering.texture_height as f32,
-    );
-
-    // Init clock
-    let mut clock = ClockService::with()
-        .tempo(settings.speed.bpm as f64)
-        .quantum(4.0)
-        .ppqn(24)
-        .enable_ticks()
-        .thread_priority(47)
-        .build();
-    // Start the clock thread or quit game if it fails
-    clock
-        .start_thread()
-        .expect("\nSystem4: fatal error: Failed to start clock thread");
-
-    clock
-        .start_clock()
-        .expect("System4: fatal error: Failed to start clock");
-
-    let sequencer_service = SequencerService::with_clock_and_osc_config(&clock, &settings.osc_send)
-        .build()
-        .expect("System4: fatal error: Failed to build sequencer service");
-
-    let osc = OscController::new(settings.osc_receive.receive_port).unwrap();
-    let osc_send = OscSender::new(&settings.osc_send).unwrap();
-
-    let osc_loop_config = OscSendConfig {
-        target_addr: settings.osc_loop.target_addr,
-        target_port: settings.osc_loop.target_port,
-    };
-    let osc_loop = OscSender::new(&osc_loop_config).unwrap();
+    let render_size = init::config::render_size(&settings);
 
     // DPI scale is used to scale the size of draw objects to account for DPI scaling.
     let dpi_scale = settings.rendering.dpi_scale;
 
-    let mut particle_system = ParticleSystem::new(
-        pt2(0.0, 0.0),
-        render_size.x,
-        render_size.y,
-        DEFAULT_PARTICLE_SIZE,
-        rgb(
-            DEFAULT_PARTICLE_RGB.0,
-            DEFAULT_PARTICLE_RGB.1,
-            DEFAULT_PARTICLE_RGB.2,
-        ),
-        particle_limit,
-    );
+    let (clock, sequencer_service) = init::timing::init_clock_and_sequencer(&settings);
+    let (osc, osc_send, osc_loop) = init::osc::init_osc(&settings);
 
-    particle_system.set_mass_variation_enabled(true);
-    particle_system.set_mass_variation_amount(0.5);
+    let particle_system = init::particles::init_particle_system(render_size, particle_limit);
 
     // Create RhythmView
     let rhythm_view = RhythmView::new();
 
-    // Create window
-    let audience_window_id = app
-        .new_window()
-        .title("Tacit Group: System_4 0.1.0")
-        .size(
-            settings.audience_window.width,
-            settings.audience_window.height,
-        )
-        .msaa_samples(1)
-        .view(audience_view)
-        .build()
-        .unwrap();
+    let window_ids = init::windows::create_windows(app, &settings);
 
-    let performer_window_id = app
-        .new_window()
-        .title("System_4 Performance Monitor v0.1.0")
-        .size(
-            settings.performer_window.width,
-            settings.performer_window.height,
-        )
-        .msaa_samples(1)
-        .view(performer_view)
-        .build()
-        .unwrap();
-
-    let control_window_id = app
-        .new_window()
-        .title("System_4 Performer Control v0.1.0")
-        .size(
-            settings.control_window.width,
-            settings.control_window.height,
-        )
-        .msaa_samples(1)
-        .raw_event(raw_window_event)
-        .view(control_view)
-        .build()
-        .unwrap();
-
-    let Some(audience_window) = app.window(audience_window_id) else {
-        eprintln!("Audience window not found. Exiting app.");
-        std::process::exit(1);
-    };
-    let Some(performer_window) = app.window(performer_window_id) else {
-        eprintln!("Performer window not found. Exiting app.");
-        std::process::exit(1);
-    };
-
-    let Some(control_window) = app.window(control_window_id) else {
-        eprintln!("Control window not found. Exiting app.");
-        std::process::exit(1);
-    };
-
-    // Set macOS window flags
-    /*
-    #[cfg(target_os = "macos")]
-    set_macos_window_behavior(&audience_window);
-    #[cfg(target_os = "macos")]
-    set_macos_window_behavior(&performer_window);
-    #[cfg(target_os = "macos")]
-    set_macos_window_behavior(&control_window);
-     */
-
-    println!(
-        "Audience window scale: {:?}",
-        audience_window.scale_factor()
-    );
-    println!(
-        "Performer window scale: {:?}",
-        performer_window.scale_factor()
-    );
-    println!("Control window scale: {:?}", control_window.scale_factor());
-
-    // Rendering initialization moved to RenderState::from_app
-
-    // Set up egui
-    let egui = Egui::from_window(&control_window);
+    let font = init::text::load_font(app);
+    let text_overlay = init::text::init_text_overlay(render_size, &font);
+    let ui_state = init::ui::init_ui(app, window_ids, text_overlay);
 
     // Set up rng
     let rng = ThreadRng::default();
 
-    // --- Load Font for Nannou Draw  ---
-    // Assumes "assets/terminal_font.ttf" exists relative to the executable
-    // or relative to the project root if running with `cargo run`
-    let assets = app.assets_path().expect("Could not find assets directory");
-    let font_path = assets.join("terminal_font.ttf");
-    let font_bytes = fs::read(&font_path)
-        .unwrap_or_else(|_| panic!("Failed to read font file at {:?}", font_path));
-    let font = Font::from_bytes(font_bytes)
-        .unwrap_or_else(|_| panic!("Failed to load font at {:?}", font_path));
-
-    // Create FPS manager
-    let mut fps = FpsManager::new_with(true, false);
-    let performer_rect = app.window(performer_window_id).unwrap().rect();
-    fps.set_draw_position(pt2(
-        performer_rect.left() + 40.0,
-        performer_rect.top() - 10.0,
-    ));
-
-    // Create new unified text overlay for per-voice panes.
-    let mut text_overlay = TextOverlay::new();
-
-    // Ensure panes can display all pinned parameter lines + one command input line.
-    let params_line_count = params_dashboard::default_tracked_keys().len();
-    let min_pane_lines = params_line_count + 1;
-
-    // Helper to create a text pane + view.
-    let mut add_voice_pane = |voice: VoiceId,
-                              anchor: TextBoxAnchor,
-                              anchor_pos: Vec2,
-                              width: f32,
-                              num_lines: usize,
-                              font_size: u32,
-                              justify: HorizontalJustify,
-                              theme: TextTheme| {
-        let num_lines = num_lines.max(min_pane_lines);
-
-        let line_spacing = 5.0;
-        let line_height = font_size as f32 + line_spacing * 2.0;
-
-        let layout = TextBoxLayout::new(TextBoxLayoutParams {
-            anchor,
-            anchor_pos,
-            width,
-            num_lines,
-            line_height,
-            vertical_flow: VerticalFlow::TopDown,
-            horizontal_justify: justify,
-        });
-
-        let view = TextPaneView::new(TextPaneViewParams {
-            layout,
-            font: font.clone(),
-            font_size,
-            line_spacing,
-            fade_delay_secs: 1.0,
-            color_fade_secs: 1.5,
-            chars_per_second: 0.0, // default: show immediately for overlay panes
-            theme,
-        });
-
-        let mut pane = TextPane::new(num_lines);
-        pane.set_slot_line_budget(TextSlot::Params, params_line_count);
-        pane.set_slot_line_budget(TextSlot::CommandInput, 1);
-        pane.set_slot_line_budget(TextSlot::AiStream, 2);
-
-        text_overlay.insert_pane(TextPaneId::Voice(voice), pane, view);
-    };
-
-    // Arrange voice panes as four columns across the full render width.
-    let gutter_x = 40.0;
-    let gutter_y = 40.0;
-    let columns = 4.0;
-
-    let col_w = render_size.x / columns;
-    let pane_w = (col_w - gutter_x).max(200.0);
-
-    let left_edge = -render_size.x / 2.0;
-    let top_y = render_size.y / 2.0 - gutter_y;
-
-    for (i, voice) in [
-        VoiceId::Voice0,
-        VoiceId::Voice1,
-        VoiceId::Voice2,
-        VoiceId::Voice3,
-    ]
-    .iter()
-    .copied()
-    .enumerate()
-    {
-        let x0 = left_edge + i as f32 * col_w + gutter_x / 2.0;
-        add_voice_pane(
-            voice,
-            TextBoxAnchor::TopLeft,
-            vec2(x0, top_y),
-            pane_w,
-            8,
-            28,
-            HorizontalJustify::Left,
-            TextTheme::default(),
-        );
-    }
-
-    // Initialize rendering state with all GPU resources and pipelines
-    let render_state = RenderState::from_app(
+    let render_state = init::rendering::init_render_state(
         app,
-        audience_window_id,
-        performer_window_id,
-        control_window_id,
-        settings.rendering.texture_width,
-        settings.rendering.texture_height,
-        settings.rendering.texture_samples,
+        window_ids,
+        &settings,
         particle_limit,
         dpi_scale,
         font,
     );
-
-    // Create UI state
-    let ui_state = UiState::new(egui, fps, text_overlay);
 
     Model {
         particle_system,

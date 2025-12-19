@@ -30,71 +30,6 @@ use rand::rngs::ThreadRng;
 
 use std::collections::HashMap;
 
-fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
-    match &command.command {
-        CommandInner::Simple(simple) => match simple {
-            SimpleCommand::Alpha { voice_id, .. }
-            | SimpleCommand::Volume { voice_id, .. }
-            | SimpleCommand::Feedback { voice_id, .. }
-            | SimpleCommand::Vibration { voice_id, .. }
-            | SimpleCommand::MoveEmitters { voice_id, .. }
-            | SimpleCommand::OuterRadius { voice_id, .. }
-            | SimpleCommand::InnerRadius { voice_id, .. }
-            | SimpleCommand::Force { voice_id, .. }
-            | SimpleCommand::Gravity { voice_id, .. }
-            | SimpleCommand::Noise { voice_id, .. }
-            | SimpleCommand::CenterX { voice_id, .. }
-            | SimpleCommand::CenterY { voice_id, .. }
-            | SimpleCommand::ListCircles { voice_id }
-            | SimpleCommand::AddWings { voice_id, .. }
-            | SimpleCommand::RemoveWings { voice_id, .. }
-            | SimpleCommand::ClearRhythm { voice_id }
-            | SimpleCommand::ClearDrone { voice_id }
-            | SimpleCommand::RemoveCircle { voice_id, .. }
-            | SimpleCommand::RhythmCapacity { voice_id, .. }
-            | SimpleCommand::RhythmNumWings { voice_id, .. }
-            | SimpleCommand::RhythmSubdivision { voice_id, .. }
-            | SimpleCommand::RhythmLengthRange { voice_id, .. }
-            | SimpleCommand::RhythmVelocityRange { voice_id, .. }
-            | SimpleCommand::RhythmCutoffRange { voice_id, .. }
-            | SimpleCommand::RhythmModifyLength { voice_id, .. }
-            | SimpleCommand::RhythmModifyVelocity { voice_id, .. }
-            | SimpleCommand::RhythmModifyCutoff { voice_id, .. } => Some(*voice_id),
-        },
-        CommandInner::Composite(comp) => match comp {
-            CompositeCommand::CreateDrone { config } => Some(config.voice),
-            CompositeCommand::CreateRhythm { config } => Some(config.voice),
-            CompositeCommand::ModifyDrone { voice_id, .. }
-            | CompositeCommand::ModifyRhythm { voice_id, .. }
-            | CompositeCommand::NewCircle { voice_id, .. }
-            | CompositeCommand::Clear { voice_id } => Some(*voice_id),
-        },
-    }
-}
-
-fn is_rhythm_shape_or_param_command(command: &Command) -> bool {
-    match &command.command {
-        CommandInner::Composite(comp) => matches!(
-            comp,
-            CompositeCommand::CreateRhythm { .. } | CompositeCommand::ModifyRhythm { .. }
-        ),
-        CommandInner::Simple(simple) => matches!(
-            simple,
-            SimpleCommand::RhythmCapacity { .. }
-                | SimpleCommand::RhythmNumWings { .. }
-                | SimpleCommand::RhythmSubdivision { .. }
-                | SimpleCommand::RhythmLengthRange { .. }
-                | SimpleCommand::RhythmVelocityRange { .. }
-                | SimpleCommand::RhythmCutoffRange { .. }
-                | SimpleCommand::RhythmModifyLength { .. }
-                | SimpleCommand::RhythmModifyVelocity { .. }
-                | SimpleCommand::RhythmModifyCutoff { .. }
-                | SimpleCommand::AddWings { .. }
-                | SimpleCommand::RemoveWings { .. }
-        ),
-    }
-}
-
 pub struct Model {
     pub particle_system: ParticleSystem,
 
@@ -404,5 +339,70 @@ impl ExecutionContext for Model {
     ) {
         self.rhythm_manager
             .rhythm_modify_all_slots_cutoff(voice_id, modification, &mut self.rng);
+    }
+}
+
+fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
+    match &command.command {
+        CommandInner::Simple(simple) => match simple {
+            SimpleCommand::Alpha { voice_id, .. }
+            | SimpleCommand::Volume { voice_id, .. }
+            | SimpleCommand::Feedback { voice_id, .. }
+            | SimpleCommand::Vibration { voice_id, .. }
+            | SimpleCommand::MoveEmitters { voice_id, .. }
+            | SimpleCommand::OuterRadius { voice_id, .. }
+            | SimpleCommand::InnerRadius { voice_id, .. }
+            | SimpleCommand::Force { voice_id, .. }
+            | SimpleCommand::Gravity { voice_id, .. }
+            | SimpleCommand::Noise { voice_id, .. }
+            | SimpleCommand::CenterX { voice_id, .. }
+            | SimpleCommand::CenterY { voice_id, .. }
+            | SimpleCommand::ListCircles { voice_id }
+            | SimpleCommand::AddWings { voice_id, .. }
+            | SimpleCommand::RemoveWings { voice_id, .. }
+            | SimpleCommand::ClearRhythm { voice_id }
+            | SimpleCommand::ClearDrone { voice_id }
+            | SimpleCommand::RemoveCircle { voice_id, .. }
+            | SimpleCommand::RhythmCapacity { voice_id, .. }
+            | SimpleCommand::RhythmNumWings { voice_id, .. }
+            | SimpleCommand::RhythmSubdivision { voice_id, .. }
+            | SimpleCommand::RhythmLengthRange { voice_id, .. }
+            | SimpleCommand::RhythmVelocityRange { voice_id, .. }
+            | SimpleCommand::RhythmCutoffRange { voice_id, .. }
+            | SimpleCommand::RhythmModifyLength { voice_id, .. }
+            | SimpleCommand::RhythmModifyVelocity { voice_id, .. }
+            | SimpleCommand::RhythmModifyCutoff { voice_id, .. } => Some(*voice_id),
+        },
+        CommandInner::Composite(comp) => match comp {
+            CompositeCommand::CreateDrone { config } => Some(config.voice),
+            CompositeCommand::CreateRhythm { config } => Some(config.voice),
+            CompositeCommand::ModifyDrone { voice_id, .. }
+            | CompositeCommand::ModifyRhythm { voice_id, .. }
+            | CompositeCommand::NewCircle { voice_id, .. }
+            | CompositeCommand::Clear { voice_id } => Some(*voice_id),
+        },
+    }
+}
+
+fn is_rhythm_shape_or_param_command(command: &Command) -> bool {
+    match &command.command {
+        CommandInner::Composite(comp) => matches!(
+            comp,
+            CompositeCommand::CreateRhythm { .. } | CompositeCommand::ModifyRhythm { .. }
+        ),
+        CommandInner::Simple(simple) => matches!(
+            simple,
+            SimpleCommand::RhythmCapacity { .. }
+                | SimpleCommand::RhythmNumWings { .. }
+                | SimpleCommand::RhythmSubdivision { .. }
+                | SimpleCommand::RhythmLengthRange { .. }
+                | SimpleCommand::RhythmVelocityRange { .. }
+                | SimpleCommand::RhythmCutoffRange { .. }
+                | SimpleCommand::RhythmModifyLength { .. }
+                | SimpleCommand::RhythmModifyVelocity { .. }
+                | SimpleCommand::RhythmModifyCutoff { .. }
+                | SimpleCommand::AddWings { .. }
+                | SimpleCommand::RemoveWings { .. }
+        ),
     }
 }

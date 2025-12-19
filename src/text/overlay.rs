@@ -24,8 +24,10 @@ pub struct TextOverlay {
     params_dashboards: HashMap<TextPaneId, ParamsDashboard>,
 
     // Avoid duplicate history spam: AI status updates rewrite a tail segment.
+    // We keep the previously-wrapped lines so we can preserve timestamps for unchanged
+    // lines across incremental updates (so they keep fading instead of re-brightening).
     last_ai_status_text: Option<String>,
-    last_ai_status_line_count: usize,
+    last_ai_status_lines: Vec<TextLine>,
 }
 
 impl TextOverlay {
@@ -172,7 +174,7 @@ impl TextOverlay {
     pub fn push_ai_status_history_if_changed(&mut self, text: Option<&str>, now: Instant) {
         let Some(text) = text else {
             self.last_ai_status_text = None;
-            self.last_ai_status_line_count = 0;
+            self.last_ai_status_lines.clear();
             return;
         };
 
@@ -196,16 +198,39 @@ impl TextOverlay {
         );
 
         // Break into visual lines, then rewrite just the previously-written tail segment.
+        // Use Fade so status lines flash bright on change, then dim over time.
+        //
+        // IMPORTANT: as the AI streams more tokens, we frequently re-wrap the *entire*
+        // status string. If we stamp every wrapped line with `now`, older lines will
+        // incorrectly regain their bright state. To avoid that, preserve timestamps for
+        // any wrapped lines whose text didn't change compared to the previous wrap.
         let block = TextBlock::new(text)
             .style(TextStyle::Ai)
-            .fade(TextFadeMode::NoFade)
+            .fade(TextFadeMode::Fade)
             .wrap(WrapPolicy::WordWrap);
 
-        let new_lines: Vec<TextLine> = line_breaker::break_block(&block, now, max_chars);
-        let new_count = new_lines.len();
+        let freshly_wrapped: Vec<TextLine> = line_breaker::break_block(&block, now, max_chars);
 
-        pane.replace_tail_history_lines(self.last_ai_status_line_count, new_lines);
-        self.last_ai_status_line_count = new_count;
+        let old_lines = std::mem::take(&mut self.last_ai_status_lines);
+        let stabilized: Vec<TextLine> = freshly_wrapped
+            .into_iter()
+            .enumerate()
+            .map(|(i, line)| {
+                let preserved_ts = old_lines
+                    .get(i)
+                    .filter(|old| {
+                        old.text == line.text && old.style == line.style && old.fade == line.fade
+                    })
+                    .map(|old| old.timestamp)
+                    .unwrap_or(now);
+
+                TextLine::new(line.text, line.style, line.fade, preserved_ts)
+            })
+            .collect();
+
+        let old_count = old_lines.len();
+        pane.replace_tail_history_lines(old_count, stabilized.clone());
+        self.last_ai_status_lines = stabilized;
     }
 
     pub fn update_and_draw_all(&mut self, draw: &Draw, now: Instant) {

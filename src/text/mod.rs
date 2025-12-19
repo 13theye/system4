@@ -105,16 +105,21 @@ pub struct TextLine {
     pub text: String,
     pub style: TextStyle,
     pub fade: TextFadeMode,
-    pub ts: Instant,
+    pub timestamp: Instant,
 }
 
 impl TextLine {
-    pub fn new(text: impl Into<String>, style: TextStyle, fade: TextFadeMode, ts: Instant) -> Self {
+    pub fn new(
+        text: impl Into<String>,
+        style: TextStyle,
+        fade: TextFadeMode,
+        timestamp: Instant,
+    ) -> Self {
         Self {
             text: text.into(),
             style,
             fade,
-            ts,
+            timestamp,
         }
     }
 }

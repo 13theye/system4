@@ -93,7 +93,7 @@ impl LineState {
         }
     }
 
-    fn set_from_text_line(&mut self, line: &TextLine, bright: Rgba, regular: Rgba, now: Instant) {
+    fn set_from_text_line(&mut self, line: &TextLine, bright: Rgba, regular: Rgba, _now: Instant) {
         self.raw_text = line.text.clone();
         self.chars = self.raw_text.chars().collect();
         self.char_idx = 0;
@@ -101,8 +101,12 @@ impl LineState {
         self.regular_color = regular;
         self.color = bright;
         self.fade_mode = line.fade;
-        self.last_text_update = now;
-        self.last_char_update = now;
+
+        // Anchor fading to the line's logical timestamp so that when a persistent line
+        // shifts to a new physical slot (because history scrolls), it does *not* regain
+        // its bright state.
+        self.last_text_update = line.timestamp;
+        self.last_char_update = line.timestamp;
     }
 
     fn show_all_chars(&mut self) {
