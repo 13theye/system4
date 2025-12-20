@@ -11,18 +11,14 @@ pub mod schema;
 
 use crate::{
     openai::schema::{
-        request::{ReasoningParamExt, ResponseTextParamExt},
+        request_helpers,
         response::ResponseObject,
         stream::{ResponseStream, StreamEvent},
     },
     settings::OpenAIServiceConfig,
 };
 
-use async_openai::{
-    config::OpenAIConfig,
-    types::responses::{self},
-    Client,
-};
+use async_openai::{config::OpenAIConfig, types::responses, Client};
 use futures::StreamExt;
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
@@ -311,8 +307,8 @@ fn generate_request(
     strict: bool,
     streaming: bool,
 ) -> Result<responses::CreateResponse, Box<dyn Error + Send + Sync>> {
-    let text_config = responses::ResponseTextParam::generate_for_system4_schema(schema_description);
-    let reasoning_config = responses::Reasoning::generate();
+    let text_config = request_helpers::response_text_params_for_system4_schema(schema_description);
+    let reasoning_config = request_helpers::reasoning_config();
 
     let mut request = if !strict {
         // workaround to append the instructions to the input because the

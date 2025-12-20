@@ -1,7 +1,7 @@
 // src/services/openai/schema/mod.rs
 // App-specific types for use with the OpenAI API but are not part of the API itself
 
-pub mod request;
+pub mod request_helpers;
 pub mod response;
 pub mod stream;
 
