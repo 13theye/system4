@@ -1,7 +1,7 @@
 use crate::{
     groups::{RhythmParams, VoiceId},
     openai::{
-        schema::{
+        types::{
             response::{MessageContent, OutputItem, OutputMessage, ResponseObject},
             stream::StreamEvent,
             RhythmObject,

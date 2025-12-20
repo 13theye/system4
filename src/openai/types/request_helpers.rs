@@ -6,7 +6,7 @@ use async_openai::types::responses::{
 };
 use schemars::schema_for;
 
-use crate::openai::schema::RhythmObject;
+use crate::openai::types::RhythmObject;
 
 /// Helper function to allow default generation of ResponseTextParam for this app.
 pub fn response_text_params_for_system4_schema(

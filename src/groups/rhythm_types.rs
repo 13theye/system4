@@ -2,7 +2,7 @@
 use prat::BeatSubdivision;
 
 use crate::{
-    openai::schema::{RhythmObject, SequenceObject, SequenceParametersObject, SubdivisionObject},
+    openai::types::{RhythmObject, SequenceObject, SequenceParametersObject, SubdivisionObject},
     terminals::commands::rhythm::RangeSize,
 };
 
@@ -101,7 +101,7 @@ impl RhythmParams {
             capacity: self.capacity,
             subdivision,
             sequence,
-            feeling: crate::openai::schema::FeelingObject::default(),
+            feeling: crate::openai::types::FeelingObject::default(),
         }
     }
 

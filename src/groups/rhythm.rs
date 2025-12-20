@@ -8,7 +8,7 @@ use rand_distr::{Beta, Distribution};
 
 use crate::{
     groups::{RhythmParams, RhythmSlotParams, VoiceId, VoiceParams},
-    openai::schema::RhythmObject,
+    openai::types::RhythmObject,
     particle::emitter::Emitter,
     sequencer::SequencerService,
     terminals::commands::rhythm::RangeSize,

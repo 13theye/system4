@@ -7,10 +7,10 @@
 //
 // OpenAI REST API client
 
-pub mod schema;
+pub mod types;
 
 use crate::{
-    openai::schema::{
+    openai::types::{
         request_helpers,
         response::ResponseObject,
         stream::{ResponseStream, StreamEvent},
