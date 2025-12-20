@@ -1,14 +1,12 @@
 // src/groups/rhythm.rs
 
 use crossbeam_channel as channel;
-//use nannou::rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use prat::BeatSubdivision;
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rand_distr::{Beta, Distribution};
 
 use crate::{
     groups::{RhythmParams, RhythmSlotParams, VoiceId, VoiceParams},
-    openai::types::RhythmObject,
     particle::emitter::Emitter,
     sequencer::SequencerService,
     terminals::commands::rhythm::RangeSize,
@@ -61,65 +59,9 @@ impl Rhythm {
     }
 
     /*************** For AI Rhythm *************************** */
-    pub fn as_serializable_object(&self) -> RhythmObject {
-        self.params.to_serializable_object()
-    }
-
-    /// Simpler test function that gathers filled slots for LLM
-    pub fn as_string_representation(&self) -> String {
-        let mut output = String::from("[");
-        for i in 0..self.params.capacity {
-            if self.params.wings.contains(&i) {
-                output.push('X');
-            } else {
-                output.push('O');
-            }
-        }
-        output.push(']');
-
-        output
-    }
-
-    /// Apply a rhythm pattern returned by the AI to this rhythm.
-    ///
-    /// The expected format is a bracketed string such as "[OXXOOXXOO]".
-    /// Each 'X' becomes a filled slot (wing), each 'O' becomes empty.
-    pub fn apply_ai_pattern(&mut self, pattern: &str) {
-        let trimmed = pattern.trim();
-        if !trimmed.starts_with('[') || !trimmed.ends_with(']') || trimmed.len() < 3 {
-            println!(
-                "Rhythm::apply_ai_pattern: invalid pattern format: {}",
-                pattern
-            );
-            return;
-        }
-
-        let inner = &trimmed[1..trimmed.len() - 1];
-        if inner.is_empty() {
-            println!("Rhythm::apply_ai_pattern: empty pattern body: {}", pattern);
-            return;
-        }
-
-        if !inner.chars().all(|c| c == 'O' || c == 'X') {
-            println!(
-                "Rhythm::apply_ai_pattern: pattern contains invalid characters: {}",
-                pattern
-            );
-            return;
-        }
-
-        let capacity = inner.chars().count();
-        let mut wings = Vec::new();
-        for (idx, ch) in inner.chars().enumerate() {
-            if ch == 'X' {
-                wings.push(idx);
-            }
-        }
-
-        self.params.capacity = capacity;
-        self.params.wings = wings;
-        self.params.num_wings = self.params.wings.len();
-        self.params.wings_buffer.clear();
+    /// Helper function to create a string representation of the sequence
+    pub fn to_rhythm_string(&self) -> String {
+        self.params.to_rhythm_string()
     }
 
     /*************** Beat logic helpers *************************** */

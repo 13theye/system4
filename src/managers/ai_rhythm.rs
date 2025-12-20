@@ -49,7 +49,7 @@ impl AIRhythm {
         source_params: &RhythmParams,
         target_voice: VoiceId,
     ) {
-        let object: RhythmObject = source_params.to_serializable_object();
+        let object = RhythmObject::from(source_params);
         let object_str = serde_json::to_string(&object).unwrap();
 
         println!("AIRhythm: starting OpenAI request for {:?}", target_voice);
@@ -211,8 +211,8 @@ impl AIRhythm {
             if let OutputItem::Message(message) = output_item {
                 if let Some(params) = self.extract_rhythm_params(message) {
                     println!(
-                        "AIRhythm: parsed AI rhythm {} for {:?}",
-                        params.as_test_ai_rhythm(),
+                        "AIRhythm: parsed AI rhythm [{}] for {:?}",
+                        params.to_rhythm_string(),
                         voice_id
                     );
 
@@ -291,7 +291,7 @@ impl AIRhythm {
                             let normalized = Self::normalize_rhythm_value(raw_val);
                             match serde_json::from_value::<RhythmObject>(normalized) {
                                 Ok(object) => {
-                                    return Some(RhythmParams::from_rhythm_response_object(object));
+                                    return Some(RhythmParams::from(object));
                                 }
                                 Err(e) => {
                                     eprintln!(

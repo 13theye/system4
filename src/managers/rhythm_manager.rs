@@ -44,8 +44,8 @@ impl RhythmManager {
         };
 
         println!(
-            "RhythmManager: sending rhythm {:?} from {:?} to AI for target {:?}",
-            current_rhythm.as_string_representation(),
+            "RhythmManager: sending rhythm [{}] from {:?} to AI for target {:?}",
+            current_rhythm.to_rhythm_string(),
             sample_voice,
             target_voice
         );
@@ -166,8 +166,8 @@ impl RhythmManager {
         };
 
         println!(
-            "RhythmManager: applying AI rhythm {} to {:?}",
-            rhythm_params.as_test_ai_rhythm(),
+            "RhythmManager: applying AI rhythm [{}] to {:?}",
+            rhythm_params.to_rhythm_string(),
             voice_id
         );
 

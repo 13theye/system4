@@ -69,7 +69,7 @@ pub struct SequenceParametersObject {
 }
 
 /// Serializable sequence.
-/// rhythm: the rhythm of the sequence, expressed as a string of "X" and "_" characters. Length of the string should be equal to capacity of the sequence. X = note on, _ = note off.
+/// rhythm: the rhythm of the sequence, expressed as a string of "X" and "-" characters. Length of the string should be equal to capacity of the sequence. X = note on, _ = note off.
 /// parameters: array of sound engine parameters for each sequencer step
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SequenceObject {
@@ -77,9 +77,123 @@ pub struct SequenceObject {
     pub parameters: Vec<SequenceParametersObject>,
 }
 
+impl SequenceObject {
+    pub fn clean_rhythm_string(&self) -> Vec<char> {
+        self.rhythm
+            .chars()
+            .filter(|c| *c == 'X' || *c == '-')
+            .collect()
+    }
+}
+
 /// The haiku describing the thinking behind the sequence.
 /// Each line of the poem is a string.
 #[derive(Default, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct FeelingObject {
     pub text: Vec<String>,
+}
+
+// Conversion implementations for rhythm types
+use crate::groups::RhythmParams;
+use prat::BeatSubdivision;
+
+impl From<&RhythmParams> for RhythmObject {
+    fn from(params: &RhythmParams) -> Self {
+        let mut content = Vec::with_capacity(params.capacity);
+
+        let subdivision = SubdivisionObject::from_beat_subdivision_u8(params.subdivision as u8);
+
+        for i in 0..params.capacity {
+            let slot = SequenceParametersObject {
+                index: i,
+                velocity: (params.slot_params[i].velocity * 1000.0).round() / 1000.0,
+                length: (params.slot_params[i].length * 1000.0).round() / 1000.0,
+                cutoff: (params.slot_params[i].cutoff * 1000.0).round() / 1000.0,
+            };
+            content.insert(i, slot);
+        }
+
+        let rhythm = params.to_rhythm_string();
+
+        let sequence = SequenceObject {
+            rhythm,
+            parameters: content,
+        };
+
+        RhythmObject {
+            thought_process: String::from(""),
+            capacity: params.capacity,
+            subdivision,
+            sequence,
+            feeling: FeelingObject::default(),
+        }
+    }
+}
+
+impl From<RhythmObject> for RhythmParams {
+    fn from(object: RhythmObject) -> Self {
+        use std::collections::HashMap;
+
+        let subdivision = match object.subdivision {
+            SubdivisionObject::Quarter => BeatSubdivision::Quarter,
+            SubdivisionObject::Eighth => BeatSubdivision::Eighth,
+            SubdivisionObject::Sixteenth => BeatSubdivision::Sixteenth,
+            SubdivisionObject::Triplet => BeatSubdivision::Triplet,
+            // Default to eighth
+            SubdivisionObject::Invalid => BeatSubdivision::Eighth,
+        };
+
+        // Start from defaults so we inherit sensible subdivision and ranges,
+        // then override capacity and fill slot/wings data from the sequence.
+        let mut output = RhythmParams {
+            capacity: object.capacity,
+            slot_params: Vec::with_capacity(object.capacity),
+            subdivision,
+            ..Default::default()
+        };
+
+        // Build a lookup table from index -> slot parameters so we can handle
+        // sparse `content` arrays where only active slots are provided.
+        let mut slot_map: HashMap<usize, crate::groups::RhythmSlotParams> = HashMap::new();
+        for slot in &object.sequence.parameters {
+            slot_map.insert(
+                slot.index,
+                crate::groups::RhythmSlotParams {
+                    velocity: slot.velocity,
+                    length: slot.length,
+                    cutoff: slot.cutoff,
+                },
+            );
+        }
+
+        // For every beat position 0..capacity, either take the model-provided
+        // parameters or fall back to a neutral default.
+        for i in 0..object.capacity {
+            if let Some(params) = slot_map.get(&i) {
+                output.slot_params.push(*params);
+            } else {
+                output.slot_params.push(crate::groups::RhythmSlotParams {
+                    velocity: 0.5,
+                    length: 0.5,
+                    cutoff: 0.5,
+                });
+            }
+        }
+
+        // Derive capacity from the rhythm string itself so we always match the
+        // number of beat positions (including both X and -), regardless of how
+        // many entries the model puts into `content`.
+        let rhythm_chars: Vec<char> = object.sequence.clean_rhythm_string();
+        output.wings.clear();
+
+        for (i, c) in rhythm_chars.iter().enumerate() {
+            if *c == 'X' {
+                output.wings.push(i);
+            }
+        }
+
+        // Wings (active slots) are determined purely by the rhythm string.
+        output.num_wings = output.wings.len();
+        output
+    }
 }
