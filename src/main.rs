@@ -96,7 +96,6 @@ fn main() {
         .run();
 }
 
-// TODO: refactor to use app.duration.since_prev_update or update.since_last
 fn update_feedback(model: &mut Model) {
     // Read feedback value for segment length before updating particle system
     let voice1_feedback = model.get_feedback(VoiceId::Voice0);

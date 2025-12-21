@@ -82,6 +82,33 @@ impl ParticleSystem {
         }
     }
 
+    /// Initialize GPU force field
+    ///
+    /// Call this after creating the ParticleSystem to enable GPU force field computation.
+    /// Requires access to the wgpu device.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - WebGPU device
+    /// * `enable` - Whether to enable GPU computation immediately (default false for testing)
+    pub fn init_gpu_force_field(
+        &mut self,
+        device: &wgpu::Device,
+        enable: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.forces.init_gpu(device, enable)
+    }
+
+    /// Enable or disable GPU force field computation
+    pub fn set_use_gpu_forces(&mut self, use_gpu: bool) {
+        self.forces.set_use_gpu(use_gpu);
+    }
+
+    /// Check if GPU force field is enabled
+    pub fn is_using_gpu_forces(&self) -> bool {
+        self.forces.use_gpu
+    }
+
     /********************* Update methods ********************************** */
 
     /// ZERO-COPY UPDATE: Updates particles and writes directly to GPU staging memory
