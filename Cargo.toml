@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 async-openai = { version = "0.31", features = ["byot", "responses"] }
+bytemuck = "1.14"
 config = "0.15"
 crossbeam-channel = "0.5"
 egui = "0.23"

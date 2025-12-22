@@ -4,6 +4,9 @@ pub use constants::{EMPTY_GPU_PARTICLE_BUFFER, EMPTY_GPU_SEGMENT_BUFFER};
 
 pub mod emitter;
 
+pub mod gpu_bridge;
+pub use gpu_bridge::GpuParticleBridge;
+
 pub mod particles;
 pub use particles::{to_segment_gpu, ParticleCore, ParticleFeedback};
 

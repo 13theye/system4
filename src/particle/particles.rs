@@ -3,6 +3,7 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
+use nnpipe::compute::GpuParticle;
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 use super::constants::*;
@@ -159,6 +160,66 @@ impl ParticleCore {
 
     pub fn fade_out_duration(&self) -> f32 {
         PARTICLE_FADE_OUT_DURATION
+    }
+
+    /// Convert core particle data to GPU particle format for GPU physics
+    ///
+    /// This creates a GpuParticle that can be used with the GPU particle system.
+    /// Unlike `to_gpu()` which creates rendering data, this includes all physics
+    /// state needed for GPU simulation.
+    #[inline]
+    pub fn to_gpu_particle(&self) -> GpuParticle {
+        GpuParticle {
+            // Position (xyz) + life (w)
+            position: [
+                self.position.x,
+                self.position.y,
+                0.0, // z is unused in 2D
+                self.remaining_life_span,
+            ],
+            // Velocity (xyz) + age (w)
+            velocity: [self.velocity.x, self.velocity.y, 0.0, self.age],
+            // Acceleration (xyz) + mass (w)
+            acceleration: [
+                self.acceleration.x,
+                self.acceleration.y,
+                0.0,
+                self.mass,
+            ],
+            // Color (rgba)
+            color: [self.rgba.red, self.rgba.green, self.rgba.blue, self.rgba.alpha],
+        }
+    }
+
+    /// Update particle core from GPU particle state
+    ///
+    /// Syncs the physics state (position, velocity, life, age) from GPU back to CPU.
+    /// This is used in Phase 3 where GPU computes physics and CPU needs to stay in sync
+    /// for rendering and segment tracking.
+    ///
+    /// Note: Does NOT update color or mass, as those are CPU-managed properties.
+    #[inline]
+    pub fn sync_from_gpu_particle(&mut self, gpu_particle: &GpuParticle) {
+        // Update position
+        self.position.x = gpu_particle.position[0];
+        self.position.y = gpu_particle.position[1];
+
+        // Update velocity
+        self.velocity.x = gpu_particle.velocity[0];
+        self.velocity.y = gpu_particle.velocity[1];
+
+        // Update life and age
+        self.remaining_life_span = gpu_particle.position[3];
+        self.age = gpu_particle.velocity[3];
+
+        // Update acceleration (for next frame's CPU reference)
+        self.acceleration.x = gpu_particle.acceleration[0];
+        self.acceleration.y = gpu_particle.acceleration[1];
+
+        // Mark particle as dead if GPU says so
+        if self.remaining_life_span <= 0.0 {
+            self.kill();
+        }
     }
 }
 
