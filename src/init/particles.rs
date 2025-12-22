@@ -24,21 +24,3 @@ pub fn init_particle_system(render_size: Vec2, particle_limit: u32) -> ParticleS
 
     particle_system
 }
-
-/// Initialize GPU force field for particle system
-///
-/// Call this after the particle system is created and wgpu device is available.
-/// This enables GPU-accelerated force field computation as an optional feature.
-///
-/// # Arguments
-///
-/// * `particle_system` - Mutable reference to the particle system
-/// * `device` - WebGPU device for GPU resource creation
-/// * `enable` - Whether to enable GPU computation immediately (default false for compatibility)
-pub fn init_gpu_force_field(
-    particle_system: &mut ParticleSystem,
-    device: &wgpu::Device,
-    enable: bool,
-) {
-    particle_system.init_gpu_force_field(device, enable);
-}

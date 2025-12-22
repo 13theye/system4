@@ -1,6 +1,32 @@
-/// src/force/field.rs
-///
-/// Force field for field-based forces
+//! src/force/field.rs
+//!
+//! Force field system supporting both CPU and GPU force computation
+//!
+//! The `ForceFields` struct manages a hybrid force field that can compute forces
+//! either on the CPU (using `WindField`) or GPU (using `GpuForceField`). In Phase 2,
+//! GPU computes forces but CPU applies them during physics integration.
+//!
+//! # Architecture
+//!
+//! - CPU mode: `WindField` computes and stores forces in `winds_combined`
+//! - GPU mode: `GpuForceField` computes forces, `read_back_gpu()` transfers to `gpu_force_cache`
+//! - Physics: `apply_forces_to_particle()` routes to CPU or GPU path based on `use_gpu` flag
+//!
+//! # Coordinate Systems
+//!
+//! - World space: Center origin (0,0), +X right, +Y up
+//! - Grid space: Top-left origin (0,0), +X right, +Y down
+//! - Transformations handled by `position_to_grid_idx()` and GPU adapter
+//!
+//! # Example
+//!
+//! ```ignore
+//! let mut forces = ForceFields::new(pt2(0.0, 0.0), vec2(800.0, 600.0), 64, 48);
+//! forces.init_gpu(device, true)?; // Enable GPU mode
+//! forces.update_gpu(voices, queue, encoder)?;
+//! forces.read_back_gpu(device, queue); // Blocking transfer to CPU
+//! forces.apply_forces_to_particle(&mut particle, 0.0); // Uses GPU forces
+//! ```
 use nannou::prelude::*;
 use nnpipe::compute::{ForceFieldConfig, ForceFieldParams, GpuForceField};
 use std::collections::hash_map::DefaultHasher;
@@ -12,6 +38,11 @@ use crate::{
     groups::{Voice, VoiceId},
     particle::ParticleCore,
 };
+
+/// Inertial resistance coefficient for wind force application
+/// Higher values = particles with momentum resist changes more strongly
+/// Matches Wind::apply() coefficient
+const INERTIA_COEFFICIENT: f32 = 0.1;
 
 /// Create a unique hash from voice_id and circle_id for noise parameter indexing
 fn hash_voice_circle(voice_id: VoiceId, circle_id: usize) -> u64 {
@@ -39,13 +70,9 @@ pub struct ForceFields {
     // Kept for future use
     #[allow(dead_code)]
     origin: Vec2,
-    #[allow(dead_code)]
     bounds_size: Vec2,
-    #[allow(dead_code)]
     grid_cols: usize,
-    #[allow(dead_code)]
     grid_rows: usize,
-    #[allow(dead_code)]
     cell_size: Vec2,
 }
 
@@ -78,6 +105,20 @@ impl ForceFields {
     ///
     /// * `device` - WebGPU device for GPU resource creation
     /// * `enable` - Whether to enable GPU computation (default false for backward compatibility)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if:
+    /// - GPU device does not support required compute shader features
+    /// - Out of GPU memory when allocating force field buffers
+    /// - Shader compilation fails (should not happen with validated shaders)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut forces = ForceFields::new(origin, bounds, 64, 48);
+    /// forces.init_gpu(device, true)?; // Enable GPU immediately
+    /// ```
     pub fn init_gpu(
         &mut self,
         device: &wgpu::Device,
@@ -199,19 +240,38 @@ impl ForceFields {
         Ok(adapters.len())
     }
 
-    /// Read back GPU force field to CPU cache
+    /// Read back GPU force field to CPU cache (blocking, ~1-5ms)
     ///
-    /// This is a blocking operation that waits for GPU completion.
-    /// The results are cached in `gpu_force_cache` for CPU physics to use.
+    /// Transfers the GPU-computed force field to CPU memory by creating a staging
+    /// buffer and blocking on `device.poll()` until the transfer completes.
+    ///
+    /// # Performance
+    ///
+    /// This is a **synchronous blocking operation** that:
+    /// - Stalls the CPU thread until GPU work completes
+    /// - Typically takes 1-5ms depending on grid size and GPU architecture
+    /// - Should be called once per frame after `update_gpu()`
+    ///
+    /// **Phase 3 will eliminate this bottleneck** by moving physics to GPU.
     ///
     /// # Arguments
     ///
-    /// * `device` - WebGPU device
-    /// * `queue` - WebGPU queue
+    /// * `device` - WebGPU device for polling completion
+    /// * `queue` - WebGPU queue (unused currently, may be removed)
     ///
     /// # Returns
     ///
-    /// Reference to cached GPU forces
+    /// Reference to cached GPU forces (valid until next `read_back_gpu` call)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Frame update loop
+    /// forces.update_gpu(voices, queue, encoder)?;
+    /// queue.submit(Some(encoder.finish()));
+    /// let forces_cache = forces.read_back_gpu(device, queue); // Blocks here
+    /// // Now CPU physics can use GPU-computed forces
+    /// ```
     pub fn read_back_gpu(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> &[[f32; 2]] {
         if let Some(gpu_ff) = self.gpu_force_field.as_mut() {
             self.gpu_force_cache = gpu_ff.read_back(device, queue);
@@ -238,13 +298,136 @@ impl ForceFields {
 
     /// Apply all applicable forces to a particle with mass variation factor
     /// OPTIMIZED: Now works with ParticleCore for better cache locality
+    ///
+    /// If GPU force field is enabled, reads from cached GPU forces.
+    /// Otherwise, uses CPU wind field.
     pub fn apply_forces_to_particle(
         &self,
         particle: &mut ParticleCore,
         mass_variation_factor: f32,
     ) {
-        // Apply wind with mass variation
-        self.wind_field.apply(particle, mass_variation_factor);
+        if self.use_gpu {
+            // Use GPU-computed forces
+            self.apply_gpu_force_to_particle(particle, mass_variation_factor);
+        } else {
+            // Use CPU wind field
+            self.wind_field.apply(particle, mass_variation_factor);
+        }
+    }
+
+    /// Apply GPU-computed force to a particle
+    ///
+    /// Reads force from the GPU force cache based on particle position and applies
+    /// it using the same physics model as `Wind::apply()`.
+    ///
+    /// # Physics Model
+    ///
+    /// The GPU force field stores combined wind velocities (target velocities for particles).
+    /// The force applied is proportional to the difference between the target velocity and
+    /// the particle's current velocity, scaled by inertial resistance.
+    ///
+    /// Force calculation:
+    /// 1. `diff = target_velocity - particle.velocity`
+    /// 2. `inertia_factor = 1.0 / (1.0 + momentum * 0.1)` (higher momentum = more resistance)
+    /// 3. `force = diff * inertia_factor`
+    /// 4. `acceleration += force / effective_mass`
+    ///
+    /// # Arguments
+    ///
+    /// * `particle` - Mutable reference to particle to apply force to
+    /// * `mass_variation_factor` - Random variation in `[-amount, +amount]` to vary effective mass
+    ///
+    /// # Panics
+    ///
+    /// Does not panic. Returns early if particle position is out of bounds.
+    //#[inline] // removed Inline until benchmarking proves benefits
+    fn apply_gpu_force_to_particle(&self, particle: &mut ParticleCore, mass_variation_factor: f32) {
+        // Get force at particle position
+        let Some(force_vec) = self.get_gpu_force_at_pos(particle.position) else {
+            return; // Out of bounds or no force
+        };
+
+        // Activate the particle
+        particle.activate();
+
+        // Apply force using the same physics as Wind::apply()
+        // The GPU force field stores combined wind velocities, so we use the same logic
+
+        // Calculate the difference between force's target velocity and particle's current velocity
+        let diff = force_vec - particle.velocity;
+
+        // Calculate effective mass with variation factor
+        let effective_mass = particle.mass * (1.0 + mass_variation_factor);
+
+        // Calculate inertial resistance based on current momentum using effective mass
+        let current_speed = particle.velocity.length();
+        let momentum_magnitude = effective_mass * current_speed;
+
+        // Inertial resistance: particles with higher momentum resist changes more
+        let inertia_factor = 1.0 / (1.0 + momentum_magnitude * INERTIA_COEFFICIENT);
+
+        // Apply the force with inertial resistance using effective mass
+        let force = diff * inertia_factor;
+        particle.acceleration += force / effective_mass;
+    }
+
+    /// Get GPU-computed force at a world position
+    ///
+    /// Returns None if position is out of bounds or if there's no valid force.
+    fn get_gpu_force_at_pos(&self, position: Vec2) -> Option<Vec2> {
+        let (x, y) = self.position_to_grid_idx(position)?;
+        let index = y * self.grid_cols + x;
+
+        self.gpu_force_cache
+            .get(index)
+            .copied()
+            .map(|[fx, fy]| vec2(fx, fy))
+    }
+
+    /// Convert world position to grid indices
+    ///
+    /// This matches the coordinate transformation in WindField::position_to_idx()
+    ///
+    /// Transforms from world coordinates (center origin, +Y up) to grid indices
+    /// (top-left origin, +Y down).
+    ///
+    /// # Coordinate Transformation
+    ///
+    /// 1. Translate from center origin to top-left: `x' = x + bounds_width/2`
+    /// 2. Flip Y axis: `y' = -y + bounds_height/2`
+    /// 3. Convert to grid indices: `i = floor(x' / cell_width)`, `j = floor(y' / cell_height)`
+    ///
+    /// # Returns
+    ///
+    /// - `Some((i, j))` if position is within bounds `[0, grid_cols) x [0, grid_rows)`
+    /// - `None` if position is out of bounds
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Particle at center of screen (world origin)
+    /// let idx = forces.position_to_grid_idx(vec2(0.0, 0.0));
+    /// assert_eq!(idx, Some((grid_cols/2, grid_rows/2)));
+    /// ```
+    fn position_to_grid_idx(&self, pos: Vec2) -> Option<(usize, usize)> {
+        // Transform from world coordinates (center origin) to grid coordinates (top-left origin)
+        let x1 = pos.x + self.bounds_size.x / 2.0;
+        let y1 = -pos.y + self.bounds_size.y / 2.0;
+
+        // Early return for negative coordinates (OOB for left/top origin)
+        if x1 < 0.0 || y1 < 0.0 {
+            return None;
+        }
+
+        // Convert to grid indices
+        let i = (x1 / self.cell_size.x).floor() as usize;
+        let j = (y1 / self.cell_size.y).floor() as usize;
+
+        if i < self.grid_cols && j < self.grid_rows {
+            Some((i, j))
+        } else {
+            None // Out of bounds
+        }
     }
 
     /// Recalculate all applicable forces in this ForceField
@@ -254,7 +437,7 @@ impl ForceFields {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct CellIdx {
     pub x: usize,
     pub y: usize,

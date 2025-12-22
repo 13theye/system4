@@ -35,12 +35,26 @@ fn model(app: &App) -> Model {
     let (clock, sequencer_service) = init::timing::init_clock_and_sequencer(&settings);
     let (osc, osc_send, osc_loop) = init::osc::init_osc(&settings);
 
-    let particle_system = init::particles::init_particle_system(render_size, particle_limit);
+    let mut particle_system = init::particles::init_particle_system(render_size, particle_limit);
 
     // Create RhythmView
     let rhythm_view = RhythmView::new();
 
     let window_ids = init::windows::create_windows(app, &settings);
+
+    // Initialize GPU force field (after windows are created so we have access to device)
+    let window = app.window(window_ids.audience).unwrap();
+    let device = window.device();
+
+    // Initialize GPU force field but keep it disabled by default (for backward compatibility)
+    // Can be enabled later via particle_system.set_use_gpu_forces(true)
+    if let Err(e) = particle_system.init_gpu_force_field(device, true) {
+        eprintln!(
+            "Warning: Failed to initialize GPU force field: {}. Falling back to CPU mode.",
+            e
+        );
+        particle_system.set_use_gpu_forces(false);
+    }
 
     let font = init::text::load_font(app);
     let text_overlay = init::text::init_text_overlay(render_size, &font);
@@ -173,13 +187,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     //let event = events.iter().any(|e| *e);
 
     // Update particle system with ZERO-COPY optimization
-    // Get GPU queue for direct staging memory writes
+    // Get GPU resources for direct staging memory writes and force field computation
     let window = app.main_window();
+    let device = window.device();
     let queue = window.queue();
 
     let (particles_written, segments_written) = model.particle_system.update_zero_copy(
         model.voice_manager.voices_mut(),
         &mut model.rng,
+        device,
         queue,
         &model.render_state.particle_renderer,
         &model.render_state.segment_renderer,

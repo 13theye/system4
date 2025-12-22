@@ -118,6 +118,7 @@ impl ParticleSystem {
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
+        device: &nannou::wgpu::Device,
         queue: &nannou::wgpu::Queue,
         particle_renderer: &ParticleRenderer,
         segment_renderer: &SegmentRenderer,
@@ -131,7 +132,33 @@ impl ParticleSystem {
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
 
+        // Update forces (always update CPU for debugging/comparison)
         self.forces.update(voices, rng);
+
+        // Update GPU force field if enabled
+        if self.forces.use_gpu {
+            // Create command encoder for GPU force combination
+            let mut encoder =
+                device.create_command_encoder(&nannou::wgpu::CommandEncoderDescriptor {
+                    label: Some("Force Field Update Encoder"),
+                });
+
+            // Update GPU force field (uploads sources and encodes compute pass)
+            if let Err(e) = self.forces.update_gpu(voices, queue, &mut encoder) {
+                eprintln!(
+                    "Warning: GPU force field update failed: {}. Falling back to CPU",
+                    e
+                );
+                self.forces.set_use_gpu(false);
+            }
+
+            // Submit GPU work
+            queue.submit(Some(encoder.finish()));
+
+            // Read back GPU force field to CPU cache (blocking operation)
+            // This is needed for CPU physics to use GPU-computed forces
+            self.forces.read_back_gpu(device, queue);
+        }
 
         // Pre-compute position offset factors for all voices
         let vibration_values: HashMap<VoiceId, f32> = voices

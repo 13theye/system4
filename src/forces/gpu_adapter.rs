@@ -59,6 +59,7 @@ impl<'a> GpuWindCircleAdapter<'a> {
         let x1 = pos.x + bounds_width / 2.0;
         let y1 = -pos.y + bounds_height / 2.0;
 
+        // Convert to grid coordinates by multiplying by reciprocal of cell width and height
         vec2(x1 * params.cell_size[2], y1 * params.cell_size[3])
     }
 
@@ -182,7 +183,9 @@ impl<'a> ForceSource for GpuWindCircleAdapter<'a> {
 pub fn collect_wind_circle_adapters(
     voices: &std::collections::HashMap<VoiceId, crate::groups::Voice>,
 ) -> Vec<GpuWindCircleAdapter<'_>> {
-    let mut adapters = Vec::new();
+    let total_circles: usize = voices.values().map(|v| v.wind_circles.len()).sum();
+
+    let mut adapters = Vec::with_capacity(total_circles);
 
     for voice in voices.values() {
         for circle in voice.wind_circles.values() {
