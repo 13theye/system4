@@ -25,7 +25,9 @@
 ///                        └──────────────┘        └─────────────┘
 /// ```
 use nannou::prelude::*;
-use nnpipe::compute::{ForceCell, GpuForceField, GpuParticle, GpuParticleConfig, GpuParticleSystem};
+use nnpipe::compute::{
+    ForceCell, GpuForceField, GpuParticle, GpuParticleConfig, GpuParticleSystem,
+};
 use std::collections::HashMap;
 
 use crate::forces::{collect_noise_values, collect_wind_circle_adapters};
@@ -159,13 +161,12 @@ impl GpuParticleBridge {
         }
 
         // Convert ParticleCore to GpuParticle
-        let gpu_particles: Vec<GpuParticle> = particles
-            .iter()
-            .map(|p| p.to_gpu_particle())
-            .collect();
+        let gpu_particles: Vec<GpuParticle> =
+            particles.iter().map(|p| p.to_gpu_particle()).collect();
 
         // Upload to GPU
-        self.gpu_particle_system.spawn_particles(queue, &gpu_particles)
+        self.gpu_particle_system
+            .spawn_particles(queue, &gpu_particles)
     }
 
     /// Run full GPU physics update
@@ -184,6 +185,73 @@ impl GpuParticleBridge {
 
         // Encode particle physics simulation
         self.gpu_particle_system.encode_simulate(encoder);
+    }
+
+    /// Encode render population (Phase 4)
+    ///
+    /// This compute pass populates the render vertex buffer from particle state,
+    /// filtering out dead particles and creating a dense array for rendering.
+    ///
+    /// # Arguments
+    ///
+    /// * `encoder` - Command encoder to record compute passes
+    ///
+    /// # Call Order
+    ///
+    /// This should be called after `encode_physics_update()` but before rendering.
+    pub fn encode_render_populate(&self, encoder: &mut wgpu::CommandEncoder) {
+        use std::time::Instant;
+
+        // REMOVED: clear_alive_count() causes 1.6s pipeline stall!
+        // The shader now resets the counter internally (atomicStore on first thread)
+        // let clear_start = Instant::now();
+        // self.gpu_particle_system.encode_clear_alive_count(encoder);
+        // println!("      clear_alive_count: {:?}", clear_start.elapsed());
+
+        // Encode render population compute pass
+        let populate_start = Instant::now();
+        self.gpu_particle_system.encode_render_populate(encoder);
+        println!("      render_populate_pass: {:?}", populate_start.elapsed());
+    }
+
+    /// Get reference to render vertex buffer (Phase 4)
+    ///
+    /// This buffer contains the GPU-populated render vertices ready for rendering.
+    /// Use this with ParticleRenderer::encode_from_buffer().
+    ///
+    /// # Returns
+    ///
+    /// Reference to the render vertex buffer
+    pub fn render_vertex_buffer(&self) -> &wgpu::Buffer {
+        self.gpu_particle_system.render_vertex_buffer()
+    }
+
+    /// Get reference to alive count buffer (Phase 4)
+    ///
+    /// This buffer contains the GPU-computed alive particle count.
+    ///
+    /// # Returns
+    ///
+    /// Reference to the alive count buffer
+    pub fn alive_count_buffer(&self) -> &wgpu::Buffer {
+        self.gpu_particle_system.alive_count_buffer()
+    }
+
+    /// Read back GPU-computed alive count (Phase 4)
+    ///
+    /// This is a blocking operation. Use sparingly for debugging or UI.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - WebGPU device
+    /// * `queue` - WebGPU queue
+    ///
+    /// # Returns
+    ///
+    /// Number of alive particles
+    pub fn read_back_gpu_alive_count(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> u32 {
+        self.gpu_particle_system
+            .read_back_alive_count(device, queue)
     }
 
     /// Swap particle buffers after frame completion
@@ -215,72 +283,5 @@ impl GpuParticleBridge {
     /// Clear all particles
     pub fn clear(&mut self, queue: &wgpu::Queue) {
         self.gpu_particle_system.clear(queue);
-    }
-
-    /// Read back GPU particle state to CPU (blocking operation)
-    ///
-    /// This method copies the current particle buffer from GPU to CPU memory.
-    /// It is a blocking operation that stalls the CPU thread until the GPU
-    /// completes all pending work and the buffer is mapped.
-    ///
-    /// # Performance Note
-    ///
-    /// This is necessary in Phase 3 because we still use CPU for rendering
-    /// (GPU render population comes in Phase 4). The blocking readback is
-    /// the performance bottleneck eliminated in Phase 4.
-    ///
-    /// # Arguments
-    ///
-    /// * `device` - WebGPU device
-    /// * `queue` - WebGPU queue
-    ///
-    /// # Returns
-    ///
-    /// Vector of GPU particles in their current state
-    pub fn read_back_particles(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> Vec<GpuParticle> {
-        let max_particles = self.max_particles();
-        let particle_buffer_size = (max_particles * std::mem::size_of::<GpuParticle>()) as u64;
-
-        // Create staging buffer for readback
-        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Particle Readback Staging"),
-            size: particle_buffer_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        // Copy GPU buffer to staging
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Particle Readback Encoder"),
-        });
-        encoder.copy_buffer_to_buffer(
-            self.current_particle_buffer(),
-            0,
-            &staging_buffer,
-            0,
-            particle_buffer_size,
-        );
-        queue.submit(Some(encoder.finish()));
-
-        // Map and read (blocking operation)
-        let buffer_slice = staging_buffer.slice(..);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
-        });
-        device.poll(wgpu::Maintain::Wait);
-        receiver.recv().unwrap().unwrap();
-
-        // Read particle data
-        let data = buffer_slice.get_mapped_range();
-        let particles: Vec<GpuParticle> = bytemuck::cast_slice(&data).to_vec();
-        drop(data);
-        staging_buffer.unmap();
-
-        particles
     }
 }

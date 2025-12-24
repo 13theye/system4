@@ -33,6 +33,12 @@ pub struct RenderConfig {
 #[derive(Debug, Deserialize)]
 pub struct ParticleConfig {
     pub limit: u32,
+    #[serde(default = "default_use_gpu")]
+    pub use_gpu: bool,
+}
+
+fn default_use_gpu() -> bool {
+    true // Default to GPU for Phase 4
 }
 
 #[derive(Debug, Deserialize)]

@@ -3,13 +3,13 @@
 ///
 /// The Particle System of System 4
 use std::collections::HashMap;
+use std::time::Instant;
 
 use nannou::prelude::*;
 use nnpipe::compute::GpuParticle;
 use nnpipe::renderers::{ParticleRenderer, SegmentRenderer};
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rayon::prelude::*;
-use std::time::Instant;
 
 use crate::{
     forces::ForceFields,
@@ -75,7 +75,7 @@ impl ParticleSystem {
             particle_feedback: HashMap::new(),
             forces: ForceFields::new(origin, bounds_size, grid_cols, grid_rows),
             gpu_particle_bridge: None,
-            use_gpu_physics: true,
+            use_gpu_physics: false,
             global_max_spawn_rate: PARTICLE_MAX_SPAWN_RATE,
             bounds_size,
             bounds_rect,
@@ -180,110 +180,68 @@ impl ParticleSystem {
 
     /********************* Update methods ********************************** */
 
-    /// GPU PHYSICS UPDATE: Full GPU physics with no CPU readback (Phase 3)
+    /// GPU RENDER POPULATION UPDATE: Full GPU physics and rendering (Phase 4)
     ///
-    /// Returns (particle_count, segment_count) for rendering.
-    /// Note: In Phase 3, we still use CPU for rendering so we read particle count,
-    /// but we don't do physics on CPU anymore.
+    /// This is the complete GPU path with no CPU→GPU transfer for rendering.
+    /// - Physics runs on GPU
+    /// - Render buffer population runs on GPU
+    /// - Only particle emission runs on CPU
+    ///
+    /// Returns encoder with encoded GPU commands (caller must submit).
+    /// The alive count can be read from the GPU bridge's alive_count_buffer if needed.
     #[allow(clippy::too_many_arguments)]
-    pub fn update_gpu_physics(
+    pub fn update_gpu_render_populate(
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
-        device: &nannou::wgpu::Device,
         queue: &nannou::wgpu::Queue,
-        particle_renderer: &ParticleRenderer,
-        segment_renderer: &SegmentRenderer,
+        encoder: &mut wgpu::CommandEncoder,
         now: Instant,
-    ) -> (usize, usize) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let _dt = (now - self.last_update).as_secs_f32();
 
-        // Handle particle emission (CPU side for now)
+        // Handle particle emission (CPU side)
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
-
-        // Create command encoder for all GPU work
-        let mut encoder = device.create_command_encoder(&nannou::wgpu::CommandEncoderDescriptor {
-            label: Some("GPU Physics Update Encoder"),
-        });
 
         // Get GPU particle bridge
         if let Some(ref mut gpu_bridge) = self.gpu_particle_bridge {
             // Update GPU force field
-            if let Err(e) = gpu_bridge.update_forces(queue, &mut encoder, voices) {
-                eprintln!("Warning: GPU force field update failed: {}", e);
-                // Fall back to CPU physics
-                self.use_gpu_physics = false;
-                queue.submit(Some(encoder.finish()));
-                return self.update_zero_copy(
-                    voices,
-                    rng,
-                    device,
-                    queue,
-                    particle_renderer,
-                    segment_renderer,
-                    now,
-                );
-            }
+            let forces_start = Instant::now();
+            gpu_bridge.update_forces(queue, encoder, voices)?;
+            println!("  Force update: {:?}", forces_start.elapsed());
 
             // Spawn new particles from CPU emitters
+            let spawn_start = Instant::now();
             let mut spawn_particles = Vec::new();
-            for (_voice_id, cores) in self.particle_cores.iter() {
-                for core in cores.iter() {
+            for (_voice_id, cores) in self.particle_cores.iter_mut() {
+                for core in cores.iter_mut() {
                     if core.is_alive && !core.is_activated {
                         spawn_particles.push(*core);
+                        core.is_activated = true;
                     }
                 }
             }
             if !spawn_particles.is_empty() {
-                gpu_bridge.spawn_particles(queue, &spawn_particles);
+                let spawned = gpu_bridge.spawn_particles(queue, &spawn_particles);
+                println!("  Spawned {} particles to GPU", spawned);
             }
+            println!("  Spawn time: {:?}", spawn_start.elapsed());
 
             // Encode GPU physics update
-            gpu_bridge.encode_physics_update(&mut encoder);
+            let physics_start = Instant::now();
+            gpu_bridge.encode_physics_update(encoder);
+            println!("  Physics encode: {:?}", physics_start.elapsed());
 
-            // Submit GPU work
-            queue.submit(Some(encoder.finish()));
-
-            // End frame (swap buffers)
-            gpu_bridge.end_frame();
-
-            // PHASE 3 FIX: Read back GPU physics results to CPU
-            // This is a blocking operation that will be eliminated in Phase 4
-            // when GPU render population is implemented
-            let gpu_particles = gpu_bridge.read_back_particles(device, queue);
-
-            // Sync GPU physics results to CPU particle cores
-            // This ensures CPU cores reflect GPU-computed positions/velocities
-            self.sync_gpu_particles_to_cpu(&gpu_particles);
-
-            // Now populate rendering buffers from CPU particle cores
-            // The CPU cores now have GPU-computed physics state, but we still
-            // need to compute colors, alpha, vibration offsets, and segments on CPU
-            // (these are CPU-managed properties not handled by GPU physics)
-            let (particles_written, segments_written) = self.render_from_cpu_particles(
-                voices,
-                rng,
-                queue,
-                particle_renderer,
-                segment_renderer,
-                now,
-            );
+            // Encode GPU render population (Phase 4)
+            let render_start = Instant::now();
+            gpu_bridge.encode_render_populate(encoder);
+            println!("  Render populate encode: {:?}", render_start.elapsed());
 
             self.last_update = now;
-            (particles_written, segments_written)
+            Ok(())
         } else {
-            // No GPU bridge, fall back to CPU
-            queue.submit(Some(encoder.finish()));
-            self.update_zero_copy(
-                voices,
-                rng,
-                device,
-                queue,
-                particle_renderer,
-                segment_renderer,
-                now,
-            )
+            Err("GPU particle bridge not initialized".into())
         }
     }
 
@@ -294,7 +252,6 @@ impl ParticleSystem {
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
-        device: &nannou::wgpu::Device,
         queue: &nannou::wgpu::Queue,
         particle_renderer: &ParticleRenderer,
         segment_renderer: &SegmentRenderer,
@@ -310,31 +267,6 @@ impl ParticleSystem {
 
         // Update forces (always update CPU for debugging/comparison)
         self.forces.update(voices, rng);
-
-        // Update GPU force field if enabled
-        if self.forces.use_gpu {
-            // Create command encoder for GPU force combination
-            let mut encoder =
-                device.create_command_encoder(&nannou::wgpu::CommandEncoderDescriptor {
-                    label: Some("Force Field Update Encoder"),
-                });
-
-            // Update GPU force field (uploads sources and encodes compute pass)
-            if let Err(e) = self.forces.update_gpu(voices, queue, &mut encoder) {
-                eprintln!(
-                    "Warning: GPU force field update failed: {}. Falling back to CPU",
-                    e
-                );
-                self.forces.set_use_gpu(false);
-            }
-
-            // Submit GPU work
-            queue.submit(Some(encoder.finish()));
-
-            // Read back GPU force field to CPU cache (blocking operation)
-            // This is needed for CPU physics to use GPU-computed forces
-            self.forces.read_back_gpu(device, queue);
-        }
 
         // Pre-compute position offset factors for all voices
         let vibration_values: HashMap<VoiceId, f32> = voices
@@ -570,12 +502,18 @@ impl ParticleSystem {
         voices: &HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
     ) {
+        let mut total_emitted = 0;
+        let mut total_emitters = 0;
+        let mut enabled_emitters = 0;
+
         for voice in voices.values() {
             let mut emitters: Vec<_> = voice.emitters.iter().collect();
             emitters.shuffle(rng);
+            total_emitters += emitters.len();
 
             for emitter in emitters.iter() {
                 if emitter.is_enabled() {
+                    enabled_emitters += 1;
                     let parent_voice = emitter.parent_voice();
                     let core_vec = self.particle_cores.entry(parent_voice).or_default();
                     let feedback_vec = self.particle_feedback.entry(parent_voice).or_default();
@@ -589,8 +527,14 @@ impl ParticleSystem {
                     let emission_scaling =
                         Self::linear_emission_scaling(voice_limit, current_count);
 
+                    println!(
+                        "  Voice {:?}: current={}, limit={}, scaling={}",
+                        parent_voice, current_count, voice_limit, emission_scaling
+                    );
+
                     // Skip emission entirely if scaling is near zero
                     if emission_scaling < 0.001 {
+                        println!("    Skipping emission (scaling too low)");
                         continue;
                     }
 
@@ -607,6 +551,7 @@ impl ParticleSystem {
                         rng,
                     );
                     let new_particles_count = new_particles.len();
+                    total_emitted += new_particles_count;
                     let mut new_feedback = vec![ParticleFeedback::new(); new_particles_count];
 
                     core_vec.append(&mut new_particles);
@@ -614,202 +559,11 @@ impl ParticleSystem {
                 }
             }
         }
-    }
 
-    /// Sync GPU particle state back to CPU particle cores
-    ///
-    /// After GPU physics completes, this method updates CPU particle cores with the
-    /// GPU-computed physics state (position, velocity, life, age). This keeps CPU
-    /// particles in sync with GPU for rendering and segment tracking.
-    ///
-    /// # Phase 3 Implementation Note
-    ///
-    /// This is necessary because Phase 3 uses GPU for physics but CPU for rendering.
-    /// The mapping between GPU particles and CPU particles is based on spawn order:
-    /// particles are spawned to GPU in voice iteration order (is_alive && !is_activated).
-    ///
-    /// # Arguments
-    ///
-    /// * `gpu_particles` - Flat array of GPU particles read back from GPU
-    fn sync_gpu_particles_to_cpu(&mut self, gpu_particles: &[GpuParticle]) {
-        let mut gpu_index = 0;
-
-        // Iterate in same order as spawning: voices, then cores
-        for (_voice_id, cores) in self.particle_cores.iter_mut() {
-            for core in cores.iter_mut() {
-                // Only sync particles that were spawned to GPU
-                if core.is_alive && !core.is_activated && gpu_index < gpu_particles.len() {
-                    let gpu_particle = &gpu_particles[gpu_index];
-
-                    // Sync GPU state to CPU
-                    core.sync_from_gpu_particle(gpu_particle);
-
-                    // Mark as activated so we don't spawn again next frame
-                    core.is_activated = true;
-
-                    gpu_index += 1;
-                }
-            }
-        }
-    }
-
-    /// Render particles from CPU particle cores (without running physics)
-    ///
-    /// This method handles all rendering-related updates that are still done on CPU
-    /// in Phase 3: color interpolation, alpha limits, vibration offsets, segment
-    /// tracking, and writing to GPU rendering buffers.
-    ///
-    /// Unlike `update_zero_copy()`, this does NOT run physics - it assumes particle
-    /// positions/velocities have already been updated (by GPU physics in Phase 3).
-    ///
-    /// # Arguments
-    ///
-    /// * `voices` - HashMap of voices for color/alpha parameters
-    /// * `rng` - Random number generator for vibration offsets
-    /// * `queue` - WGPU queue for buffer writes
-    /// * `particle_renderer` - Particle renderer for writing instances
-    /// * `segment_renderer` - Segment renderer for writing trail segments
-    /// * `now` - Current timestamp for color interpolation
-    ///
-    /// # Returns
-    ///
-    /// Tuple of (particles_written, segments_written)
-    #[allow(clippy::too_many_arguments)]
-    fn render_from_cpu_particles(
-        &mut self,
-        voices: &mut HashMap<VoiceId, Voice>,
-        rng: &mut ThreadRng,
-        queue: &nannou::wgpu::Queue,
-        particle_renderer: &ParticleRenderer,
-        segment_renderer: &SegmentRenderer,
-        now: Instant,
-    ) -> (usize, usize) {
-        let _dt = (now - self.last_update).as_secs_f32();
-
-        // Pre-compute vibration values for all voices
-        let vibration_values: HashMap<VoiceId, f32> = voices
-            .values()
-            .map(|voice| (voice.id, voice.params.vibration))
-            .collect();
-
-        let mut total_particle_count = 0;
-        let mut total_segment_count = 0;
-        let mut computed_offsets_map: HashMap<VoiceId, Vec<Vec2>> = HashMap::new();
-
-        for (voice_id, cores) in self.particle_cores.iter_mut() {
-            let voice = voices.get(voice_id);
-            let Some(color_limit) = voice.map(|v| v.params.color_limit) else {
-                continue;
-            };
-            let Some(alpha_limit) = voice.map(|v| v.params.alpha_limit) else {
-                continue;
-            };
-
-            // Interpolate color
-            let color = tween::interpolate_color(
-                color_limit,
-                rgb(PARTICLE_HIGH_R, PARTICLE_HIGH_G, PARTICLE_HIGH_B),
-                FADE_DURATION,
-                RAMP_UP_PERCENT,
-                DWELL_PERCENT,
-                RAMP_CURVE_EXPONENT,
-                FADE_CURVE_EXPONENT,
-                now,
-                self.last_update,
-            );
-
-            let vibration = vibration_values.get(voice_id).copied().unwrap_or(0.0);
-            let mut offset_factors = vec![0.0; cores.len()];
-            if vibration > 0.0 {
-                rng.fill(&mut offset_factors[..]);
-                for v in &mut offset_factors {
-                    *v = (*v * 2.0 - 1.0) * vibration;
-                }
-            }
-
-            let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
-            let mut computed_offsets = vec![vec2(0.0, 0.0); cores.len()];
-
-            // Update colors, alpha, feedback WITHOUT running physics
-            cores
-                .par_iter_mut()
-                .zip(feedback_array.par_iter_mut())
-                .zip(computed_offsets.par_iter_mut())
-                .enumerate()
-                .for_each(|(index, ((core, feedback), computed_offset))| {
-                    // Update color and alpha (but NOT physics - that was done on GPU)
-                    core.rgba.red = color.red;
-                    core.rgba.green = color.green;
-                    core.rgba.blue = color.blue;
-                    core.rgba.alpha = core.rgba.alpha.min(alpha_limit);
-
-                    // Apply age-based fade
-                    if core.remaining_life_span < PARTICLE_FADE_OUT_DURATION {
-                        let fade_factor = core.remaining_life_span / PARTICLE_FADE_OUT_DURATION;
-                        core.rgba.alpha *= fade_factor.max(0.0);
-                    }
-
-                    // Calculate vibration offset
-                    let offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0 {
-                        let normal = vec2(-core.velocity.y, core.velocity.x).normalize_or_zero();
-                        normal * PARTICLE_MAX_POSITION_OFFSET * offset_factors[index]
-                    } else {
-                        vec2(0.0, 0.0)
-                    };
-
-                    *computed_offset = offset;
-
-                    // Update feedback for segment rendering
-                    let offset_position = core.position + offset;
-                    feedback.record(offset_position, color);
-
-                    // Check bounds
-                    if core.is_out_of_bounds(self.bounds_rect) {
-                        core.kill();
-                    }
-                });
-
-            computed_offsets_map.insert(*voice_id, computed_offsets);
-
-            // Count alive particles
-            let alive_count = cores
-                .iter()
-                .filter(|c| c.is_alive && c.is_activated)
-                .count();
-            total_particle_count += alive_count;
-            total_segment_count += alive_count;
-
-            // Cull dead particles
-            let mut write_index = 0;
-            for read_index in 0..cores.len() {
-                if cores[read_index].is_alive {
-                    if write_index != read_index {
-                        cores[write_index] = cores[read_index];
-                        feedback_array[write_index] = feedback_array[read_index].clone();
-                    }
-                    write_index += 1;
-                }
-            }
-            cores.truncate(write_index);
-            feedback_array.truncate(write_index);
-        }
-
-        // Write to GPU rendering buffers
-        let particles_written = self.write_particles_zero_copy(
-            queue,
-            particle_renderer,
-            &computed_offsets_map,
-            total_particle_count,
+        println!(
+            "Emission: {} total emitters, {} enabled, {} particles emitted",
+            total_emitters, enabled_emitters, total_emitted
         );
-        let segments_written = self.write_segments_zero_copy(
-            queue,
-            segment_renderer,
-            voices,
-            &computed_offsets_map,
-            total_segment_count,
-        );
-
-        (particles_written, segments_written)
     }
 
     /********************* Particle methods ********************************** */
@@ -899,6 +653,45 @@ impl ParticleSystem {
 
     pub fn get_particle_count(&self) -> usize {
         self.particle_cores.values().map(|cores| cores.len()).sum()
+    }
+
+    /// Get reference to GPU render vertex buffer (Phase 4)
+    ///
+    /// This buffer contains GPU-populated render vertices ready for rendering.
+    /// Returns None if GPU physics is not initialized.
+    pub fn gpu_render_vertex_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.gpu_particle_bridge
+            .as_ref()
+            .map(|bridge| bridge.render_vertex_buffer())
+    }
+
+    /// Get reference to GPU alive count buffer (Phase 4)
+    ///
+    /// This buffer contains the GPU-computed alive particle count.
+    /// Returns None if GPU physics is not initialized.
+    pub fn gpu_alive_count_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.gpu_particle_bridge
+            .as_ref()
+            .map(|bridge| bridge.alive_count_buffer())
+    }
+
+    /// Read back GPU-computed alive count (Phase 4)
+    ///
+    /// This is a blocking operation. Use sparingly for debugging or UI.
+    /// Returns None if GPU physics is not initialized.
+    pub fn read_gpu_alive_count(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Option<u32> {
+        self.gpu_particle_bridge
+            .as_ref()
+            .map(|bridge| bridge.read_back_gpu_alive_count(device, queue))
+    }
+
+    /// Swap GPU particle buffers (Phase 4)
+    ///
+    /// Call this after submitting GPU work to prepare for the next frame.
+    pub fn end_gpu_frame(&mut self) {
+        if let Some(ref mut bridge) = self.gpu_particle_bridge {
+            bridge.end_frame();
+        }
     }
 
     fn make_bounds_rect(&self) -> Rect {

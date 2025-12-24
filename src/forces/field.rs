@@ -240,45 +240,6 @@ impl ForceFields {
         Ok(adapters.len())
     }
 
-    /// Read back GPU force field to CPU cache (blocking, ~1-5ms)
-    ///
-    /// Transfers the GPU-computed force field to CPU memory by creating a staging
-    /// buffer and blocking on `device.poll()` until the transfer completes.
-    ///
-    /// # Performance
-    ///
-    /// This is a **synchronous blocking operation** that:
-    /// - Stalls the CPU thread until GPU work completes
-    /// - Typically takes 1-5ms depending on grid size and GPU architecture
-    /// - Should be called once per frame after `update_gpu()`
-    ///
-    /// **Phase 3 will eliminate this bottleneck** by moving physics to GPU.
-    ///
-    /// # Arguments
-    ///
-    /// * `device` - WebGPU device for polling completion
-    /// * `queue` - WebGPU queue (unused currently, may be removed)
-    ///
-    /// # Returns
-    ///
-    /// Reference to cached GPU forces (valid until next `read_back_gpu` call)
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Frame update loop
-    /// forces.update_gpu(voices, queue, encoder)?;
-    /// queue.submit(Some(encoder.finish()));
-    /// let forces_cache = forces.read_back_gpu(device, queue); // Blocks here
-    /// // Now CPU physics can use GPU-computed forces
-    /// ```
-    pub fn read_back_gpu(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> &[[f32; 2]] {
-        if let Some(gpu_ff) = self.gpu_force_field.as_mut() {
-            self.gpu_force_cache = gpu_ff.read_back(device, queue);
-        }
-        &self.gpu_force_cache
-    }
-
     /// Get cached GPU forces
     ///
     /// Returns the most recently read-back GPU force field.

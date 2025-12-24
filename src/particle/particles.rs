@@ -169,7 +169,7 @@ impl ParticleCore {
     /// state needed for GPU simulation.
     #[inline]
     pub fn to_gpu_particle(&self) -> GpuParticle {
-        GpuParticle {
+        let gpu_particle = GpuParticle {
             // Position (xyz) + life (w)
             position: [
                 self.position.x,
@@ -180,46 +180,31 @@ impl ParticleCore {
             // Velocity (xyz) + age (w)
             velocity: [self.velocity.x, self.velocity.y, 0.0, self.age],
             // Acceleration (xyz) + mass (w)
-            acceleration: [
-                self.acceleration.x,
-                self.acceleration.y,
-                0.0,
-                self.mass,
-            ],
+            acceleration: [self.acceleration.x, self.acceleration.y, 0.0, self.mass],
             // Color (rgba)
-            color: [self.rgba.red, self.rgba.green, self.rgba.blue, self.rgba.alpha],
+            color: [
+                self.rgba.red,
+                self.rgba.green,
+                self.rgba.blue,
+                self.rgba.alpha,
+            ],
+        };
+
+        // DEBUG: Log first particle conversion to verify color
+        static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            println!("First GPU particle spawn:");
+            println!(
+                "  Color: ({:.2}, {:.2}, {:.2}, {:.2})",
+                self.rgba.red, self.rgba.green, self.rgba.blue, self.rgba.alpha
+            );
+            println!(
+                "  Life: {:.1}, Mass: {:.2}",
+                self.remaining_life_span, self.mass
+            );
         }
-    }
 
-    /// Update particle core from GPU particle state
-    ///
-    /// Syncs the physics state (position, velocity, life, age) from GPU back to CPU.
-    /// This is used in Phase 3 where GPU computes physics and CPU needs to stay in sync
-    /// for rendering and segment tracking.
-    ///
-    /// Note: Does NOT update color or mass, as those are CPU-managed properties.
-    #[inline]
-    pub fn sync_from_gpu_particle(&mut self, gpu_particle: &GpuParticle) {
-        // Update position
-        self.position.x = gpu_particle.position[0];
-        self.position.y = gpu_particle.position[1];
-
-        // Update velocity
-        self.velocity.x = gpu_particle.velocity[0];
-        self.velocity.y = gpu_particle.velocity[1];
-
-        // Update life and age
-        self.remaining_life_span = gpu_particle.position[3];
-        self.age = gpu_particle.velocity[3];
-
-        // Update acceleration (for next frame's CPU reference)
-        self.acceleration.x = gpu_particle.acceleration[0];
-        self.acceleration.y = gpu_particle.acceleration[1];
-
-        // Mark particle as dead if GPU says so
-        if self.remaining_life_span <= 0.0 {
-            self.kill();
-        }
+        gpu_particle
     }
 }
 

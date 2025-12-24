@@ -35,26 +35,19 @@ fn model(app: &App) -> Model {
     let (clock, sequencer_service) = init::timing::init_clock_and_sequencer(&settings);
     let (osc, osc_send, osc_loop) = init::osc::init_osc(&settings);
 
-    let mut particle_system = init::particles::init_particle_system(render_size, particle_limit);
-
     // Create RhythmView
     let rhythm_view = RhythmView::new();
 
     let window_ids = init::windows::create_windows(app, &settings);
 
-    // Initialize GPU force field (after windows are created so we have access to device)
+    // Initialize particle system (after windows are created so we have access to device for GPU mode)
     let window = app.window(window_ids.audience).unwrap();
     let device = window.device();
 
-    // Initialize GPU force field but keep it disabled by default (for backward compatibility)
-    // Can be enabled later via particle_system.set_use_gpu_forces(true)
-    if let Err(e) = particle_system.init_gpu_force_field(device, true) {
-        eprintln!(
-            "Warning: Failed to initialize GPU force field: {}. Falling back to CPU mode.",
-            e
-        );
-        particle_system.set_use_gpu_forces(false);
-    }
+    // Initialize particle system with GPU or CPU based on config
+    let use_gpu = settings.particles.use_gpu;
+    let particle_system =
+        init::particles::init_particle_system(render_size, particle_limit, use_gpu, Some(device));
 
     let font = init::text::load_font(app);
     let text_overlay = init::text::init_text_overlay(render_size, &font);
@@ -186,25 +179,73 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // This enables particles to flash with rhythm
     //let event = events.iter().any(|e| *e);
 
-    // Update particle system with ZERO-COPY optimization
-    // Get GPU resources for direct staging memory writes and force field computation
+    // Get GPU resources
     let window = app.main_window();
     let device = window.device();
     let queue = window.queue();
 
-    let (particles_written, segments_written) = model.particle_system.update_zero_copy(
-        model.voice_manager.voices_mut(),
-        &mut model.rng,
-        device,
-        queue,
-        &model.render_state.particle_renderer,
-        &model.render_state.segment_renderer,
-        now,
-    );
+    // Update particles using GPU or CPU path based on configuration
+    if model.particle_system.is_using_gpu_physics() {
+        println!("=== Using GPU physics path ===");
+        let update_start = Instant::now();
 
-    // Store counts for rendering
-    model.render_state.particle_count = particles_written;
-    model.render_state.segment_instance_count = segments_written;
+        // Phase 4: GPU-only particle system with render buffer population
+        // Create encoder for all GPU work this frame
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Particle Update Encoder"),
+        });
+
+        // GPU: Force combination + physics + render population (all on GPU)
+        if let Err(e) = model.particle_system.update_gpu_render_populate(
+            model.voice_manager.voices_mut(),
+            &mut model.rng,
+            queue,
+            &mut encoder,
+            now,
+        ) {
+            eprintln!("GPU update failed: {}", e);
+            // Fallback: Keep previous frame's particle count
+        }
+
+        let encode_time = update_start.elapsed();
+        println!("GPU encode time: {:?}", encode_time);
+
+        // Submit GPU work
+        let submit_start = Instant::now();
+        queue.submit(Some(encoder.finish()));
+        let submit_time = submit_start.elapsed();
+        println!("GPU submit time: {:?}", submit_time);
+
+        // NO LONGER NEEDED: Buffer swapping removed since we use in-place updates
+        // model.particle_system.end_gpu_frame();
+
+        // WORKAROUND: Use CPU-tracked alive count instead of blocking GPU readback
+        // The GPU readback was taking 1.6 seconds per frame, causing 0.6 FPS!
+        // The CPU tracks spawned particles, so we can use that for now.
+        // In a proper Phase 4 implementation, we'd use indirect rendering to avoid
+        // any CPU involvement.
+        if let Some(gpu_bridge) = &model.particle_system.gpu_particle_bridge {
+            let cpu_alive_count = gpu_bridge.alive_count();
+            println!("CPU-tracked alive count: {}", cpu_alive_count);
+            model.render_state.particle_count = cpu_alive_count;
+        } else {
+            model.render_state.particle_count = 0;
+        }
+    } else {
+        // Legacy CPU path: Zero-copy particle update
+        let (particles_written, segments_written) = model.particle_system.update_zero_copy(
+            model.voice_manager.voices_mut(),
+            &mut model.rng,
+            queue,
+            &model.render_state.particle_renderer,
+            &model.render_state.segment_renderer,
+            now,
+        );
+
+        // Store counts for CPU rendering
+        model.render_state.particle_count = particles_written;
+        model.render_state.segment_instance_count = segments_written;
+    }
 }
 
 fn audience_view(app: &App, model: &Model, frame: Frame) {
@@ -225,14 +266,35 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Encode Nannou Draw
         rendering.encode_draw_commands(device, &mut encoder);
 
-        // ZERO-COPY: Encode particles and segments without re-uploading
-        // Data was already written directly to GPU staging in update_zero_copy
-        model.render_state.particle_renderer.encode_only(
-            &mut encoder,
-            model.render_state.particle_count,
-            rendering.get_named_texture("particles").unwrap(),
-        );
+        // Render particles using GPU or CPU path based on configuration
+        if model.particle_system.is_using_gpu_physics() {
+            // Phase 4: Render particles directly from GPU render buffer (no CPU transfer)
+            if let Some(render_buffer) = model.particle_system.gpu_render_vertex_buffer() {
+                // Use the GPU-computed alive count from the update phase
+                let alive_count = model.render_state.particle_count as u32;
 
+                println!(
+                    "GPU render: {} alive particles (buffer capacity: {})",
+                    alive_count, model.particle_system.default_particle_limit
+                );
+
+                model.render_state.particle_renderer.encode_from_buffer(
+                    &mut encoder,
+                    render_buffer,
+                    alive_count,
+                    rendering.get_named_texture("particles").unwrap(),
+                );
+            }
+        } else {
+            // Legacy CPU path: Render from CPU-populated buffer
+            model.render_state.particle_renderer.encode_only(
+                &mut encoder,
+                model.render_state.particle_count,
+                rendering.get_named_texture("particles").unwrap(),
+            );
+        }
+
+        // Segments (CPU path in both modes; Phase 5 will move to GPU)
         model.render_state.segment_renderer.encode_only(
             &mut encoder,
             model.render_state.segment_instance_count,
