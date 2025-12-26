@@ -230,6 +230,7 @@ impl Emitter for LinearEmitter {
             EmitDirection::East => vec2(speed, 0.0),
         };
         let length = self.end.distance(self.start) - 4.0;
+        let length = length.max(0.0); // Ensure non-negative
         let random_range = -length / 2.0..length / 2.0;
 
         let mut particles = Vec::with_capacity(adjusted_rate as usize);
@@ -239,7 +240,12 @@ impl Emitter for LinearEmitter {
             let speed_variation = rng.random_range(0.95..1.05);
             let velocity = base_velocity * speed_variation;
 
-            let var_pos = rng.random_range(random_range.clone());
+            // Only sample if range is valid
+            let var_pos = if length > 0.0 {
+                rng.random_range(random_range.clone())
+            } else {
+                0.0
+            };
 
             let base_position = match self.direction {
                 EmitDirection::North => vec2(var_pos + self.midpoint.x, self.midpoint.y),

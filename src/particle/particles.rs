@@ -3,7 +3,7 @@
 // Particle struct for the Particle System
 
 use nannou::prelude::*;
-use nnpipe::compute::GpuParticle;
+use nnpipe::compute::{GpuParticle, ParticleSpawnRequest};
 use nnpipe::renderers::{ParticleGpu, SegmentGpu};
 
 use super::constants::*;
@@ -162,12 +162,40 @@ impl ParticleCore {
         PARTICLE_FADE_OUT_DURATION
     }
 
-    /// Convert core particle data to GPU particle format for GPU physics
+    /// Convert core particle data to spawn request for GPU-side spawning
+    ///
+    /// This creates a lightweight spawn request that the GPU spawn shader
+    /// will use to find a free slot and spawn a particle.
+    ///
+    /// This is the new preferred method for GPU spawning - it eliminates
+    /// CPU-side particle tracking.
+    #[inline]
+    pub fn to_spawn_request(&self) -> ParticleSpawnRequest {
+        ParticleSpawnRequest {
+            position: [self.position.x, self.position.y],
+            velocity: [self.velocity.x, self.velocity.y],
+            life: self.remaining_life_span,
+            mass: self.mass,
+            color: [
+                self.rgba.red,
+                self.rgba.green,
+                self.rgba.blue,
+                self.rgba.alpha,
+            ],
+            size: self.size,
+            _padding: 0.0,
+        }
+    }
+
+    /// Convert core particle data to GPU particle format for GPU physics (legacy)
     ///
     /// This creates a GpuParticle that can be used with the GPU particle system.
     /// Unlike `to_gpu()` which creates rendering data, this includes all physics
     /// state needed for GPU simulation.
+    ///
+    /// DEPRECATED: Use to_spawn_request() for new GPU-side spawning.
     #[inline]
+    #[deprecated(note = "Use to_spawn_request() for GPU-side spawning")]
     pub fn to_gpu_particle(&self) -> GpuParticle {
         let gpu_particle = GpuParticle {
             // Position (xyz) + life (w)

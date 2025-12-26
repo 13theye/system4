@@ -199,6 +199,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         if let Err(e) = model.particle_system.update_gpu_render_populate(
             model.voice_manager.voices_mut(),
             &mut model.rng,
+            device,
             queue,
             &mut encoder,
             now,

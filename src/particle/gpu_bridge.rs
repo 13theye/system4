@@ -25,7 +25,9 @@
 ///                        └──────────────┘        └─────────────┘
 /// ```
 use nannou::prelude::*;
-use nnpipe::compute::{GpuParticle, GpuParticleConfig, GpuParticleSystem, GpuWindCircle};
+use nnpipe::compute::{
+    GpuParticle, GpuParticleConfig, GpuParticleSystem, GpuWindCircle, ParticleSpawnRequest,
+};
 use std::collections::HashMap;
 
 use crate::groups::{Voice, VoiceId};
@@ -126,9 +128,45 @@ impl GpuParticleBridge {
         Ok(())
     }
 
-    /// Spawn particles from CPU emitters
+    /// Upload spawn requests to GPU (new GPU-side spawning)
+    ///
+    /// Converts spawn requests from CPU emitters and uploads to GPU.
+    /// The GPU spawn shader will find free slots and spawn particles.
+    ///
+    /// # Arguments
+    ///
+    /// * `queue` - WebGPU queue for uploads
+    /// * `requests` - Slice of spawn requests
+    ///
+    /// # Returns
+    ///
+    /// Number of requests uploaded
+    pub fn upload_spawn_requests(
+        &mut self,
+        queue: &wgpu::Queue,
+        requests: &[ParticleSpawnRequest],
+    ) -> usize {
+        self.gpu_particle_system
+            .upload_spawn_requests(queue, requests)
+    }
+
+    /// Encode GPU spawn pass (new GPU-side spawning)
+    ///
+    /// Encodes the spawn compute shader to find free slots and spawn particles.
+    /// Call this before physics update.
+    ///
+    /// # Arguments
+    ///
+    /// * `encoder` - Command encoder to record compute passes
+    pub fn encode_spawn(&self, encoder: &mut wgpu::CommandEncoder) {
+        self.gpu_particle_system.encode_spawn(encoder);
+    }
+
+    /// Spawn particles from CPU emitters (legacy method)
     ///
     /// Converts ParticleCore instances to GpuParticle format and uploads to GPU.
+    ///
+    /// DEPRECATED: Use upload_spawn_requests() and encode_spawn() instead.
     ///
     /// # Arguments
     ///
@@ -138,6 +176,7 @@ impl GpuParticleBridge {
     /// # Returns
     ///
     /// Number of particles actually spawned
+    #[deprecated(note = "Use upload_spawn_requests() and encode_spawn() for GPU-side spawning")]
     pub fn spawn_particles(&mut self, queue: &wgpu::Queue, particles: &[ParticleCore]) -> usize {
         if particles.is_empty() {
             return 0;
@@ -148,6 +187,7 @@ impl GpuParticleBridge {
             particles.iter().map(|p| p.to_gpu_particle()).collect();
 
         // Upload to GPU
+        #[allow(deprecated)]
         self.gpu_particle_system
             .spawn_particles(queue, &gpu_particles)
     }

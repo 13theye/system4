@@ -98,8 +98,7 @@ impl ForceFields {
 
     /// Update ForceField with all Voices' WindCircles with per-circle angle variations
     ///
-    /// This method updates BOTH CPU and GPU force fields. The GPU update is encoded
-    /// but not executed - you must submit the command buffer separately.
+    /// This method updates only CPU force field.
     pub fn update(
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
