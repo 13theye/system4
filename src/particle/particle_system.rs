@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use nannou::prelude::*;
-use nnpipe::compute::GpuParticle;
 use nnpipe::renderers::{ParticleRenderer, SegmentRenderer};
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rayon::prelude::*;
@@ -153,7 +152,6 @@ impl ParticleSystem {
                 self.bounds_size.x / 2.0,
                 self.bounds_size.y / 2.0,
             ],
-            dt: 1.0 / 60.0, // 60 FPS
             damping: 0.98,
             max_force: 100.0,
             noise_scale: 0.01,
@@ -198,7 +196,11 @@ impl ParticleSystem {
         encoder: &mut wgpu::CommandEncoder,
         now: Instant,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let _dt = (now - self.last_update).as_secs_f32();
+        let dt = (now - self.last_update).as_secs_f32();
+
+        // Calculate framerate_factor for frame-rate independent physics
+        // This converts dt (in seconds) to "frame units" where 1.0 = one 60fps frame
+        let framerate_factor = (dt / 0.0167).min(1.5);
 
         // Handle particle emission (CPU side)
         self.handle_particle_emission(voices, rng);
@@ -223,15 +225,27 @@ impl ParticleSystem {
                 }
             }
             if !spawn_particles.is_empty() {
+                // Debug: Print first particle's spawn data
+                if let Some(first) = spawn_particles.first() {
+                    println!("  First spawn particle: pos=({:.1}, {:.1}), life={:.1}, age={:.1}, vel=({:.2}, {:.2})",
+                        first.position.x, first.position.y,
+                        first.remaining_life_span, first.age,
+                        first.velocity.x, first.velocity.y);
+                }
                 let spawned = gpu_bridge.spawn_particles(queue, &spawn_particles);
                 println!("  Spawned {} particles to GPU", spawned);
             }
             println!("  Spawn time: {:?}", spawn_start.elapsed());
 
-            // Encode GPU physics update
+            // Encode GPU physics update with actual framerate_factor
             let physics_start = Instant::now();
-            gpu_bridge.encode_physics_update(encoder);
-            println!("  Physics encode: {:?}", physics_start.elapsed());
+            gpu_bridge.encode_physics_update(queue, encoder, framerate_factor);
+            println!(
+                "  Physics encode: {:?} (dt={:.4}s, framerate_factor={:.2})",
+                physics_start.elapsed(),
+                dt,
+                framerate_factor
+            );
 
             // Encode GPU render population (Phase 4)
             let render_start = Instant::now();

@@ -4,9 +4,13 @@ use crate::rendering::{render_state::GpuParticleBuffer, GpuSegmentBuffer};
 
 // Constants for the Particle Core
 pub const PARTICLE_MASS: f32 = 11.0;
-pub const PARTICLE_LIFE_SPAN: f32 = 1800.0;
-pub const PARTICLE_FADE_IN_DURATION: f32 = 180.0; // frames to fade in
-pub const PARTICLE_FADE_OUT_DURATION: f32 = 100.0;
+
+// NOTE: These durations are now in FRAMES for CPU path compatibility.
+// The GPU path will convert these to use actual dt (framerate_factor).
+// At 60fps: 1800 frames = 30 seconds, 180 frames = 3 seconds, 100 frames = 1.67 seconds
+pub const PARTICLE_LIFE_SPAN: f32 = 1800.0;        // frames (30 seconds at 60fps)
+pub const PARTICLE_FADE_IN_DURATION: f32 = 180.0;  // frames (3 seconds at 60fps)
+pub const PARTICLE_FADE_OUT_DURATION: f32 = 100.0; // frames (1.67 seconds at 60fps)
 /// Buffer for out-of-bounds particles
 pub const OOB_BUFFER: f32 = 1500.0;
 pub const FEEDBACK_POSITIONS: usize = 128;

@@ -50,32 +50,33 @@ impl<'a> GpuWindCircleAdapter<'a> {
     }
 
     /// Convert world position to grid coordinates
+    ///
+    /// IMPORTANT: This must match the coordinate transform in particle_physics.wgsl!
+    /// The shader uses: grid_pos = (world_pos - bounds.min) * (1/cell_size)
     fn world_to_grid_coords(params: &ForceFieldParams, pos: Vec2) -> Vec2 {
-        // Get bounds from params
-        let bounds_width = params.bounds[2] - params.bounds[0];
-        let bounds_height = params.bounds[3] - params.bounds[1];
-
-        // Convert from world coordinates (center origin) to grid coordinates (top-left origin)
-        let x1 = pos.x + bounds_width / 2.0;
-        let y1 = -pos.y + bounds_height / 2.0;
-
-        // Convert to grid coordinates by multiplying by reciprocal of cell width and height
-        vec2(x1 * params.cell_size[2], y1 * params.cell_size[3])
+        // Match the GPU shader's coordinate transform exactly:
+        // grid_pos.x = (pos.x - bounds.x) * cell_size.z  // cell_size.z = 1/cell_width
+        // grid_pos.y = (pos.y - bounds.y) * cell_size.w  // cell_size.w = 1/cell_height
+        //
+        // Where bounds.x = min_x (-width/2) and bounds.y = min_y (-height/2)
+        vec2(
+            (pos.x - params.bounds[0]) * params.cell_size[2],
+            (pos.y - params.bounds[1]) * params.cell_size[3]
+        )
     }
 
     /// Get cell center position in world coordinates
+    ///
+    /// Inverse of world_to_grid_coords. Must be consistent with the shader.
     fn get_cell_center(params: &ForceFieldParams, col: usize, row: usize) -> Vec2 {
-        // Get bounds from params
-        let bounds_width = params.bounds[2] - params.bounds[0];
-        let bounds_height = params.bounds[3] - params.bounds[1];
+        // Inverse of the grid coordinate transform:
+        // world_pos.x = grid_x * cell_width + bounds.x
+        // world_pos.y = grid_y * cell_height + bounds.y
+        let grid_x = col as f32 + 0.5;  // Center of cell
+        let grid_y = row as f32 + 0.5;
 
-        // Calculate cell center in grid space
-        let grid_x = (col as f32 + 0.5) * params.cell_size[0];
-        let grid_y = (row as f32 + 0.5) * params.cell_size[1];
-
-        // Transform back to world coordinates (center origin)
-        let world_x = grid_x - bounds_width / 2.0;
-        let world_y = -(grid_y - bounds_height / 2.0);
+        let world_x = grid_x * params.cell_size[0] + params.bounds[0];
+        let world_y = grid_y * params.cell_size[1] + params.bounds[1];
 
         vec2(world_x, world_y)
     }

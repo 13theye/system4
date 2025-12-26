@@ -72,7 +72,7 @@ impl GpuParticleBridge {
             grid_width: config.grid_width,
             grid_height: config.grid_height,
             bounds: config.bounds,
-            dt: config.dt,
+            dt: 1.0, // default value for 1st update only
             damping: config.damping,
             max_force: config.max_force,
             noise_scale: config.noise_scale,
@@ -109,6 +109,10 @@ impl GpuParticleBridge {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Collect wind circle adapters
         let adapters = collect_wind_circle_adapters(voices);
+        println!(
+            "    GPU Forces: {} wind circle adapters collected",
+            adapters.len()
+        );
 
         // Collect noise values
         let noise_values = collect_noise_values(voices);
@@ -116,6 +120,13 @@ impl GpuParticleBridge {
         // Upload sources to GPU force field
         self.gpu_force_field
             .upload_sources(queue, &adapters, Some(&noise_values))?;
+
+        // Debug: Print contribution count
+        let contribution_count = self.gpu_force_field.contribution_count();
+        println!(
+            "    GPU Forces: {} contributions uploaded to GPU",
+            contribution_count
+        );
 
         // Encode force combination compute pass
         self.gpu_force_field.encode_combine(encoder);
@@ -138,6 +149,12 @@ impl GpuParticleBridge {
         // Calculate buffer size
         let total_cells = self.force_field_cache.len();
         let buffer_size = (total_cells * std::mem::size_of::<ForceCell>()) as u64;
+
+        // DEBUG: Log buffer copy details
+        println!(
+            "    Copying force field: {} cells, {} bytes",
+            total_cells, buffer_size
+        );
 
         // Copy force field buffer
         encoder.copy_buffer_to_buffer(src_buffer, 0, dst_buffer, 0, buffer_size);
@@ -178,8 +195,22 @@ impl GpuParticleBridge {
     ///
     /// # Arguments
     ///
+    /// * `queue` - WebGPU queue for uploading updated params
     /// * `encoder` - Command encoder to record compute passes
-    pub fn encode_physics_update(&mut self, encoder: &mut wgpu::CommandEncoder) {
+    /// * `framerate_factor` - Frame-rate independent time step (dt / 0.0167)
+    pub fn encode_physics_update(
+        &mut self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        framerate_factor: f32,
+    ) {
+        // Update physics parameters with actual framerate_factor for frame-rate independence
+        let mut updated_params = *self.gpu_particle_system.params();
+        updated_params.physics[0] = framerate_factor; // physics.x = dt
+
+        self.gpu_particle_system
+            .update_physics_params(queue, &updated_params);
+
         // Copy force field to particle system
         self.copy_force_field_to_particle_system(encoder);
 
@@ -202,11 +233,10 @@ impl GpuParticleBridge {
     pub fn encode_render_populate(&self, encoder: &mut wgpu::CommandEncoder) {
         use std::time::Instant;
 
-        // REMOVED: clear_alive_count() causes 1.6s pipeline stall!
-        // The shader now resets the counter internally (atomicStore on first thread)
-        // let clear_start = Instant::now();
-        // self.gpu_particle_system.encode_clear_alive_count(encoder);
-        // println!("      clear_alive_count: {:?}", clear_start.elapsed());
+        // Clear alive count before render populate
+        let clear_start = Instant::now();
+        self.gpu_particle_system.encode_clear_alive_count(encoder);
+        println!("      clear_alive_count: {:?}", clear_start.elapsed());
 
         // Encode render population compute pass
         let populate_start = Instant::now();
@@ -283,5 +313,77 @@ impl GpuParticleBridge {
     /// Clear all particles
     pub fn clear(&mut self, queue: &wgpu::Queue) {
         self.gpu_particle_system.clear(queue);
+    }
+
+    /// Debug readback: Read first N particle positions from GPU
+    ///
+    /// This is a BLOCKING operation that reads back GPU memory to CPU.
+    /// Use sparingly for debugging only!
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - WebGPU device
+    /// * `queue` - WebGPU queue
+    /// * `count` - Number of particles to read (default: 10)
+    ///
+    /// # Returns
+    ///
+    /// Vector of (pos_x, pos_y, vel_x, vel_y) tuples
+    pub fn debug_read_particle_positions(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        count: usize,
+    ) -> Vec<(f32, f32, f32, f32)> {
+        use nannou::wgpu;
+
+        let count = count.min(self.max_particles());
+        let buffer_size = (std::mem::size_of::<GpuParticle>() * count) as u64;
+
+        // Create staging buffer for readback
+        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Debug Particle Readback"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Copy from GPU particle buffer to staging
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Debug Readback Encoder"),
+        });
+
+        encoder.copy_buffer_to_buffer(
+            self.current_particle_buffer(),
+            0,
+            &staging_buffer,
+            0,
+            buffer_size,
+        );
+
+        queue.submit(Some(encoder.finish()));
+
+        // Map and read (BLOCKING!)
+        let buffer_slice = staging_buffer.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            tx.send(result).unwrap();
+        });
+        device.poll(wgpu::Maintain::Wait);
+        rx.recv().unwrap().unwrap();
+
+        let data = buffer_slice.get_mapped_range();
+        let particles: &[GpuParticle] = bytemuck::cast_slice(&data);
+
+        let positions: Vec<(f32, f32, f32, f32)> = particles
+            .iter()
+            .take(count)
+            .map(|p| (p.position[0], p.position[1], p.velocity[0], p.velocity[1]))
+            .collect();
+
+        drop(data);
+        staging_buffer.unmap();
+
+        positions
     }
 }
