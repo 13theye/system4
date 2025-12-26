@@ -137,6 +137,7 @@ impl ForceFields {
             damping: 0.98,
             max_force: 100.0,
             noise_scale: 0.01,
+            inertia_coefficient: 0.1, // Match CPU momentum-based inertial resistance
         };
 
         self.gpu_force_field = Some(GpuForceField::new(device, config)?);

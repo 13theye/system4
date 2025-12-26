@@ -152,10 +152,11 @@ impl ParticleSystem {
                 self.bounds_size.x / 2.0,
                 self.bounds_size.y / 2.0,
             ],
-            damping: 0.98,
+            damping: 0.99,
             max_force: 100.0,
             noise_scale: 0.01,
-            trail_capacity: 0, // Not used in Phase 3
+            trail_capacity: 0,        // Not used in Phase 3
+            inertia_coefficient: 0.1, // Match CPU momentum-based inertial resistance
         };
 
         self.gpu_particle_bridge = Some(GpuParticleBridge::new(device, config)?);
@@ -274,7 +275,7 @@ impl ParticleSystem {
         let dt = (now - self.last_update).as_secs_f32();
 
         // how many frames have passed with 60fps target
-        let framerate_factor = (dt / 0.0167).min(1.5);
+        let framerate_factor = (dt / 0.0167).min(3.0);
 
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);

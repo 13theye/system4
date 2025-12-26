@@ -47,6 +47,12 @@ pub struct GpuParticleBridge {
 
     /// Intermediate storage for force field conversion
     force_field_cache: Vec<ForceCell>,
+
+    /// Counter for alive count readback (every 10 frames)
+    alive_count_readback_counter: u32,
+
+    /// Cached GPU-computed alive count
+    gpu_alive_count: u32,
 }
 
 impl GpuParticleBridge {
@@ -75,7 +81,8 @@ impl GpuParticleBridge {
             dt: 1.0, // default value for 1st update only
             damping: config.damping,
             max_force: config.max_force,
-            noise_scale: config.noise_scale,
+            noise_scale: config.noise_scale, // Legacy, kept for compatibility
+            inertia_coefficient: config.inertia_coefficient,
         };
 
         let gpu_force_field = GpuForceField::new(device, force_field_config)?;
@@ -88,6 +95,8 @@ impl GpuParticleBridge {
             gpu_particle_system,
             gpu_force_field,
             force_field_cache,
+            alive_count_readback_counter: 0,
+            gpu_alive_count: 0,
         })
     }
 
@@ -284,6 +293,68 @@ impl GpuParticleBridge {
             .read_back_alive_count(device, queue)
     }
 
+    /// Read GPU alive count conditionally (every 10 frames)
+    ///
+    /// This method performs CPU-GPU synchronization to read the alive count,
+    /// but only does so every 10 frames to reduce performance impact.
+    /// Between readbacks, it returns the cached value.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - WebGPU device
+    /// * `queue` - WebGPU queue
+    ///
+    /// # Returns
+    ///
+    /// GPU-computed alive particle count (may be up to 10 frames stale)
+    pub fn read_gpu_alive_count_conditional(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> u32 {
+        self.alive_count_readback_counter += 1;
+
+        // Only read every 10 frames to reduce sync overhead
+        if self.alive_count_readback_counter % 10 == 0 {
+            // Create staging buffer for readback
+            let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Alive Count Readback"),
+                size: 4,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            // Copy from GPU alive count buffer
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Alive Count Readback Encoder"),
+            });
+            encoder.copy_buffer_to_buffer(
+                self.gpu_particle_system.alive_count_buffer(),
+                0,
+                &staging_buffer,
+                0,
+                4,
+            );
+            queue.submit(Some(encoder.finish()));
+
+            // Map and read
+            let buffer_slice = staging_buffer.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+                tx.send(result).unwrap();
+            });
+            device.poll(wgpu::Maintain::Wait);
+            rx.recv().unwrap().unwrap();
+
+            let data = buffer_slice.get_mapped_range();
+            self.gpu_alive_count = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+            drop(data);
+            staging_buffer.unmap();
+        }
+
+        self.gpu_alive_count
+    }
+
     /// Swap particle buffers after frame completion
     ///
     /// Call this after submitting the command encoder to swap the double-buffered
@@ -375,10 +446,18 @@ impl GpuParticleBridge {
         let data = buffer_slice.get_mapped_range();
         let particles: &[GpuParticle] = bytemuck::cast_slice(&data);
 
+        // Return: (x, y, life, age) for debugging
         let positions: Vec<(f32, f32, f32, f32)> = particles
             .iter()
             .take(count)
-            .map(|p| (p.position[0], p.position[1], p.velocity[0], p.velocity[1]))
+            .map(|p| {
+                (
+                    p.position[0], // x
+                    p.position[1], // y
+                    p.position[3], // life (w component of position)
+                    p.velocity[3], // age (w component of velocity)
+                )
+            })
             .collect();
 
         drop(data);
