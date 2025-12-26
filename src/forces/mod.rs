@@ -15,6 +15,3 @@ pub use wind_new::WindField;
 
 pub mod wind_circle;
 pub use wind_circle::{WindCircle, WindCircleParams};
-
-pub mod gpu_adapter;
-pub use gpu_adapter::{collect_noise_values, collect_wind_circle_adapters, GpuWindCircleAdapter};

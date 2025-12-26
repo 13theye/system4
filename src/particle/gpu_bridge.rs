@@ -25,28 +25,25 @@
 ///                        └──────────────┘        └─────────────┘
 /// ```
 use nannou::prelude::*;
-use nnpipe::compute::{
-    ForceCell, GpuForceField, GpuParticle, GpuParticleConfig, GpuParticleSystem,
-};
+use nnpipe::compute::{GpuParticle, GpuParticleConfig, GpuParticleSystem, GpuWindCircle};
 use std::collections::HashMap;
 
-use crate::forces::{collect_noise_values, collect_wind_circle_adapters};
 use crate::groups::{Voice, VoiceId};
 use crate::particle::ParticleCore;
 
 /// GPU Particle Bridge
 ///
 /// Bridges System4's particle system with Nnpipe's GPU particle system.
-/// Manages force field updates, particle spawning, and GPU physics execution.
+/// Manages wind circle updates, particle spawning, and GPU physics execution.
+///
+/// # Architectural Change (2025-12-26)
+///
+/// This bridge now uses per-particle force computation instead of grid-based
+/// force fields. Wind circles are uploaded directly to GPU and particles
+/// compute forces in the shader, achieving pixel-perfect precision.
 pub struct GpuParticleBridge {
     /// GPU particle system for physics simulation
     gpu_particle_system: GpuParticleSystem,
-
-    /// GPU force field for force combination
-    gpu_force_field: GpuForceField,
-
-    /// Intermediate storage for force field conversion
-    force_field_cache: Vec<ForceCell>,
 
     /// Counter for alive count readback (every 10 frames)
     alive_count_readback_counter: u32,
@@ -70,103 +67,63 @@ impl GpuParticleBridge {
         device: &wgpu::Device,
         config: GpuParticleConfig,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        // Create GPU particle system
+        // Create GPU particle system with per-particle force computation
         let gpu_particle_system = GpuParticleSystem::new(device, config.clone())?;
-
-        // Create GPU force field with matching configuration
-        let force_field_config = nnpipe::compute::ForceFieldConfig {
-            grid_width: config.grid_width,
-            grid_height: config.grid_height,
-            bounds: config.bounds,
-            dt: 1.0, // default value for 1st update only
-            damping: config.damping,
-            max_force: config.max_force,
-            noise_scale: config.noise_scale, // Legacy, kept for compatibility
-            inertia_coefficient: config.inertia_coefficient,
-        };
-
-        let gpu_force_field = GpuForceField::new(device, force_field_config)?;
-
-        // Initialize force field cache
-        let total_cells = (config.grid_width * config.grid_height) as usize;
-        let force_field_cache = vec![ForceCell::default(); total_cells];
 
         Ok(Self {
             gpu_particle_system,
-            gpu_force_field,
-            force_field_cache,
             alive_count_readback_counter: 0,
             gpu_alive_count: 0,
         })
     }
 
-    /// Update force field from voices
+    /// Upload wind circles directly to GPU for per-particle force computation
     ///
-    /// Uploads wind circle sources to GPU and encodes force combination.
-    /// The encoder must be submitted to the queue for the GPU work to execute.
+    /// This replaces the old grid-based force field system.
+    /// Wind circles are uploaded as source parameters and particles
+    /// compute forces directly in the shader.
     ///
     /// # Arguments
     ///
     /// * `queue` - WebGPU queue for uploads
-    /// * `encoder` - Command encoder to record compute pass
     /// * `voices` - HashMap of voices containing wind circles
     pub fn update_forces(
         &mut self,
         queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
+        _encoder: &mut wgpu::CommandEncoder, // Encoder no longer needed (no compute pass)
         voices: &HashMap<VoiceId, Voice>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Collect wind circle adapters
-        let adapters = collect_wind_circle_adapters(voices);
+        // Convert all wind circles to GPU format
+        let mut gpu_wind_circles = Vec::new();
+
+        for voice in voices.values() {
+            for circle in voice.wind_circles.values() {
+                let params = circle.params();
+
+                // Convert to GpuWindCircle format
+                let gpu_circle = GpuWindCircle::new(
+                    [params.center.x, params.center.y],
+                    params.inner_radius,
+                    params.outer_radius,
+                    params.force,
+                    params.gravity,
+                    params.noise,
+                );
+
+                gpu_wind_circles.push(gpu_circle);
+            }
+        }
+
         println!(
-            "    GPU Forces: {} wind circle adapters collected",
-            adapters.len()
+            "    GPU Forces: {} wind circles uploaded for per-particle computation",
+            gpu_wind_circles.len()
         );
 
-        // Collect noise values
-        let noise_values = collect_noise_values(voices);
-
-        // Upload sources to GPU force field
-        self.gpu_force_field
-            .upload_sources(queue, &adapters, Some(&noise_values))?;
-
-        // Debug: Print contribution count
-        let contribution_count = self.gpu_force_field.contribution_count();
-        println!(
-            "    GPU Forces: {} contributions uploaded to GPU",
-            contribution_count
-        );
-
-        // Encode force combination compute pass
-        self.gpu_force_field.encode_combine(encoder);
+        // Upload directly to particle system
+        self.gpu_particle_system
+            .upload_wind_circles(queue, &gpu_wind_circles);
 
         Ok(())
-    }
-
-    /// Copy force field from GPU force field to particle system
-    ///
-    /// This is needed because GpuForceField and GpuParticleSystem have separate
-    /// force field buffers. We use a copy command to transfer the data.
-    ///
-    /// # Arguments
-    ///
-    /// * `encoder` - Command encoder to record buffer copy
-    pub fn copy_force_field_to_particle_system(&self, encoder: &mut wgpu::CommandEncoder) {
-        let src_buffer = self.gpu_force_field.get_force_buffer();
-        let dst_buffer = self.gpu_particle_system.force_field_buffer();
-
-        // Calculate buffer size
-        let total_cells = self.force_field_cache.len();
-        let buffer_size = (total_cells * std::mem::size_of::<ForceCell>()) as u64;
-
-        // DEBUG: Log buffer copy details
-        println!(
-            "    Copying force field: {} cells, {} bytes",
-            total_cells, buffer_size
-        );
-
-        // Copy force field buffer
-        encoder.copy_buffer_to_buffer(src_buffer, 0, dst_buffer, 0, buffer_size);
     }
 
     /// Spawn particles from CPU emitters
@@ -197,10 +154,8 @@ impl GpuParticleBridge {
 
     /// Run full GPU physics update
     ///
-    /// Encodes all compute passes needed for a single frame:
-    /// 1. Force field combination (already encoded in update_forces)
-    /// 2. Copy force field to particle system
-    /// 3. Particle physics integration
+    /// Encodes particle physics integration using per-particle force computation.
+    /// No force field copy needed - wind circles are already uploaded.
     ///
     /// # Arguments
     ///
@@ -214,14 +169,13 @@ impl GpuParticleBridge {
         framerate_factor: f32,
     ) {
         // Update physics parameters with actual framerate_factor for frame-rate independence
-        let mut updated_params = *self.gpu_particle_system.params();
-        updated_params.physics[0] = framerate_factor; // physics.x = dt
+        let mut updated_params = *self.gpu_particle_system.physics_params();
+        updated_params.dt = framerate_factor;
 
         self.gpu_particle_system
             .update_physics_params(queue, &updated_params);
 
-        // Copy force field to particle system
-        self.copy_force_field_to_particle_system(encoder);
+        // No force field copy needed - wind circles already uploaded in update_forces()
 
         // Encode particle physics simulation
         self.gpu_particle_system.encode_simulate(encoder);
@@ -315,7 +269,7 @@ impl GpuParticleBridge {
         self.alive_count_readback_counter += 1;
 
         // Only read every 10 frames to reduce sync overhead
-        if self.alive_count_readback_counter % 10 == 0 {
+        if self.alive_count_readback_counter.is_multiple_of(10) {
             // Create staging buffer for readback
             let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Alive Count Readback"),

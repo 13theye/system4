@@ -226,18 +226,24 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         // (minimal CPU-GPU synchronization stalls).
         if let Some(gpu_bridge) = &mut model.particle_system.gpu_particle_bridge {
             let gpu_alive_count = gpu_bridge.read_gpu_alive_count_conditional(device, queue);
-            println!("GPU alive count: {} (read every 10 frames)", gpu_alive_count);
+            println!(
+                "GPU alive count: {} (read every 10 frames)",
+                gpu_alive_count
+            );
             model.render_state.particle_count = gpu_alive_count as usize;
 
             // DEBUG: Every 60 frames, read first 10 particles to check life values
             static mut DEBUG_COUNTER: u32 = 0;
             unsafe {
                 DEBUG_COUNTER += 1;
-                if DEBUG_COUNTER % 60 == 0 {
+                if DEBUG_COUNTER.is_multiple_of(60) {
                     let particles = gpu_bridge.debug_read_particle_positions(device, queue, 10);
                     println!("  DEBUG: First 10 particles (pos, life, age):");
                     for (i, (x, y, life, age)) in particles.iter().enumerate() {
-                        println!("    [{}] pos=({:.1}, {:.1}), life={:.1}, age={:.1}", i, x, y, life, age);
+                        println!(
+                            "    [{}] pos=({:.1}, {:.1}), life={:.1}, age={:.1}",
+                            i, x, y, life, age
+                        );
                     }
                 }
             }

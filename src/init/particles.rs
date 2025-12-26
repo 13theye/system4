@@ -44,18 +44,6 @@ pub fn init_particle_system(
         println!("  Render size: {}x{}", render_size.x, render_size.y);
 
         if let Some(dev) = device {
-            // Initialize GPU force field
-            println!("  Initializing GPU force field...");
-            if let Err(e) = particle_system.init_gpu_force_field(dev, true) {
-                eprintln!(
-                    "Warning: Failed to initialize GPU force field: {}. Falling back to CPU forces.",
-                    e
-                );
-                particle_system.set_use_gpu_forces(false);
-            } else {
-                println!("  GPU force field initialized successfully");
-            }
-
             // Initialize GPU physics (Phase 4)
             println!("  Initializing GPU physics (Phase 4)...");
             if let Err(e) = particle_system.init_gpu_physics(dev, particle_limit as usize, true) {
