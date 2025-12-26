@@ -217,8 +217,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         let submit_time = submit_start.elapsed();
         println!("GPU submit time: {:?}", submit_time);
 
-        // NO LONGER NEEDED: Buffer swapping removed since we use in-place updates
-        // With in-place updates, we keep accumulating particles in the same buffer
+        // Buffer swapping not needed with in-place updates
         // model.particle_system.end_gpu_frame();
 
         // Read GPU-computed alive count (every 10 frames to reduce sync overhead)

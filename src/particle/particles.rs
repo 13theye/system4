@@ -169,13 +169,17 @@ impl ParticleCore {
     ///
     /// This is the new preferred method for GPU spawning - it eliminates
     /// CPU-side particle tracking.
+    ///
+    /// # Arguments
+    /// * `voice_id` - Voice ID for per-voice particle culling (0-3)
     #[inline]
-    pub fn to_spawn_request(&self) -> ParticleSpawnRequest {
+    pub fn to_spawn_request(&self, voice_id: i32) -> ParticleSpawnRequest {
         ParticleSpawnRequest {
             position: [self.position.x, self.position.y],
             velocity: [self.velocity.x, self.velocity.y],
             life: self.remaining_life_span,
             mass: self.mass,
+            _padding_before_color: [0.0, 0.0],
             color: [
                 self.rgba.red,
                 self.rgba.green,
@@ -183,7 +187,8 @@ impl ParticleCore {
                 self.rgba.alpha,
             ],
             size: self.size,
-            _padding: 0.0,
+            voice_id: voice_id as f32,
+            _padding_end: [0.0, 0.0],
         }
     }
 

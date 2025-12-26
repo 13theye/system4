@@ -7,22 +7,6 @@
 /// - Coordinating GPU compute passes
 /// - Bridging between CPU emitters and GPU physics
 ///
-/// # Phase 3 Implementation
-///
-/// This is a Phase 3 implementation that eliminates CPU physics and the blocking
-/// read_back operation from Phase 2. All physics now runs on GPU.
-///
-/// # Architecture
-///
-/// ```text
-/// System4 Domain          Bridge                  Nnpipe GPU
-/// ┌─────────────┐        ┌──────────────┐        ┌─────────────┐
-/// │ Voice       │───────>│ GPU Bridge   │───────>│ GPU Particle│
-/// │ WindCircle  │        │              │        │ System      │
-/// │ Emitter     │        │ - Convert    │        │             │
-/// │ ParticleCore│        │ - Upload     │        │ - Physics   │
-/// └─────────────┘        │ - Coordinate │        │ - Forces    │
-///                        └──────────────┘        └─────────────┘
 /// ```
 use nannou::prelude::*;
 use nnpipe::compute::{
@@ -31,7 +15,6 @@ use nnpipe::compute::{
 use std::collections::HashMap;
 
 use crate::groups::{Voice, VoiceId};
-use crate::particle::ParticleCore;
 
 /// GPU Particle Bridge
 ///
@@ -162,34 +145,53 @@ impl GpuParticleBridge {
         self.gpu_particle_system.encode_spawn(encoder);
     }
 
-    /// Spawn particles from CPU emitters (legacy method)
+    /// Update voice limits for per-voice particle culling
     ///
-    /// Converts ParticleCore instances to GpuParticle format and uploads to GPU.
-    ///
-    /// DEPRECATED: Use upload_spawn_requests() and encode_spawn() instead.
+    /// Uploads target particle counts for each voice based on volume and particle_limit.
+    /// Call this before encode_cull() to update culling behavior.
     ///
     /// # Arguments
     ///
     /// * `queue` - WebGPU queue for uploads
-    /// * `particles` - Slice of ParticleCore to spawn on GPU
-    ///
-    /// # Returns
-    ///
-    /// Number of particles actually spawned
-    #[deprecated(note = "Use upload_spawn_requests() and encode_spawn() for GPU-side spawning")]
-    pub fn spawn_particles(&mut self, queue: &wgpu::Queue, particles: &[ParticleCore]) -> usize {
-        if particles.is_empty() {
-            return 0;
+    /// * `voices` - HashMap of voices containing volume and particle_limit params
+    pub fn update_voice_limits(&mut self, queue: &wgpu::Queue, voices: &HashMap<VoiceId, Voice>) {
+        use nnpipe::compute::VoiceLimit;
+
+        // Build limits array (indexed by voice_id 0-3)
+        let mut limits = [VoiceLimit::default(); 4];
+        for voice in voices.values() {
+            let voice_id = voice.id.to_i32();
+            if voice_id >= 0 && voice_id < 4 {
+                let target_count =
+                    (voice.params.volume * voice.params.particle_limit as f32).round() as u32;
+                limits[voice_id as usize] = VoiceLimit::new(target_count);
+            }
         }
 
-        // Convert ParticleCore to GpuParticle
-        let gpu_particles: Vec<GpuParticle> =
-            particles.iter().map(|p| p.to_gpu_particle()).collect();
+        self.gpu_particle_system.update_voice_limits(queue, &limits);
+    }
 
-        // Upload to GPU
-        #[allow(deprecated)]
-        self.gpu_particle_system
-            .spawn_particles(queue, &gpu_particles)
+    /// Clear culling counters before running cull pass
+    ///
+    /// Resets the per-voice particle count atomics. Call this before encode_cull().
+    ///
+    /// # Arguments
+    ///
+    /// * `queue` - WebGPU queue for uploads
+    pub fn clear_cull_counts(&mut self, queue: &wgpu::Queue) {
+        self.gpu_particle_system.clear_cull_counts(queue);
+    }
+
+    /// Encode particle culling pass
+    ///
+    /// Runs the two-pass culling algorithm to mark excess particles for fade-out.
+    /// Call this after spawn but before physics.
+    ///
+    /// # Arguments
+    ///
+    /// * `encoder` - Command encoder to record compute passes
+    pub fn encode_cull(&self, encoder: &mut wgpu::CommandEncoder) {
+        self.gpu_particle_system.encode_cull(encoder);
     }
 
     /// Run full GPU physics update
@@ -440,11 +442,18 @@ impl GpuParticleBridge {
         let data = buffer_slice.get_mapped_range();
         let particles: &[GpuParticle] = bytemuck::cast_slice(&data);
 
-        // Return: (x, y, life, age) for debugging
+        // Return: (x, y, life, age) and print color for debugging
         let positions: Vec<(f32, f32, f32, f32)> = particles
             .iter()
             .take(count)
-            .map(|p| {
+            .enumerate()
+            .map(|(i, p)| {
+                if i == 0 {
+                    println!(
+                        "  First particle color: ({:.3}, {:.3}, {:.3}, {:.3})",
+                        p.color[0], p.color[1], p.color[2], p.color[3]
+                    );
+                }
                 (
                     p.position[0], // x
                     p.position[1], // y

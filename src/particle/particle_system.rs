@@ -199,22 +199,39 @@ impl ParticleSystem {
             if !spawn_requests.is_empty() {
                 let upload_start = Instant::now();
                 let uploaded = gpu_bridge.upload_spawn_requests(queue, &spawn_requests);
-                println!("  Upload spawn requests: {} requests ({:?})", uploaded, upload_start.elapsed());
+                println!(
+                    "  Upload spawn requests: {} requests ({:?})",
+                    uploaded,
+                    upload_start.elapsed()
+                );
             }
 
-            // 3. Update GPU force field
+            // 3. Update voice limits for culling
+            let limits_start = Instant::now();
+            gpu_bridge.update_voice_limits(queue, voices);
+            println!("  Update voice limits: {:?}", limits_start.elapsed());
+
+            // 4. Clear culling counters
+            gpu_bridge.clear_cull_counts(queue);
+
+            // 5. Update GPU force field
             let forces_start = Instant::now();
             gpu_bridge.update_forces(queue, encoder, voices)?;
             println!("  Force update: {:?}", forces_start.elapsed());
 
-            // 4. GPU spawns particles (finds slots, drops overflow)
+            // 6. GPU spawns particles (finds slots, drops overflow)
             if !spawn_requests.is_empty() {
                 let spawn_start = Instant::now();
                 gpu_bridge.encode_spawn(encoder);
                 println!("  Spawn encode: {:?}", spawn_start.elapsed());
             }
 
-            // 5. GPU physics
+            // 7. GPU culls excess particles per voice
+            let cull_start = Instant::now();
+            gpu_bridge.encode_cull(encoder);
+            println!("  Cull encode: {:?}", cull_start.elapsed());
+
+            // 8. GPU physics
             let physics_start = Instant::now();
             gpu_bridge.encode_physics_update(queue, encoder, framerate_factor);
             println!(
@@ -224,11 +241,10 @@ impl ParticleSystem {
                 framerate_factor
             );
 
-            // 6. GPU render populate
+            // 9. GPU render populate
             let render_start = Instant::now();
             gpu_bridge.encode_render_populate(encoder);
             println!("  Render populate encode: {:?}", render_start.elapsed());
-
         } else {
             return Err("GPU particle bridge not initialized".into());
         }
@@ -541,11 +557,12 @@ impl ParticleSystem {
                 // Convert ParticleCores to spawn requests
                 // Respect target_particles as a soft limit per voice
                 let mut voice_request_count = 0;
+                let voice_id = voice.id.to_i32();
                 for particle in particles {
                     if voice_request_count >= target_particles {
                         break; // Reached per-voice limit
                     }
-                    spawn_requests.push(particle.to_spawn_request());
+                    spawn_requests.push(particle.to_spawn_request(voice_id));
                     voice_request_count += 1;
                 }
             }
@@ -636,72 +653,6 @@ impl ParticleSystem {
             "Emission: {} total emitters, {} enabled, {} particles emitted",
             total_emitters, enabled_emitters, total_emitted
         );
-    }
-
-    /********************* GPU Sync methods ********************************** */
-
-    /// Synchronize CPU particle tracking with GPU alive count
-    ///
-    /// When using GPU physics, particles die on the GPU but CPU particle_cores
-    /// still holds the spawn data. This causes emission logic to think we're
-    /// at max capacity when we're not. This method periodically cleans up the
-    /// CPU-side tracking to match GPU reality.
-    ///
-    /// We mark oldest activated particles as dead until CPU count matches GPU count.
-    fn sync_cpu_particles_with_gpu(&mut self, gpu_alive_count: usize) {
-        // Count CPU-side activated particles
-        let cpu_activated_count: usize = self
-            .particle_cores
-            .values()
-            .map(|cores| cores.iter().filter(|c| c.is_activated).count())
-            .sum();
-
-        println!(
-            "  Sync: CPU activated = {}, GPU alive = {}",
-            cpu_activated_count, gpu_alive_count
-        );
-
-        // If CPU thinks we have more particles than GPU, clean up the difference
-        if cpu_activated_count > gpu_alive_count {
-            let to_remove = cpu_activated_count - gpu_alive_count;
-            println!("    Marking {} CPU particles as dead to sync with GPU", to_remove);
-
-            let mut removed = 0;
-
-            // Remove oldest activated particles first (they likely died on GPU)
-            for cores in self.particle_cores.values_mut() {
-                for core in cores.iter_mut() {
-                    if removed >= to_remove {
-                        break;
-                    }
-                    if core.is_activated {
-                        core.is_alive = false;
-                        removed += 1;
-                    }
-                }
-                if removed >= to_remove {
-                    break;
-                }
-            }
-
-            // Clean up dead particles from vectors
-            for (voice_id, cores) in self.particle_cores.iter_mut() {
-                let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
-
-                let mut write_index = 0;
-                for read_index in 0..cores.len() {
-                    if cores[read_index].is_alive {
-                        if write_index != read_index {
-                            cores[write_index] = cores[read_index];
-                            feedback_array[write_index] = feedback_array[read_index].clone();
-                        }
-                        write_index += 1;
-                    }
-                }
-                cores.truncate(write_index);
-                feedback_array.truncate(write_index);
-            }
-        }
     }
 
     /********************* Particle methods ********************************** */
