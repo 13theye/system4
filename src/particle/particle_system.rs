@@ -120,6 +120,8 @@ impl ParticleSystem {
         now: Instant,
         perlin_seed: u32,
     ) -> (usize, usize) {
+        let frame_start = Instant::now();
+
         // Calculate time delta
         let dt = (now - self.last_update).as_secs_f32();
 
@@ -134,6 +136,8 @@ impl ParticleSystem {
 
         self.handle_particle_emission(voices, rng);
         self.cull_excess_particles(voices);
+
+        let physics_start = Instant::now();
 
         // Pre-compute "vibration" position offset factors for all voices
         let vibration_values: HashMap<VoiceId, f32> = voices
@@ -277,6 +281,15 @@ impl ParticleSystem {
             feedback_array.truncate(write_index);
         }
 
+        let physics_time = physics_start.elapsed();
+        println!(
+            "[Physics] Parallel update + culling: {:.3}ms ({} particles)",
+            physics_time.as_secs_f64() * 1000.0,
+            total_particle_count
+        );
+
+        let gpu_write_start = Instant::now();
+
         // Second pass: ZERO-COPY write directly to GPU staging memory
         // Use the SAME computed offsets from physics loop for consistency
         let particles_written = self.write_particles_zero_copy(
@@ -291,6 +304,20 @@ impl ParticleSystem {
             voices,
             &computed_offsets_map,
             total_segment_count,
+        );
+
+        let gpu_write_time = gpu_write_start.elapsed();
+        let frame_time = frame_start.elapsed();
+
+        println!(
+            "[GPU Write] Total GPU write time: {:.3}ms",
+            gpu_write_time.as_secs_f64() * 1000.0
+        );
+        println!(
+            "[FRAME] Total update_zero_copy: {:.3}ms (Physics: {:.1}%, GPU: {:.1}%)\n",
+            frame_time.as_secs_f64() * 1000.0,
+            (physics_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0,
+            (gpu_write_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0
         );
 
         // Record the last update time as the last item of business
@@ -347,35 +374,68 @@ impl ParticleSystem {
             return (0, 0).1;
         }
 
+        let start_total = Instant::now();
+
+        // Phase 1: Collect work items (sequential - just bookkeeping)
+        let start_collect = Instant::now();
+        let mut work_items = Vec::with_capacity(total_count);
+
+        for (voice_id, cores) in self.particle_cores.iter() {
+            let voice = voices.get(voice_id);
+            let segment_length = voice.map(|v| v.params.segment_length).unwrap_or(0.0);
+            let segment_line_width = voice.map(|v| v.params.segment_line_width).unwrap_or(1.0);
+
+            for (index, core) in cores.iter().enumerate() {
+                if core.is_alive && core.is_activated {
+                    work_items.push((*voice_id, index, segment_length, segment_line_width));
+                }
+            }
+        }
+        let collect_time = start_collect.elapsed();
+
         let (_, segment_count) =
             renderer.write_segments_direct(queue, total_count, |gpu_segments| {
-                let mut write_idx = 0;
+                // Phase 2: Parallel generation of SegmentGpu structs
+                let start_assembly = Instant::now();
 
-                for (voice_id, cores) in self.particle_cores.iter() {
-                    let voice = voices.get(voice_id);
-                    let segment_length = voice.map(|v| v.params.segment_length).unwrap_or(0.0);
-                    let segment_line_width =
-                        voice.map(|v| v.params.segment_line_width).unwrap_or(1.0);
-                    let computed_offsets = computed_offsets_map.get(voice_id).unwrap();
-                    let feedback_array = self.particle_feedback.get(voice_id).unwrap();
+                let segments: Vec<_> = work_items
+                    .par_iter()
+                    .map(|(voice_id, particle_idx, segment_length, segment_line_width)| {
+                        let computed_offsets = computed_offsets_map.get(voice_id).unwrap();
+                        let feedback_array = self.particle_feedback.get(voice_id).unwrap();
+                        let cores = self.particle_cores.get(voice_id).unwrap();
 
-                    for (index, core) in cores.iter().enumerate() {
-                        if core.is_alive && core.is_activated {
-                            // Use pre-computed offset from physics loop (no recalculation!)
-                            let offset = computed_offsets[index];
+                        to_segment_gpu(
+                            &cores[*particle_idx],
+                            &feedback_array[*particle_idx],
+                            computed_offsets[*particle_idx],
+                            *segment_length,
+                            *segment_line_width,
+                        )
+                    })
+                    .collect();
 
-                            gpu_segments[write_idx] = to_segment_gpu(
-                                core,
-                                &feedback_array[index],
-                                offset,
-                                segment_length,
-                                segment_line_width,
-                            );
-                            write_idx += 1;
-                        }
-                    }
-                }
+                let assembly_time = start_assembly.elapsed();
+
+                // Phase 3: Sequential copy into GPU buffer
+                let start_copy = Instant::now();
+                gpu_segments[..segments.len()].copy_from_slice(&segments);
+                let copy_time = start_copy.elapsed();
+
+                println!(
+                    "  [Segments] Collect: {:.3}ms, Parallel assembly: {:.3}ms, Copy: {:.3}ms ({} segments)",
+                    collect_time.as_secs_f64() * 1000.0,
+                    assembly_time.as_secs_f64() * 1000.0,
+                    copy_time.as_secs_f64() * 1000.0,
+                    segments.len()
+                );
             });
+
+        let total_time = start_total.elapsed();
+        println!(
+            "[Segments] Total write_segments_zero_copy: {:.3}ms",
+            total_time.as_secs_f64() * 1000.0
+        );
 
         segment_count
     }
