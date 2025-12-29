@@ -1,18 +1,24 @@
-//! src/forces2/wind_circle.rs
-//!
-//! WindCircle implementation for Forces v2
+// src/forces/wind_circle.rs
+//
+// WindCircle implementation for wind_new.rs
 
-use crate::{forces::wind::Wind, groups::VoiceId};
+use super::wind_new::{Wind, WindField};
+use crate::groups::VoiceId;
 use nannou::prelude::*;
 
-/// Maximum wind angle deviation in radians (90 degrees)
-const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
+/// Type alias for cell indices
+#[derive(Debug, Clone, Copy)]
+pub struct CellIdx {
+    pub x: usize,
+    pub y: usize,
+}
 
 /// A circular wind force that affects particles within a donut-shaped region
 #[derive(Clone)]
 pub struct WindCircle {
     pub id: usize,
     pub parent_voice: VoiceId,
+    cell_idxs: Vec<CellIdx>, // Indices of cells that are affected by the circle
     params: WindCircleParams, // Params of the circle
 }
 
@@ -35,31 +41,110 @@ impl WindCircle {
             force: strength,
             gravity: center_bias,
             noise,
+            dirty: true,
         };
         Self {
             id,
             parent_voice,
+            cell_idxs: Vec::new(),
             params: config,
         }
     }
 
-    /// Calculate the Wind force for a given location, if any
-    pub fn wind_for_position(&self, position: Vec2, noise_factor: f64) -> Option<Wind> {
-        let params = &self.params;
-        let distance_to_center = (position - params.center).length();
+    /// Recalculate wind within each grid inside this circle, if the parameters have changed
+    pub fn update(&mut self, field: &mut WindField) {
+        if self.has_changes() {
+            self.remove_from_field(field);
+            self.cell_idxs = self.apply_to_field(field);
+            self.clear_changes();
+        }
+    }
+
+    /// Remove the circle's wind from the field
+    pub fn remove_from_field(&mut self, field: &mut WindField) {
+        for cell_idx in self.cell_idxs.iter() {
+            field.remove_circle_wind(cell_idx.x, cell_idx.y, self.id, self.parent_voice);
+        }
+        self.cell_idxs.clear();
+    }
+
+    /// Add the circle's wind to the field, return the cells that were affected.
+    /// The total numerical force for each cell is calculated once per frame in a later step.
+    pub fn apply_to_field(&self, field: &mut WindField) -> Vec<CellIdx> {
+        // Calculate bounding box using direct parameter access
+        let (min_col, max_col, min_row, max_row) = self.calculate_bounding_box(field, &self.params);
+
+        let mut affected_cells = Vec::new();
+
+        // Update cells serially
+        for col in min_col..max_col {
+            for row in min_row..max_row {
+                let Some(wind) = self.calculate_wind_for_cell(field, col, row, &self.params) else {
+                    continue;
+                };
+                field.add_circle_wind(col, row, self.id, self.parent_voice, wind);
+                affected_cells.push(CellIdx { x: col, y: row });
+            }
+        }
+
+        affected_cells
+    }
+
+    /// Get the bounding box containing all cells that are affected by the circle
+    fn calculate_bounding_box(
+        &self,
+        field: &WindField,
+        params: &WindCircleParams,
+    ) -> (usize, usize, usize, usize) {
+        // Calculate the outer radius for bounding box
+        let outer_radius = params.outer_radius + params.inner_radius / 2.0;
+
+        // Use the same coordinate transformation as position_to_idx for consistency
+        let center_pos_transformed = field.world_to_grid_coords(params.center);
+
+        let cell_size = field.params.cell_size;
+        let radius_in_cells_x = outer_radius / cell_size.x;
+        let radius_in_cells_y = outer_radius / cell_size.y;
+
+        let min_col = (center_pos_transformed.x - radius_in_cells_x)
+            .floor()
+            .max(0.0) as usize;
+        let max_col = (center_pos_transformed.x + radius_in_cells_x)
+            .ceil()
+            .min(field.params.grid_cols as f32) as usize;
+        let min_row = (center_pos_transformed.y - radius_in_cells_y)
+            .floor()
+            .max(0.0) as usize;
+        let max_row = (center_pos_transformed.y + radius_in_cells_y)
+            .ceil()
+            .min(field.params.grid_rows as f32) as usize;
+
+        (min_col, max_col, min_row, max_row)
+    }
+
+    /// Calculate the Wind force within a cell. Returns the wind force if this cell contains one.
+    fn calculate_wind_for_cell(
+        &self,
+        field: &WindField,
+        col: usize,
+        row: usize,
+        params: &WindCircleParams,
+    ) -> Option<Wind> {
+        // Get cell origin
+        let cell_origin = field.get_cell_origin(col, row)?;
+
+        let distance_to_center = (cell_origin - params.center).length();
         let inner_radius = params.inner_radius;
         let outer_radius = params.outer_radius;
 
         if distance_to_center >= inner_radius && distance_to_center <= outer_radius {
             // Wind generation logic specific to circular fields
-            let radius_vector = position - params.center;
+            let radius_vector = cell_origin - params.center;
             let radius_dir = radius_vector.normalize();
             let tangent_dir = vec2(radius_dir.y, -radius_dir.x); // tangential, 90 deg CCW from radial
 
             // Rotate the tangent vector by bias * 90 degrees
             let angle = params.gravity * -std::f32::consts::FRAC_PI_2; // PI/2 = 90 deg
-            let angle_offset = params.noise * noise_factor as f32 * MAX_WIND_ANGLE_DEVIATION;
-            let angle = angle + angle_offset;
 
             let sin_a = angle.sin();
             let cos_a = angle.cos();
@@ -85,6 +170,16 @@ impl WindCircle {
     }
 
     /******************* Methods to change circle properties *******************/
+
+    /// Returns true if the WindCircle has parameter changes that have not been applied.
+    pub fn has_changes(&self) -> bool {
+        self.params.dirty
+    }
+
+    /// Clear the needs_recalculation flag, indicating that the parameters have been applied.
+    pub fn clear_changes(&mut self) {
+        self.params.dirty = false;
+    }
 
     /// Return a reference to the WindCircleParams
     pub fn params(&self) -> &WindCircleParams {
@@ -151,6 +246,8 @@ pub struct WindCircleParams {
     pub gravity: f32,
     /// 0.0-1.0 factor for random angle variation, where 1.0 = full �90� deviation
     pub noise: f32,
+    /// True if settings changed and cells need recalculation
+    pub dirty: bool,
 }
 
 impl Default for WindCircleParams {
@@ -162,6 +259,7 @@ impl Default for WindCircleParams {
             force: 0.0,
             gravity: 0.0,
             noise: 0.0,
+            dirty: true,
         }
     }
 }
@@ -171,18 +269,21 @@ impl WindCircleParams {
     pub fn set_center(&mut self, center: Vec2) {
         if self.center != center {
             self.center = center;
+            self.dirty = true;
         }
     }
 
     pub fn set_center_x(&mut self, x: f32) {
         if self.center.x != x {
             self.center.x = x;
+            self.dirty = true;
         }
     }
 
     pub fn set_center_y(&mut self, y: f32) {
         if self.center.y != y {
             self.center.y = y;
+            self.dirty = true;
         }
     }
 
@@ -190,6 +291,7 @@ impl WindCircleParams {
     pub fn set_outer_radius(&mut self, radius: f32) {
         if self.outer_radius != radius {
             self.outer_radius = radius;
+            self.dirty = true;
         }
     }
 
@@ -197,6 +299,7 @@ impl WindCircleParams {
     pub fn set_inner_radius(&mut self, radius: f32) {
         if self.inner_radius != radius {
             self.inner_radius = radius;
+            self.dirty = true;
         }
     }
 
@@ -204,6 +307,7 @@ impl WindCircleParams {
     pub fn set_force(&mut self, force: f32) {
         if self.force != force {
             self.force = force;
+            self.dirty = true;
         }
     }
 
@@ -211,6 +315,7 @@ impl WindCircleParams {
     pub fn set_gravity(&mut self, gravity: f32) {
         if self.gravity != gravity {
             self.gravity = gravity;
+            self.dirty = true;
         }
     }
 
@@ -219,6 +324,7 @@ impl WindCircleParams {
         let clamped_noise = noise.clamp(0.0, 1.0);
         if self.noise != clamped_noise {
             self.noise = clamped_noise;
+            self.dirty = true;
         }
     }
 }

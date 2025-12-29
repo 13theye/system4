@@ -1,6 +1,6 @@
 use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, DroneCommandBuilder},
-    forces::WindCircle,
+    forces::wind_circle::WindCircle,
     groups::VoiceId,
     terminals::commands::drone::DroneConfig,
 };
@@ -54,7 +54,7 @@ impl CircleCommandHandler {
         );
 
         // Add the circle to the voice
-        voice.add_wind_circle(circle);
+        voice.add_wind_circle(circle.clone());
 
         // Queue parameter update commands for processing after this command completes
         let parameter_commands = DroneCommandBuilder::generate_circle_parameter_commands(

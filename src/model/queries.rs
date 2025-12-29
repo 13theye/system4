@@ -2,7 +2,7 @@
 //
 // Read-only (or read-mostly) accessors used by UI/rendering.
 
-use crate::{forces::WindCircleParams, groups::VoiceId, model::Model};
+use crate::{forces::wind_circle::WindCircleParams, groups::VoiceId, model::Model};
 
 impl Model {
     /// Get all wind circle IDs for a voice.

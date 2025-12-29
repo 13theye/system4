@@ -61,7 +61,7 @@ width = 1512
 height = 270
 
 [particles]
-limit = 10000
+limit = 100000
 
 
 

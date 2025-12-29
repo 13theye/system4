@@ -1,6 +1,6 @@
-// src/model/command_flow.rs
-//
-// Command-flow helpers: enqueue commands and process one "tick" of execution.
+//! src/model/command_flow.rs
+//!
+//! Command-flow helpers: enqueue commands and process one "tick" of execution.
 
 use crate::{
     command_engine::{Command, CommandEngine},
@@ -18,17 +18,9 @@ impl Model {
 
     /// Hard-remove a voice immediately (used by shutdown paths).
     pub fn kill_voice(&mut self, voice_id: VoiceId) {
-        // Remove voice's wind circles from force field
-        let Some(voice) = self.voice_manager.get_voice_mut(voice_id) else {
+        if self.voice_manager.get_voice_mut(voice_id).is_none() {
             return;
         };
-
-        let wind_field = &mut self.particle_system.forces.wind_field;
-
-        for (id, circle) in voice.wind_circles.iter_mut() {
-            circle.remove_from_field(wind_field);
-            println!("Controller: Removed wind circle for {:?}", id);
-        }
 
         // Remove the voice from the hashmap
         self.voice_manager.remove_voice(voice_id);

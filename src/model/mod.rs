@@ -80,7 +80,8 @@ impl Drop for Model {
 fn erase_drone(model: &mut Model, id: i32) {
     let voice_id = VoiceId::from_i32(id);
     model.kill_voice(voice_id);
-    model.particle_system.forces.recalculate_once();
+    // not needed for Forces2
+    //model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);
 }
 
@@ -210,17 +211,17 @@ impl ExecutionContext for Model {
     }
 
     // Wind field access
-    fn wind_field(&mut self) -> &mut crate::forces::WindField {
-        &mut self.particle_system.forces.wind_field
+    fn wind_field(&mut self) -> &mut crate::forces::wind_field::WindField {
+        &mut self.particle_system.force_fields.wind_field
     }
 
     // Particle system defaults
     fn default_particle_color(&self) -> nannou::color::Rgb {
-        self.particle_system.default_particle_color
+        self.particle_system.params.default_particle_color
     }
 
     fn global_max_spawn_rate(&self) -> f32 {
-        self.particle_system.global_max_spawn_rate
+        self.particle_system.params.global_max_spawn_rate
     }
 
     // GPU segment buffer access - delegate to voice_manager
@@ -279,15 +280,12 @@ impl ExecutionContext for Model {
 
     // Composite operations - delegate to voice_manager with wind field access
     fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
-        let wind_field = &mut self.particle_system.forces.wind_field;
         self.voice_manager
-            .remove_circle_from_voice(voice_id, circle_id, wind_field)
+            .remove_circle_from_voice(voice_id, circle_id)
     }
 
     fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
-        let wind_field = &mut self.particle_system.forces.wind_field;
-        self.voice_manager
-            .remove_all_circles_from_voice(voice_id, wind_field);
+        self.voice_manager.remove_all_circles_from_voice(voice_id);
     }
 
     // Rhythm composite operations - delegate to rhythm_manager with service access

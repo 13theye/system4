@@ -1,9 +1,9 @@
-// System 4
-//
-// (c) 2025 13th Eye LLC & Tacit Group
-//
-//
-// src/main.rs
+//! System 4
+//!
+//! (c) 2025 13th Eye LLC & Tacit Group
+//!
+//!
+//! src/main.rs
 
 mod init;
 
@@ -185,6 +185,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         &model.render_state.particle_renderer,
         &model.render_state.segment_renderer,
         now,
+        app.duration.since_start.as_millis() as u32,
     );
 
     // Store counts for rendering

@@ -122,8 +122,8 @@ impl RenderState {
             format: wgpu::TextureFormat::Rgba16Float,
         };
 
-        let particle_renderer = ParticleRenderer::new(device, hi_config, 25000);
-        let segment_renderer = SegmentRenderer::new(device, hi_config, 25000);
+        let particle_renderer = ParticleRenderer::new(device, hi_config, particle_limit as usize);
+        let segment_renderer = SegmentRenderer::new(device, hi_config, particle_limit as usize);
 
         // Create texture reshapers for multi-window rendering
         let audience_reshaper =
