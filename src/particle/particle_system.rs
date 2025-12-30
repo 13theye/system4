@@ -119,6 +119,7 @@ impl ParticleSystem {
         segment_renderer: &SegmentRenderer,
         now: Instant,
         perlin_seed: u32,
+        engine_debug: bool,
     ) -> (usize, usize) {
         let frame_start = Instant::now();
 
@@ -135,7 +136,10 @@ impl ParticleSystem {
         let framerate_factor = (dt / 0.0167).min(1.5);
 
         self.handle_particle_emission(voices, rng);
+
+        let cull_start = Instant::now();
         self.cull_excess_particles(voices);
+        let cull_time = cull_start.elapsed();
 
         let physics_start = Instant::now();
 
@@ -258,6 +262,7 @@ impl ParticleSystem {
             computed_offsets_map.insert(*voice_id, computed_offsets);
 
             // Count alive particles
+            let count_start = Instant::now();
             let alive_count = cores
                 .iter()
                 .filter(|c| c.is_alive && c.is_activated)
@@ -265,28 +270,47 @@ impl ParticleSystem {
             voice_particle_counts.insert(*voice_id, alive_count);
             total_particle_count += alive_count;
             total_segment_count += alive_count;
+            let count_time = count_start.elapsed();
 
             // Cull dead particles
+            let overall_cull_start = Instant::now();
             let mut write_index = 0;
             for read_index in 0..cores.len() {
                 if cores[read_index].is_alive {
                     if write_index != read_index {
-                        cores[write_index] = cores[read_index];
-                        feedback_array[write_index] = feedback_array[read_index].clone();
+                        cores.swap(write_index, read_index);
+                        feedback_array.swap(write_index, read_index);
                     }
                     write_index += 1;
                 }
             }
             cores.truncate(write_index);
             feedback_array.truncate(write_index);
+
+            let overall_cull_time = overall_cull_start.elapsed();
+            println!(
+                "[Physics] Count time : {:.3}ms",
+                count_time.as_secs_f64() * 1000.0
+            );
+            println!(
+                "[Physics] Overall cull time : {:.3}ms",
+                overall_cull_time.as_secs_f64() * 1000.0
+            );
         }
 
         let physics_time = physics_start.elapsed();
-        println!(
-            "[Physics] Parallel update + culling: {:.3}ms ({} particles)",
-            physics_time.as_secs_f64() * 1000.0,
-            total_particle_count
-        );
+        if engine_debug {
+            println!(
+                "[Physics] Particle end of life marking time : {:.3}ms",
+                cull_time.as_secs_f64() * 1000.0
+            );
+
+            println!(
+                "[Physics] Parallel update : {:.3}ms ({} particles)",
+                physics_time.as_secs_f64() * 1000.0,
+                total_particle_count
+            );
+        }
 
         let gpu_write_start = Instant::now();
 
@@ -297,28 +321,35 @@ impl ParticleSystem {
             particle_renderer,
             &computed_offsets_map,
             total_particle_count,
+            engine_debug,
         );
+        /*
         let segments_written = self.write_segments_zero_copy(
             queue,
             segment_renderer,
             voices,
             &computed_offsets_map,
             total_segment_count,
+            engine_debug,
         );
+         */
+        let segments_written = 0;
 
         let gpu_write_time = gpu_write_start.elapsed();
         let frame_time = frame_start.elapsed();
 
-        println!(
-            "[GPU Write] Total GPU write time: {:.3}ms",
-            gpu_write_time.as_secs_f64() * 1000.0
-        );
-        println!(
-            "[FRAME] Total update_zero_copy: {:.3}ms (Physics: {:.1}%, GPU: {:.1}%)\n",
-            frame_time.as_secs_f64() * 1000.0,
-            (physics_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0,
-            (gpu_write_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0
-        );
+        if engine_debug {
+            println!(
+                "[GPU Write] Total GPU write time: {:.3}ms",
+                gpu_write_time.as_secs_f64() * 1000.0
+            );
+            println!(
+                "[FRAME] Total update_zero_copy: {:.3}ms (Physics: {:.1}%, GPU: {:.1}%)\n",
+                frame_time.as_secs_f64() * 1000.0,
+                (physics_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0,
+                (gpu_write_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0
+            );
+        }
 
         // Record the last update time as the last item of business
         self.last_update = now;
@@ -333,12 +364,16 @@ impl ParticleSystem {
         renderer: &ParticleRenderer,
         computed_offsets_map: &HashMap<VoiceId, Vec<Vec2>>,
         total_count: usize,
+        engine_debug: bool,
     ) -> usize {
         if total_count == 0 {
             return 0;
         }
 
-        renderer.write_particles_direct(queue, total_count, |gpu_particles| {
+        let start_total = Instant::now();
+
+        let particle_count = renderer.write_particles_direct(queue, total_count, |gpu_particles| {
+            let start_assembly = Instant::now();
             let mut write_idx = 0;
 
             for (voice_id, cores) in self.particle_cores.iter() {
@@ -358,7 +393,26 @@ impl ParticleSystem {
                     }
                 }
             }
-        })
+
+            let assembly_time = start_assembly.elapsed();
+            if engine_debug {
+                println!(
+                    "  [Particles] Assembly: {:.3}ms ({} particles)",
+                    assembly_time.as_secs_f64() * 1000.0,
+                    write_idx
+                );
+            }
+        });
+
+        let total_time = start_total.elapsed();
+        if engine_debug {
+            println!(
+                "[Particles] Total write_particles_zero_copy: {:.3}ms",
+                total_time.as_secs_f64() * 1000.0
+            );
+        }
+
+        particle_count
     }
 
     /// Write segments directly to GPU staging memory (zero-copy)
@@ -369,6 +423,7 @@ impl ParticleSystem {
         voices: &HashMap<VoiceId, Voice>,
         computed_offsets_map: &HashMap<VoiceId, Vec<Vec2>>,
         total_count: usize,
+        engine_debug: bool,
     ) -> usize {
         if total_count == 0 {
             return (0, 0).1;
@@ -422,20 +477,24 @@ impl ParticleSystem {
                 gpu_segments[..segments.len()].copy_from_slice(&segments);
                 let copy_time = start_copy.elapsed();
 
-                println!(
-                    "  [Segments] Collect: {:.3}ms, Parallel assembly: {:.3}ms, Copy: {:.3}ms ({} segments)",
-                    collect_time.as_secs_f64() * 1000.0,
-                    assembly_time.as_secs_f64() * 1000.0,
-                    copy_time.as_secs_f64() * 1000.0,
-                    segments.len()
-                );
+                if engine_debug {
+                    println!(
+                        "  [Segments] Collect: {:.3}ms, Parallel assembly: {:.3}ms, Copy: {:.3}ms ({} segments)",
+                        collect_time.as_secs_f64() * 1000.0,
+                        assembly_time.as_secs_f64() * 1000.0,
+                        copy_time.as_secs_f64() * 1000.0,
+                        segments.len()
+                    );
+                }
             });
 
         let total_time = start_total.elapsed();
-        println!(
-            "[Segments] Total write_segments_zero_copy: {:.3}ms",
-            total_time.as_secs_f64() * 1000.0
-        );
+        if engine_debug {
+            println!(
+                "[Segments] Total write_segments_zero_copy: {:.3}ms",
+                total_time.as_secs_f64() * 1000.0
+            );
+        }
 
         segment_count
     }

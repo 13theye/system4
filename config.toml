@@ -63,5 +63,9 @@ height = 270
 [particles]
 limit = 100000
 
+[debug]
+# Enable detailed performance timing output
+engine_debug = false
+
 
 

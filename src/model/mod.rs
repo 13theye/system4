@@ -66,6 +66,9 @@ pub struct Model {
     // and, if auto-AI is enabled, we should trigger a single AI rhythm
     // request after all commands have been applied.
     pub auto_ai_pending_for_voice1: bool,
+
+    // Debug flag for performance timing output
+    pub engine_debug: bool,
 }
 
 impl Drop for Model {

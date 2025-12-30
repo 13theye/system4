@@ -67,3 +67,8 @@ pub struct OpenAIServiceConfig {
     pub strict_request_object_adherence: bool,
     pub api_key: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct DebugConfig {
+    pub engine_debug: bool,
+}

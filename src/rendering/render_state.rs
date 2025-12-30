@@ -85,6 +85,7 @@ impl RenderState {
         particle_limit: u32,
         dpi_scale: f32,
         font: Font,
+        engine_debug: bool,
     ) -> Self {
         let render_size = vec2(texture_width as f32, texture_height as f32);
         let render_rect = Rect::from_x_y_w_h(0.0, 0.0, render_size.x, render_size.y);
@@ -122,8 +123,8 @@ impl RenderState {
             format: wgpu::TextureFormat::Rgba16Float,
         };
 
-        let particle_renderer = ParticleRenderer::new(device, hi_config, particle_limit as usize);
-        let segment_renderer = SegmentRenderer::new(device, hi_config, particle_limit as usize);
+        let particle_renderer = ParticleRenderer::new(device, hi_config, particle_limit as usize, engine_debug);
+        let segment_renderer = SegmentRenderer::new(device, hi_config, particle_limit as usize, engine_debug);
 
         // Create texture reshapers for multi-window rendering
         let audience_reshaper =

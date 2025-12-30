@@ -23,5 +23,6 @@ pub fn init_render_state(
         particle_limit,
         dpi_scale,
         font,
+        settings.debug.engine_debug,
     )
 }
