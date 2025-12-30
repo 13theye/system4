@@ -1,6 +1,6 @@
 use super::commands::Command;
 use crate::{
-    forces::WindField,
+    forces::wind_field::WindField,
     groups::{Rhythm, Voice, VoiceId},
     osc::OscSender,
     rendering::GpuSegmentBuffer,

@@ -1,5 +1,4 @@
 use crate::{
-    forces::WindField,
     groups::{Voice, VoiceId},
     rendering::GpuSegmentBuffer,
 };
@@ -89,15 +88,9 @@ impl VoiceManager {
     // Composite operations that need coordinated access to wind field
     /// Remove a specific circle from a voice's wind circles
     /// This requires coordinated access to both the wind field and the voice
-    pub fn remove_circle_from_voice(
-        &mut self,
-        voice_id: VoiceId,
-        circle_id: usize,
-        wind_field: &mut WindField,
-    ) -> bool {
+    pub fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
         if let Some(voice) = self.voices.get_mut(&voice_id) {
-            if let Some(circle) = voice.wind_circles.get_mut(&circle_id) {
-                circle.remove_from_field(wind_field);
+            if voice.wind_circles.get_mut(&circle_id).is_some() {
                 voice.remove_wind_circle(circle_id);
                 true
             } else {
@@ -110,11 +103,9 @@ impl VoiceManager {
 
     /// Remove all circles from a voice's wind circles
     /// This requires coordinated access to both the wind field and the voice
-    pub fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId, wind_field: &mut WindField) {
+    pub fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
         if let Some(voice) = self.voices.get_mut(&voice_id) {
-            for (_id, circle) in voice.wind_circles.iter_mut() {
-                circle.remove_from_field(wind_field);
-            }
+            voice.remove_all_circles();
         }
     }
 }

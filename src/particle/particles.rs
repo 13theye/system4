@@ -79,7 +79,6 @@ impl ParticleCore {
 
     /// Update the particle based on forces and age
     /// This is the hot path - keep it tight and cache-friendly
-    #[inline]
     pub fn update(&mut self, color_limit: Rgb, alpha_limit: f32, framerate_factor: f32) {
         // Apply velocity and reset acceleration
         self.velocity += self.acceleration * framerate_factor;

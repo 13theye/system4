@@ -1,7 +1,7 @@
 // src/groups/voice.rs
 
 use crate::{
-    forces::WindCircle,
+    forces::wind::WindCircle,
     groups::VoiceId,
     particle::emitter::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
@@ -27,7 +27,7 @@ pub struct VoiceParams {
 impl Default for VoiceParams {
     fn default() -> Self {
         Self {
-            particle_limit: 5000,
+            particle_limit: 15000,
             volume: 0.0,
             default_spawn_rate: 30.0,
             alpha_limit: 0.0,
@@ -240,6 +240,11 @@ impl Voice {
     /// Remove a WindCircle from this voice
     pub fn remove_wind_circle(&mut self, id: usize) {
         self.wind_circles.remove(&id);
+        self.recalculate_emitters();
+    }
+
+    pub fn remove_all_circles(&mut self) {
+        self.wind_circles.clear();
         self.recalculate_emitters();
     }
 
