@@ -9,7 +9,7 @@ pub const PARTICLE_FADE_IN_DURATION: f32 = 180.0; // frames to fade in
 pub const PARTICLE_FADE_OUT_DURATION: f32 = 100.0;
 /// Buffer for out-of-bounds particles
 pub const OOB_BUFFER: f32 = 1500.0;
-pub const FEEDBACK_POSITIONS: usize = 128;
+pub const FEEDBACK_POSITIONS: usize = 64;
 
 // Constant used on the system-level
 pub const EMPTY_GPU_PARTICLE_BUFFER: GpuParticleBuffer = Vec::new();

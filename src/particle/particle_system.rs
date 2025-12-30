@@ -25,7 +25,8 @@ pub struct ParticleSystem {
     // Core: hot data for physics updates (~100 bytes per particle)
     pub particle_cores: HashMap<VoiceId, Vec<ParticleCore>>,
     // Feedback: cold data for trail rendering (~3.4KB per particle)
-    pub particle_feedback: HashMap<VoiceId, Vec<ParticleFeedback>>,
+    // Boxed for performance improvement when culling particles
+    pub particle_feedback: HashMap<VoiceId, Vec<Box<ParticleFeedback>>>,
 
     // forces
     pub force_fields: ForceFields,
@@ -141,8 +142,6 @@ impl ParticleSystem {
         self.cull_excess_particles(voices);
         let cull_time = cull_start.elapsed();
 
-        let physics_start = Instant::now();
-
         // Pre-compute "vibration" position offset factors for all voices
         let vibration_values: HashMap<VoiceId, f32> = voices
             .values()
@@ -157,6 +156,7 @@ impl ParticleSystem {
         // Init Hashmap to Store computed offsets from physics loop to reuse in GPU write
         let mut computed_offsets_map: HashMap<VoiceId, Vec<Vec2>> = HashMap::new();
 
+        let physics_start = Instant::now();
         for (voice_id, cores) in self.particle_cores.iter_mut() {
             let voice = voices.get(voice_id);
             let color_limit = voice.map(|v| v.params.color_limit);
@@ -288,14 +288,17 @@ impl ParticleSystem {
             feedback_array.truncate(write_index);
 
             let overall_cull_time = overall_cull_start.elapsed();
-            println!(
-                "[Physics] Count time : {:.3}ms",
-                count_time.as_secs_f64() * 1000.0
-            );
-            println!(
-                "[Physics] Overall cull time : {:.3}ms",
-                overall_cull_time.as_secs_f64() * 1000.0
-            );
+
+            if engine_debug {
+                println!(
+                    "[Physics] Count time : {:.3}ms",
+                    count_time.as_secs_f64() * 1000.0
+                );
+                println!(
+                    "[Physics] Overall cull time : {:.3}ms",
+                    overall_cull_time.as_secs_f64() * 1000.0
+                );
+            }
         }
 
         let physics_time = physics_start.elapsed();
@@ -323,7 +326,7 @@ impl ParticleSystem {
             total_particle_count,
             engine_debug,
         );
-        /*
+
         let segments_written = self.write_segments_zero_copy(
             queue,
             segment_renderer,
@@ -332,8 +335,6 @@ impl ParticleSystem {
             total_segment_count,
             engine_debug,
         );
-         */
-        let segments_written = 0;
 
         let gpu_write_time = gpu_write_start.elapsed();
         let frame_time = frame_start.elapsed();
@@ -485,6 +486,10 @@ impl ParticleSystem {
                         copy_time.as_secs_f64() * 1000.0,
                         segments.len()
                     );
+                    println!(
+                        "  [Segments] Count: {}",
+                        segments.len()
+                    );
                 }
             });
 
@@ -541,7 +546,8 @@ impl ParticleSystem {
                         rng,
                     );
                     let new_particles_count = new_particles.len();
-                    let mut new_feedback = vec![ParticleFeedback::new(); new_particles_count];
+                    let mut new_feedback =
+                        vec![Box::new(ParticleFeedback::new()); new_particles_count];
 
                     core_vec.append(&mut new_particles);
                     feedback_vec.append(&mut new_feedback);

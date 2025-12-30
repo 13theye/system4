@@ -27,7 +27,7 @@ pub struct VoiceParams {
 impl Default for VoiceParams {
     fn default() -> Self {
         Self {
-            particle_limit: 1000000,
+            particle_limit: 15000,
             volume: 0.0,
             default_spawn_rate: 30.0,
             alpha_limit: 0.0,
