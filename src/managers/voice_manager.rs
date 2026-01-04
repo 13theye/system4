@@ -13,13 +13,15 @@ use std::collections::HashMap;
 pub struct VoiceManager {
     voices: HashMap<VoiceId, Voice>,
     gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
+    voice_particle_limit: u32,
 }
 
 impl VoiceManager {
-    pub fn new() -> Self {
+    pub fn new(voice_particle_limit: u32) -> Self {
         Self {
             voices: HashMap::new(),
             gpu_segment_buffers: HashMap::new(),
+            voice_particle_limit,
         }
     }
 
@@ -50,6 +52,10 @@ impl VoiceManager {
 
     pub fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice> {
         &mut self.voices
+    }
+
+    pub fn voice_particle_limit(&self) -> u32 {
+        self.voice_particle_limit
     }
 
     // GPU segment buffer access
@@ -107,11 +113,5 @@ impl VoiceManager {
         if let Some(voice) = self.voices.get_mut(&voice_id) {
             voice.remove_all_circles();
         }
-    }
-}
-
-impl Default for VoiceManager {
-    fn default() -> Self {
-        Self::new()
     }
 }

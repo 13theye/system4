@@ -456,19 +456,21 @@ impl ParticleSystem {
 
                 let segments: Vec<_> = work_items
                     .par_iter()
-                    .map(|(voice_id, particle_idx, segment_length, segment_line_width)| {
-                        let computed_offsets = computed_offsets_map.get(voice_id).unwrap();
-                        let feedback_array = self.particle_feedback.get(voice_id).unwrap();
-                        let cores = self.particle_cores.get(voice_id).unwrap();
+                    .map(
+                        |(voice_id, particle_idx, segment_length, segment_line_width)| {
+                            let computed_offsets = computed_offsets_map.get(voice_id).unwrap();
+                            let feedback_array = self.particle_feedback.get(voice_id).unwrap();
+                            let cores = self.particle_cores.get(voice_id).unwrap();
 
-                        to_segment_gpu(
-                            &cores[*particle_idx],
-                            &feedback_array[*particle_idx],
-                            computed_offsets[*particle_idx],
-                            *segment_length,
-                            *segment_line_width,
-                        )
-                    })
+                            to_segment_gpu(
+                                &cores[*particle_idx],
+                                &feedback_array[*particle_idx],
+                                computed_offsets[*particle_idx],
+                                *segment_length,
+                                *segment_line_width,
+                            )
+                        },
+                    )
                     .collect();
 
                 let assembly_time = start_assembly.elapsed();
@@ -479,16 +481,12 @@ impl ParticleSystem {
                 let copy_time = start_copy.elapsed();
 
                 if engine_debug {
+                    println!("  [Segments] Count: {}", segments.len());
                     println!(
-                        "  [Segments] Collect: {:.3}ms, Parallel assembly: {:.3}ms, Copy: {:.3}ms ({} segments)",
+                        "  [Segments] Collect: {:.3}ms, Parallel assembly: {:.3}ms, Copy: {:.3}ms",
                         collect_time.as_secs_f64() * 1000.0,
                         assembly_time.as_secs_f64() * 1000.0,
                         copy_time.as_secs_f64() * 1000.0,
-                        segments.len()
-                    );
-                    println!(
-                        "  [Segments] Count: {}",
-                        segments.len()
                     );
                 }
             });

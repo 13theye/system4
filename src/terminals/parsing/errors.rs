@@ -16,8 +16,8 @@ pub enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::UnexpectedToken { expected, found } => {
-                write!(f, "Expected {}, found {}", expected, found)
+            ParseError::UnexpectedToken { found, .. } => {
+                write!(f, "Invalid token: {}", found)
             }
             ParseError::UnexpectedEnd => write!(f, "Unexpected end of input"),
             ParseError::InvalidNumber(s) => write!(f, "Invalid number: {}", s),

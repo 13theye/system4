@@ -63,6 +63,11 @@ impl Voice {
         }
     }
 
+    pub fn with_particle_limit(mut self, limit: usize) -> Self {
+        self.params.particle_limit = limit;
+        self
+    }
+
     pub fn issue_wind_circle_idx(&mut self) -> usize {
         if let Some(i) = (0..self.wind_circle_idx).find(|&i| !self.wind_circles.contains_key(&i)) {
             i

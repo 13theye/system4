@@ -27,7 +27,8 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
     let style = (*ctx.style()).clone();
     ctx.set_style(adjust_style_from(style));
 
-    let mut show_forces_changed = false;
+    let mut show_engine_debug_changed = false;
+    
     let mut command_queue = Vec::<Command>::new();
     let mut terminal_commands_to_process = Vec::new();
 
@@ -49,7 +50,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
             ui.horizontal(|ui| {
                 // Vertical 1: Instructions and status info (always visible)
                 ui.vertical(|ui| {
-                    ui.set_min_size(egui::vec2(150.0, height));
+                    ui.set_min_size(egui::vec2(180.0, height));
                     // Status info
                     ui.label(format!(
                         "Particles: {}",
@@ -59,14 +60,32 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                     ui.label(format!("FPS: {:.1}", model.ui_state.fps.fps()));
                     ui.add_space(15.0);
 
-                    show_forces_changed = ui
+                    ui
                         .checkbox(&mut model.ui_state.show_forces, "Show Forces")
                         .changed();
                     ui.add_space(30.0);
 
-                    // Instructions section
-                    ui.label("...");
-                    ui.label("P: Debug view");
+                    // Enable debug settings
+                    ui.checkbox(&mut model.ui_state.debug_unlock, "Enable Debug");
+
+                    if model.ui_state.debug_unlock {
+                        ui
+                            .checkbox(&mut model.ui_state.show_bounds, "Bounding Box")
+                            .changed();
+                        show_engine_debug_changed = ui
+                            .checkbox(&mut model.engine_debug, "Particle Engine Logs")
+                            .changed();
+                    } else {
+                        // if debug is disabled, disable all debug visualization
+                        model.ui_state.show_bounds = false;
+                        model.engine_debug = false;
+                        model.render_state.set_render_engines_debug(false);
+                    }
+
+                    if show_engine_debug_changed {
+                        model.render_state.set_render_engines_debug(model.engine_debug);
+                    }
+                    
 
                     // Push tab selector to bottom with expanding space
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {

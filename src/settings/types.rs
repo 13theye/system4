@@ -32,11 +32,11 @@ pub struct RenderConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct ParticleConfig {
-    pub limit: u32,
+    pub per_voice_limit: u32,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SpeedConfig {
+pub struct TempoConfig {
     pub bpm: f32,
 }
 
@@ -66,9 +66,4 @@ pub struct OpenAIServiceConfig {
     pub schema_description: Option<String>,
     pub strict_request_object_adherence: bool,
     pub api_key: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DebugConfig {
-    pub engine_debug: bool,
 }

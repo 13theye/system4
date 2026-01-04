@@ -26,7 +26,10 @@ use system4::{
 fn model(app: &App) -> Model {
     let settings = init::config::load_settings();
 
-    let particle_limit = settings.particles.limit;
+    let per_voice_particle_limit = settings.particles.per_voice_limit;
+
+    // Particle limit is the per-voice limit * the number of particle voices
+    let particle_limit = per_voice_particle_limit * 2;
     let render_size = init::config::render_size(&settings);
 
     // DPI scale is used to scale the size of draw objects to account for DPI scaling.
@@ -60,7 +63,7 @@ fn model(app: &App) -> Model {
 
     Model {
         particle_system,
-        voice_manager: VoiceManager::new(),
+        voice_manager: VoiceManager::new(settings.particles.per_voice_limit),
         rhythm_manager: RhythmManager::new(&settings.openai_service),
         rhythm_view,
         clock,
@@ -74,7 +77,7 @@ fn model(app: &App) -> Model {
         rng,
         command_queue: Vec::new(),
         auto_ai_pending_for_voice1: false,
-        engine_debug: settings.debug.engine_debug,
+        engine_debug: false,
     }
 }
 
@@ -97,7 +100,6 @@ fn main() {
         .run();
 }
 
-// TODO: refactor to use app.duration.since_prev_update or update.since_last
 fn update_feedback(model: &mut Model) {
     // Read feedback value for segment length before updating particle system
     let voice1_feedback = model.get_feedback(VoiceId::Voice0);
@@ -114,6 +116,7 @@ fn update_feedback(model: &mut Model) {
     }
 }
 
+/// Main update loop
 fn update(app: &App, model: &mut Model, _update: Update) {
     let now = Instant::now();
 
@@ -195,6 +198,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.render_state.segment_instance_count = segments_written;
 }
 
+/// Draw the audience view window's contents
 fn audience_view(app: &App, model: &Model, frame: Frame) {
     // Begin Rendering context
     {
@@ -292,6 +296,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
     let _ = model.render_state.audience_draw.to_frame(app, &frame);
 }
 
+/// Draw the performer window's contents
 fn performer_view(app: &App, model: &Model, frame: Frame) {
     let rendering = model.render_state.render_engine.borrow_mut();
 
@@ -328,6 +333,7 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
     let _ = model.render_state.performer_draw.to_frame(app, &frame);
 }
 
+/// Draw the control window (UI)
 fn control_view(app: &App, model: &Model, frame: Frame) {
     // Draw background first
     model.render_state.control_draw.background().color(BLACK);
@@ -338,6 +344,7 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
 
 // ******************************* Input Capture *****************************
 
+/// Handle Raw Window Events, for Control window
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     model.ui_state.egui.handle_raw_event(event);
 
@@ -365,9 +372,12 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
                                 .clear_live_slot(TextPaneId::Voice(voice), TextSlot::CommandInput);
                         }
                     }
+
                     VirtualKeyCode::P => {
+                        /*
                         // Toggle debug and FPS display
                         model.ui_state.show_bounds = !model.ui_state.show_bounds;
+                         */
                     }
                     _ => {}
                 }

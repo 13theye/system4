@@ -2,12 +2,10 @@ use prat::clockservice::ClockService;
 
 use system4::{sequencer::SequencerService, settings::Settings};
 
-pub fn init_clock_and_sequencer(
-    settings: &Settings,
-) -> (ClockService, SequencerService) {
+pub fn init_clock_and_sequencer(settings: &Settings) -> (ClockService, SequencerService) {
     // Init clock
     let mut clock = ClockService::with()
-        .tempo(settings.speed.bpm as f64)
+        .tempo(settings.tempo.bpm as f64)
         .quantum(4.0)
         .ppqn(24)
         .enable_ticks()

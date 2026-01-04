@@ -175,6 +175,10 @@ impl ExecutionContext for Model {
         self.voice_manager.voices_mut()
     }
 
+    fn voice_particle_limit(&self) -> u32 {
+        self.voice_manager.voice_particle_limit()
+    }
+
     // Rhythm state access - delegate to rhythm_manager
     fn has_rhythm(&self, voice_id: VoiceId) -> bool {
         self.rhythm_manager.has_rhythm(voice_id)

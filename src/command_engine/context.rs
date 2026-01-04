@@ -28,6 +28,7 @@ pub trait ExecutionContext {
     fn remove_voice(&mut self, voice_id: VoiceId) -> Option<Voice>;
     fn voices(&self) -> &HashMap<VoiceId, Voice>;
     fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice>;
+    fn voice_particle_limit(&self) -> u32;
 
     // Rhythm state access
     fn has_rhythm(&self, voice_id: VoiceId) -> bool;

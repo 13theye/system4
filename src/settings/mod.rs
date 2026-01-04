@@ -9,7 +9,6 @@ use std::env;
 pub struct Settings {
     pub audience_window: AudienceWindowConfig,
     pub control_window: ControlWindowConfig,
-    pub debug: DebugConfig,
     pub openai_service: OpenAIServiceConfig,
     pub osc_send: OscSendConfig,
     pub osc_loop: OscLoopConfig,
@@ -17,7 +16,7 @@ pub struct Settings {
     pub particles: ParticleConfig,
     pub performer_window: PerformerWindowConfig,
     pub rendering: RenderConfig,
-    pub speed: SpeedConfig,
+    pub tempo: TempoConfig,
 }
 
 impl Settings {
