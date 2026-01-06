@@ -18,10 +18,6 @@ impl Model {
 
     /// Hard-remove a voice immediately (used by shutdown paths).
     pub fn kill_voice(&mut self, voice_id: VoiceId) {
-        if self.voice_manager.get_voice_mut(voice_id).is_none() {
-            return;
-        };
-
         // Remove the voice from the hashmap
         self.voice_manager.remove_voice(voice_id);
     }
@@ -41,10 +37,10 @@ impl Model {
         // request using the final Voice1 rhythm state, if requested.
         if self.auto_ai_pending_for_voice1
             && self.ui_state.auto_ai_from_voice1
-            && self.rhythm_manager.has_rhythm(VoiceId::Voice1)
-            && !self.rhythm_manager.is_ai_request_pending()
+            && self.voice_manager.has_rhythm(VoiceId::Voice1)
+            && !self.voice_manager.is_ai_request_pending()
         {
-            self.rhythm_manager.request_ai_rhythm();
+            self.voice_manager.request_ai_rhythm_from(VoiceId::Voice1);
         }
     }
 }

@@ -7,23 +7,23 @@ use crate::{forces::wind_circle::WindCircleParams, groups::VoiceId, model::Model
 impl Model {
     /// Get all wind circle IDs for a voice.
     pub fn get_wind_circle_ids(&self, voice: VoiceId) -> Vec<usize> {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
-            return Vec::new();
+        let Some(drone) = self.voice_manager.get_drone(voice) else {
+            return Vec::with_capacity(0);
         };
-        let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();
+        let mut ids: Vec<usize> = drone.wind_circles.keys().copied().collect();
         ids.sort();
         ids
     }
 
     /// Get the params of a circle.
     pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
-        let voice = self.voice_manager.voices().get(&voice)?;
+        let voice = self.voice_manager.get_drone(voice)?;
         voice.wind_circles.get(&id).map(|circle| circle.params())
     }
 
     /// Get the alpha limit of a Voice ("brightness").
     pub fn get_alpha_limit(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 
@@ -32,7 +32,7 @@ impl Model {
 
     /// Get the center bias of a Voice's WindCircle ("gravity").
     pub fn get_center_bias(&self, voice: VoiceId, id: usize) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 
@@ -45,7 +45,7 @@ impl Model {
 
     /// Get the angle variation of a Voice's WindCircle by id ("noise").
     pub fn get_noise(&self, voice: VoiceId, id: usize) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 
@@ -58,7 +58,7 @@ impl Model {
 
     /// Get the position offset factor of a Voice ("vibration").
     pub fn get_vibration(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 
@@ -66,7 +66,7 @@ impl Model {
     }
 
     pub fn get_emitter_position(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 
@@ -74,7 +74,7 @@ impl Model {
     }
 
     pub fn get_volume(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 
@@ -82,7 +82,7 @@ impl Model {
     }
 
     pub fn get_feedback(&self, voice: VoiceId) -> f32 {
-        let Some(voice) = self.voice_manager.voices().get(&voice) else {
+        let Some(voice) = self.voice_manager.get_drone(voice) else {
             return 0.0;
         };
 

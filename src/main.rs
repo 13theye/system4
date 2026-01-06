@@ -15,12 +15,12 @@ use std::time::Instant;
 
 use system4::{
     groups::VoiceId,
-    managers::{RhythmManager, VoiceManager},
+    managers::VoiceManager,
     model::Model,
     text::{TextPaneId, TextSlot},
     ui::control_panel::update_control_ui,
     utils::IdGenerator,
-    view::rhythm::{RhythmView, RhythmViewUpdateParams},
+    view::rhythm::RhythmView,
 };
 
 fn model(app: &App) -> Model {
@@ -63,8 +63,7 @@ fn model(app: &App) -> Model {
 
     Model {
         particle_system,
-        voice_manager: VoiceManager::new(settings.particles.per_voice_limit),
-        rhythm_manager: RhythmManager::new(&settings.openai_service),
+        voice_manager: VoiceManager::init(&settings),
         rhythm_view,
         clock,
         sequencer_service,
@@ -102,17 +101,17 @@ fn main() {
 
 fn update_feedback(model: &mut Model) {
     // Read feedback value for segment length before updating particle system
-    let voice1_feedback = model.get_feedback(VoiceId::Voice0);
-    let voice4_feedback = model.get_feedback(VoiceId::Voice3);
+    let voice0_feedback = model.get_feedback(VoiceId::Voice0);
+    let voice3_feedback = model.get_feedback(VoiceId::Voice3);
 
-    // Update segment length based on Voice1 feedback slider
-    if let Some(voice1) = model.voice_manager.get_voice_mut(VoiceId::Voice0) {
-        voice1.set_segment_length(voice1_feedback);
+    // Update segment length based on Voice0 feedback slider
+    if let Some(drone1) = model.voice_manager.get_drone_mut(VoiceId::Voice0) {
+        drone1.set_segment_length(voice0_feedback);
     }
 
-    // Update segment length based on Voice4 feedback slider
-    if let Some(voice4) = model.voice_manager.get_voice_mut(VoiceId::Voice3) {
-        voice4.set_segment_length(voice4_feedback);
+    // Update segment length based on Voice3 feedback slider
+    if let Some(drone3) = model.voice_manager.get_drone_mut(VoiceId::Voice3) {
+        drone3.set_segment_length(voice3_feedback);
     }
 }
 
@@ -136,7 +135,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.process_command_queue(now);
 
     // Poll AI rhythm responses (if any) and apply them to rhythms
-    model.rhythm_manager.update_ai(
+    model.voice_manager.update_ai(
         now,
         &mut model.sequencer_service,
         &mut model.rhythm_view,
@@ -146,30 +145,10 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Update feedback-derived voice params (segment length)
     update_feedback(model);
 
-    let mut events = Vec::new();
-
     // Update Rhythm logical groups & views
-    for (voice_id, rhythm) in model.rhythm_manager.rhythms_mut().iter_mut() {
-        let (current_slot, current_wing) = rhythm.update();
-
-        let params = rhythm.get_params();
-        if let Some(current_wing) = current_wing {
-            if params.wings.contains(&current_wing) {
-                events.push(true);
-            }
-        }
-
-        let update_params = RhythmViewUpdateParams {
-            current_slot,
-            current_wing,
-            tempo: model.clock.tempo(),
-            subdivision: rhythm.get_subdivision().to_owned(),
-        };
-
-        model
-            .rhythm_view
-            .update_voice(voice_id, rhythm.get_params(), &update_params, now);
-    }
+    model
+        .voice_manager
+        .update_rhythms(model.clock.tempo(), &mut model.rhythm_view, now);
 
     // Update formations in transition states (including cleared/clearing ones)
     model.rhythm_view.update_all_transitions(now);
@@ -183,7 +162,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     let queue = window.queue();
 
     let (particles_written, segments_written) = model.particle_system.update_zero_copy(
-        model.voice_manager.voices_mut(),
+        &mut model.voice_manager.voices,
         &mut model.rng,
         queue,
         &model.render_state.particle_renderer,
@@ -266,7 +245,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
 
             // Always route AI status text into Voice2's history (not live text).
             overlay.push_ai_status_history_if_changed(
-                model.rhythm_manager.current_ai_status_text(),
+                model.voice_manager.current_ai_status_text(),
                 now,
             );
 
@@ -322,7 +301,7 @@ fn performer_view(app: &App, model: &Model, frame: Frame) {
 
         // Apply transform to match texture coordinates
         model.particle_system.draw_forces(
-            model.voice_manager.voices(),
+            &model.voice_manager.voices,
             &model.render_state.performer_draw,
             scale_x,
             scale_y,

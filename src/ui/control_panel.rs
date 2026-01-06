@@ -127,7 +127,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.vertical(|ui| {
                                             ui.set_width(320.0);
                                             ui.set_min_height(height);
-                                            if model.voice_manager.has_voice(VoiceId::Voice0) {
+                                            if model.voice_manager.has_drone(VoiceId::Voice0) {
                                                 let voice0_commands = voice_panel::render_drone_voice_panel(
                                                     ui,
                                                     &voice0_params,
@@ -175,7 +175,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.vertical(|ui| {
                                             ui.set_width(320.0);
                                             ui.set_min_height(height);
-                                            if model.voice_manager.has_voice(VoiceId::Voice3) {
+                                            if model.voice_manager.has_drone(VoiceId::Voice3) {
                                                 let voice3_commands = voice_panel::render_drone_voice_panel(
                                                     ui,
                                                     &voice3_params,

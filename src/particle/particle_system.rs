@@ -145,7 +145,8 @@ impl ParticleSystem {
         // Pre-compute "vibration" position offset factors for all voices
         let vibration_values: HashMap<VoiceId, f32> = voices
             .values()
-            .map(|voice| (voice.id, voice.params.vibration))
+            .filter_map(|v| v.as_drone())
+            .map(|drone| (drone.id, drone.params.vibration))
             .collect();
 
         // Init empty particle counters
@@ -158,15 +159,16 @@ impl ParticleSystem {
 
         let physics_start = Instant::now();
         for (voice_id, cores) in self.particle_cores.iter_mut() {
-            let voice = voices.get(voice_id);
-            let color_limit = voice.map(|v| v.params.color_limit);
-            let alpha_limit = voice.map(|v| v.params.alpha_limit);
-
-            if color_limit.is_none() || alpha_limit.is_none() {
+            let Some(voice) = voices.get(voice_id) else {
                 continue;
-            }
+            };
 
-            let (color_limit, alpha_limit) = (color_limit.unwrap(), alpha_limit.unwrap());
+            let Some(drone) = voice.as_drone() else {
+                continue;
+            };
+
+            let color_limit = drone.params.color_limit;
+            let alpha_limit = drone.params.alpha_limit;
 
             // Interpolate color (same for all particles)
             let color = tween::interpolate_color(
@@ -209,10 +211,7 @@ impl ParticleSystem {
             let mut computed_offsets = vec![vec2(0.0, 0.0); cores.len()];
 
             // Collect all WindCircles for all voices
-            let circles_vec: Vec<&WindCircle> = voices
-                .values()
-                .flat_map(|v| v.wind_circles.values())
-                .collect();
+            let circles_vec: Vec<&WindCircle> = drone.wind_circles.values().collect();
 
             // Physics update for each particle
             // HOT LOOP in parallel execution
@@ -437,9 +436,14 @@ impl ParticleSystem {
         let mut work_items = Vec::with_capacity(total_count);
 
         for (voice_id, cores) in self.particle_cores.iter() {
-            let voice = voices.get(voice_id);
-            let segment_length = voice.map(|v| v.params.segment_length).unwrap_or(0.0);
-            let segment_line_width = voice.map(|v| v.params.segment_line_width).unwrap_or(1.0);
+            let Some(voice) = voices.get(voice_id) else {
+                continue;
+            };
+            let Some(drone) = voice.as_drone() else {
+                continue;
+            };
+            let segment_length = drone.params.segment_length;
+            let segment_line_width = drone.params.segment_line_width;
 
             for (index, core) in cores.iter().enumerate() {
                 if core.is_alive && core.is_activated {
@@ -508,7 +512,12 @@ impl ParticleSystem {
         rng: &mut ThreadRng,
     ) {
         for voice in voices.values() {
-            let mut emitters: Vec<_> = voice.emitters.iter().collect();
+            // Only handle Drone voices
+            let Some(drone) = voice.as_drone() else {
+                continue;
+            };
+
+            let mut emitters: Vec<_> = drone.emitters.iter().collect();
             emitters.shuffle(rng);
 
             for emitter in emitters.iter() {
@@ -519,28 +528,21 @@ impl ParticleSystem {
                     let current_count = core_vec.len();
 
                     // Calculate emission scaling based on how close we are to the limit
-                    let voice_limit = voices
-                        .get(&parent_voice)
-                        .map(|v| v.params.volume * v.params.particle_limit as f32)
-                        .unwrap_or(self.params.overall_particle_limit as f32);
-                    let emission_scaling =
-                        Self::linear_emission_scaling(voice_limit, current_count);
+                    let emission_scaling = Self::linear_emission_scaling(
+                        drone.params.particle_limit as f32,
+                        current_count,
+                    );
 
                     // Skip emission entirely if scaling is near zero
                     if emission_scaling < 0.001 {
                         continue;
                     }
 
-                    let color_limit = voices
-                        .get(&parent_voice)
-                        .map(|v| v.params.color_limit)
-                        .unwrap_or(self.params.default_particle_color);
-
                     let mut new_particles = emitter.emit(
                         emission_scaling,
                         10.0,
                         self.params.default_particle_size,
-                        rgba_from(color_limit, 0.0),
+                        rgba_from(drone.params.color_limit, 0.0),
                         rng,
                     );
                     let new_particles_count = new_particles.len();
@@ -594,7 +596,8 @@ impl ParticleSystem {
         for (voice_id, cores) in self.particle_cores.iter_mut() {
             let limit = voices
                 .get(voice_id)
-                .map(|v| v.params.volume * v.params.particle_limit as f32)
+                .and_then(|v| v.as_drone())
+                .map(|d| d.params.volume * d.params.particle_limit as f32)
                 .unwrap_or(self.params.overall_particle_limit as f32);
 
             let mut active_particles = 0;
@@ -663,7 +666,8 @@ impl ParticleSystem {
     ) {
         let circles_vec: Vec<&WindCircle> = voices
             .values()
-            .flat_map(|v| v.wind_circles.values())
+            .filter_map(|v| v.as_drone())
+            .flat_map(|d| d.wind_circles.values())
             .collect();
 
         self.draw_origin(draw, scale_x, scale_y);
@@ -674,7 +678,10 @@ impl ParticleSystem {
         self.draw_emitters(voices, draw, scale_x, scale_y);
 
         for voice in voices.values() {
-            for circle in voice.wind_circles.values() {
+            let Some(drone) = voice.as_drone() else {
+                continue;
+            };
+            for circle in drone.wind_circles.values() {
                 circle.draw_center(draw, scale_x, scale_y);
                 circle.draw(draw, scale_x, scale_y);
             }
@@ -698,8 +705,8 @@ impl ParticleSystem {
         scale_y: f32,
     ) {
         let mut emitters = Vec::new();
-        for voice in voices.values() {
-            emitters.extend(&voice.emitters);
+        for drone in voices.values().filter_map(|v| v.as_drone()) {
+            emitters.extend(&drone.emitters);
         }
         for emitter in emitters.iter() {
             emitter.draw(draw, scale_x, scale_y);

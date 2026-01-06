@@ -20,7 +20,7 @@ impl CircleCommandHandler {
         circle_config: DroneConfig,
         source: CommandSource,
     ) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (NewCircle)", voice_id);
             return;
         }
@@ -38,7 +38,7 @@ impl CircleCommandHandler {
         let noise = resolved_config.noise.unwrap();
 
         // Create the new WindCircle
-        let voice = ctx.get_voice_mut(voice_id).unwrap();
+        let voice = ctx.get_drone_mut(voice_id).unwrap();
         let circle_id = voice.issue_wind_circle_idx();
 
         let center = nannou::prelude::vec2(center_x, center_y);
@@ -85,7 +85,7 @@ impl CircleCommandHandler {
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_outer_radius(circle_id, value);
         }
     }
@@ -106,7 +106,7 @@ impl CircleCommandHandler {
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_inner_radius(circle_id, value);
         }
     }
@@ -128,7 +128,7 @@ impl CircleCommandHandler {
         }
 
         let strength = value.min(30.0);
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_force(circle_id, strength);
         }
     }
@@ -149,7 +149,7 @@ impl CircleCommandHandler {
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_gravity(circle_id, value);
         }
     }
@@ -170,7 +170,7 @@ impl CircleCommandHandler {
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_noise(circle_id, value);
         }
     }
@@ -191,7 +191,7 @@ impl CircleCommandHandler {
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_center_x(circle_id, value);
         }
     }
@@ -212,7 +212,7 @@ impl CircleCommandHandler {
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_circle_center_y(circle_id, value);
         }
     }
@@ -230,7 +230,7 @@ impl CircleCommandHandler {
     }
 
     pub fn remove_circle(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, circle_id: i32) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found", voice_id);
             return;
         }
@@ -247,7 +247,7 @@ impl CircleCommandHandler {
     }
 
     fn get_wind_circle_ids(&self, ctx: &dyn ExecutionContext, voice: VoiceId) -> Vec<usize> {
-        let Some(voice) = ctx.get_voice(voice) else {
+        let Some(voice) = ctx.get_drone(voice) else {
             return Vec::new();
         };
         let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();

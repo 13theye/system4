@@ -2,7 +2,7 @@
 // These structs hold pre-extracted parameter values to avoid borrow checker conflicts
 
 use crate::forces::wind_circle::WindCircleParams;
-use crate::groups::{VoiceId, VoiceParams};
+use crate::groups::{DroneParams, VoiceId};
 use crate::model::Model;
 
 /// All parameters needed to render a drone voice panel (Voice 0 or Voice 3)
@@ -13,7 +13,7 @@ pub struct DroneVoiceParams {
     /// List of (circle_id, circle_params) tuples
     pub circles: Vec<(usize, WindCircleParams)>,
     /// Voice-level parameters (contains alpha, volume, feedback, vibration, emitter_position, etc.)
-    pub voice_params: VoiceParams,
+    pub voice_params: DroneParams,
 }
 
 impl DroneVoiceParams {
@@ -34,8 +34,7 @@ impl DroneVoiceParams {
         // Get voice params directly from the voice
         let voice_params = model
             .voice_manager
-            .voices()
-            .get(&voice_id)
+            .get_drone(voice_id)
             .map(|v| v.params.clone())
             .unwrap_or_default();
 

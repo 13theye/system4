@@ -4,7 +4,10 @@ pub mod voice_id;
 pub use voice_id::VoiceId;
 
 pub mod voice;
-pub use voice::{Voice, VoiceParams};
+pub use voice::Voice;
+
+pub mod drone;
+pub use drone::{Drone, DroneParams};
 
 pub mod rhythm;
 pub use rhythm::Rhythm;

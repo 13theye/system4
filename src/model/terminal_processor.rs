@@ -202,7 +202,8 @@ impl Model {
                     "Terminal: invoking RhythmManager::send_to_ai() for generateRhythm on {:?}",
                     target_voice
                 );
-                self.rhythm_manager.request_ai_rhythm();
+                self.voice_manager
+                    .request_ai_rhythm_from(crate::groups::VoiceId::Voice1);
             }
         }
     }

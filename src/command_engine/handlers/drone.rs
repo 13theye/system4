@@ -1,6 +1,6 @@
 use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, DroneCommandBuilder},
-    groups::{Voice, VoiceId},
+    groups::{Drone, Voice, VoiceId},
     terminals::commands::drone::DroneConfig,
 };
 use std::time::Instant;
@@ -22,7 +22,7 @@ impl DroneCommandHandler {
     ) {
         let voice_id = config.voice;
 
-        if ctx.has_voice(voice_id) {
+        if ctx.has_rhythm(voice_id) || ctx.has_drone(voice_id) {
             println!("Controller: Voice {} already exists", voice_id);
             return;
         }
@@ -31,20 +31,21 @@ impl DroneCommandHandler {
         let resolved_config = config.merge_with_defaults();
 
         // Phase 1: Initialize drone structure (WindCircle and emitters)
-        let mut voice = Voice::new_with_id(voice_id);
+        let mut drone = Drone::new_with_id(voice_id);
 
         // Get particle system defaults
         let default_color = ctx.default_particle_color();
         let global_max_spawn_rate = ctx.global_max_spawn_rate();
 
         let circle_id =
-            voice.initialize_drone(&resolved_config, default_color, global_max_spawn_rate);
+            drone.initialize_drone(&resolved_config, default_color, global_max_spawn_rate);
 
         ctx.osc_send()
             .send_drone_on_off(resolved_config.voice.to_i32(), 1);
-        voice.set_is_spawning(true);
+        drone.set_is_spawning(true);
 
         // Insert voice before applying parameters so validation can find it
+        let voice = Voice::new_from_drone(drone);
         ctx.insert_voice(voice_id, voice);
 
         // Phase 2: Apply parameters through the command pipeline
@@ -69,7 +70,7 @@ impl DroneCommandHandler {
         source: CommandSource,
         _now: Instant,
     ) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (ModifyDrone)", voice_id);
             return;
         }
@@ -88,66 +89,66 @@ impl DroneCommandHandler {
     }
 
     pub fn set_alpha(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (Alpha)", voice_id);
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_alpha_limit(value);
         }
     }
 
     pub fn set_volume(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (Volume)", voice_id);
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_volume(value);
         }
     }
 
     pub fn set_feedback(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (Feedback)", voice_id);
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_feedback(value);
         }
     }
 
     pub fn set_vibration(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (Vibration)", voice_id);
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_vibration(value);
         }
     }
 
     pub fn move_emitters(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId, value: f32) {
-        if !ctx.validate_voice_exists(voice_id) {
+        if !ctx.has_drone(voice_id) {
             println!("Error: Voice {:?} not found (MoveEmitters)", voice_id);
             return;
         }
 
-        if let Some(voice) = ctx.get_voice_mut(voice_id) {
+        if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_emitter_position(value);
         }
     }
 
-    pub fn clear_voice(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
-        self.kill_voice(ctx, voice_id);
+    pub fn clear_drone(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
+        self.kill_drone(ctx, voice_id);
         ctx.osc_send().send_drone_on_off(voice_id.to_i32(), 0);
     }
 
-    fn kill_voice(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
+    fn kill_drone(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
         // Remove all circles from wind field
         ctx.remove_all_circles_from_voice(voice_id);
 

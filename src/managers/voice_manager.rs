@@ -1,117 +1,350 @@
+//! src/managers/voice_manager.rs
+//!
+//! Top-level gateway to all voice-specific state.
+
 use crate::{
-    groups::{Voice, VoiceId},
+    groups::{Drone, Rhythm, Voice, VoiceId},
+    managers::{AIRhythmManager, DroneManager},
     rendering::GpuSegmentBuffer,
+    sequencer::SequencerService,
+    settings::Settings,
+    terminals::commands::rhythm::RhythmParamModification,
+    view::rhythm::{RhythmView, RhythmViewUpdateParams},
 };
+
 use std::collections::HashMap;
 
-/// VoiceManager handles all voice-related state and operations.
-/// This includes:
-/// - Voice lifecycle (creation, removal)
-/// - Voice state access (mutable and immutable)
-/// - GPU segment buffer management (tied to voice lifecycle)
-/// - Wind circle operations that need coordinated access to wind field
+const AI_VOICE_ID: VoiceId = VoiceId::Voice2;
+
 pub struct VoiceManager {
-    voices: HashMap<VoiceId, Voice>,
-    gpu_segment_buffers: HashMap<VoiceId, GpuSegmentBuffer>,
-    voice_particle_limit: u32,
+    // Voice state
+    pub voices: HashMap<VoiceId, Voice>,
+
+    // Managers of Drone and AIRhythm specific states
+    drone_manager: DroneManager,
+    ai_rhythm_manager: AIRhythmManager,
 }
 
 impl VoiceManager {
-    pub fn new(voice_particle_limit: u32) -> Self {
+    pub fn init(settings: &Settings) -> Self {
+        let voice_particle_limit = settings.particles.per_voice_limit;
+        let openai_service_config = &settings.openai_service;
+
         Self {
             voices: HashMap::new(),
-            gpu_segment_buffers: HashMap::new(),
-            voice_particle_limit,
+            drone_manager: DroneManager::init(voice_particle_limit),
+            ai_rhythm_manager: AIRhythmManager::init(openai_service_config),
         }
     }
 
-    // Voice state access
-    pub fn has_voice(&self, voice_id: VoiceId) -> bool {
-        self.voices.contains_key(&voice_id)
-    }
-
-    pub fn get_voice(&self, voice_id: VoiceId) -> Option<&Voice> {
-        self.voices.get(&voice_id)
-    }
-
-    pub fn get_voice_mut(&mut self, voice_id: VoiceId) -> Option<&mut Voice> {
-        self.voices.get_mut(&voice_id)
-    }
-
-    pub fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice) {
-        self.voices.insert(voice_id, voice);
-    }
-
-    pub fn remove_voice(&mut self, voice_id: VoiceId) -> Option<Voice> {
-        self.voices.remove(&voice_id)
-    }
-
-    pub fn voices(&self) -> &HashMap<VoiceId, Voice> {
-        &self.voices
-    }
-
-    pub fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice> {
-        &mut self.voices
-    }
-
-    pub fn voice_particle_limit(&self) -> u32 {
-        self.voice_particle_limit
-    }
-
-    // GPU segment buffer access
-    pub fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer> {
-        self.gpu_segment_buffers.get(&voice_id)
-    }
-
-    pub fn insert_segment_buffer(&mut self, voice_id: VoiceId, buffer: GpuSegmentBuffer) {
-        self.gpu_segment_buffers.insert(voice_id, buffer);
-    }
-
-    pub fn remove_segment_buffer(&mut self, voice_id: VoiceId) -> Option<GpuSegmentBuffer> {
-        self.gpu_segment_buffers.remove(&voice_id)
-    }
-
-    pub fn segment_buffers(&self) -> &HashMap<VoiceId, GpuSegmentBuffer> {
-        &self.gpu_segment_buffers
-    }
-
-    pub fn segment_buffers_mut(&mut self) -> &mut HashMap<VoiceId, GpuSegmentBuffer> {
-        &mut self.gpu_segment_buffers
-    }
-
-    // Validation
+    /// Returns `true` if a Voice exists for the given `VoiceId`
     pub fn validate_voice_exists(&self, voice_id: VoiceId) -> bool {
         self.voices.contains_key(&voice_id)
     }
 
-    pub fn validate_circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
-        self.voices
-            .get(&voice_id)
-            .map(|voice| voice.wind_circles.contains_key(&circle_id))
-            .unwrap_or(false)
+    /// Insert a `Voice` with the key `VoiceId`
+    pub fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice) {
+        self.voices.insert(voice_id, voice);
     }
 
-    // Composite operations that need coordinated access to wind field
-    /// Remove a specific circle from a voice's wind circles
-    /// This requires coordinated access to both the wind field and the voice
+    /// Remove a `Voice` with the key `VoiceId`, returning the value if it exists
+    pub fn remove_voice(&mut self, voice_id: VoiceId) -> Option<Voice> {
+        self.voices.remove(&voice_id)
+    }
+
+    /**************** Drone methods ************************* */
+
+    /// Check if a `Voice` exists for a `VoiceId` and is a `Drone`.
+    pub fn has_drone(&self, voice_id: VoiceId) -> bool {
+        self.voices
+            .get(&voice_id)
+            .is_some_and(|voice| voice.is_drone())
+    }
+
+    /// Attempt to retrieve a `Drone` from a `VoiceId`. Returns `None` if the `VoiceId` does not exist or is not a `Drone`.
+    pub fn get_drone(&self, voice_id: VoiceId) -> Option<&Drone> {
+        let voice = self.voices.get(&voice_id)?;
+        voice.as_drone()
+    }
+
+    /// Attempt to retrieve a mutable reference to a `Drone` from a `VoiceId`. Returns `None` if the `VoiceId` does not exist or is not a `Drone`.
+    pub fn get_drone_mut(&mut self, voice_id: VoiceId) -> Option<&mut Drone> {
+        let voice = self.voices.get_mut(&voice_id)?;
+        voice.as_drone_mut()
+    }
+
+    /// Return the per-voice particle limit for drones
+    pub fn drone_particle_limit(&self) -> u32 {
+        self.drone_manager.drone_particle_limit()
+    }
+
+    /// Check that a particular `WindCircle` exists for a `VoiceId`
+    pub fn voice_has_wind_circle(&self, voice_id: VoiceId, circle_id: usize) -> bool {
+        self.get_drone(voice_id)
+            .map_or(false, |drone| drone.has_wind_circle(circle_id))
+    }
+
+    /// Remove a `WindCircle` from a `VoiceId`
     pub fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
-        if let Some(voice) = self.voices.get_mut(&voice_id) {
-            if voice.wind_circles.get_mut(&circle_id).is_some() {
-                voice.remove_wind_circle(circle_id);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
+        let Some(drone) = self.get_drone_mut(voice_id) else {
+            return false;
+        };
+        drone.remove_wind_circle(circle_id);
+        true
+    }
+
+    /// Remove all `WindCircles` from a `VoiceId`
+    pub fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
+        self.get_drone_mut(voice_id)
+            .map(|drone| drone.remove_all_circles());
+    }
+
+    /// Return a reference to the DroneManager's segment buffer for a `VoiceId`
+    pub fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer> {
+        self.drone_manager.get_segment_buffer(voice_id)
+    }
+
+    /**************** Rhythm methods ************************* */
+
+    /// Check if a `Voice` exists for a `VoiceId` and is a `Rhythm`.
+    pub fn has_rhythm(&self, voice_id: VoiceId) -> bool {
+        self.voices
+            .get(&voice_id)
+            .is_some_and(|voice| voice.is_rhythm())
+    }
+
+    /// Attempt to retrieve a `Rhythm` from a `VoiceId`. Returns `None` if the `VoiceId` does not exist or is not a `Rhythm`.
+    pub fn get_rhythm(&self, voice_id: VoiceId) -> Option<&Rhythm> {
+        let voice = self.voices.get(&voice_id)?;
+        voice.as_rhythm()
+    }
+
+    /// Attempt to retrieve a mutable reference to a `Rhythm` from a `VoiceId`. Returns `None` if the `VoiceId` does not exist or is not a `Rhythm`.
+    pub fn get_rhythm_mut(&mut self, voice_id: VoiceId) -> Option<&mut Rhythm> {
+        let voice = self.voices.get_mut(&voice_id)?;
+        voice.as_rhythm_mut()
+    }
+
+    /// Apply `rhythm` changes to the sequencer
+    pub fn apply_rhythm_to_sequencer(
+        &self,
+        voice_id: VoiceId,
+        sequencer_service: &mut SequencerService,
+    ) {
+        if let Some(rhythm) = self.get_rhythm(voice_id) {
+            rhythm.update_sequencer(sequencer_service);
         }
     }
 
-    /// Remove all circles from a voice's wind circles
-    /// This requires coordinated access to both the wind field and the voice
-    pub fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
-        if let Some(voice) = self.voices.get_mut(&voice_id) {
-            voice.remove_all_circles();
+    pub fn rhythm_reroll_wings(
+        &mut self,
+        voice_id: VoiceId,
+        rng: &mut rand::rngs::ThreadRng,
+        sequencer_service: &mut SequencerService,
+    ) {
+        if let Some(rhythm) = self.get_rhythm_mut(voice_id) {
+            rhythm.reroll_wings(rng, sequencer_service);
+        }
+    }
+
+    pub fn rhythm_add_wings(
+        &mut self,
+        voice_id: VoiceId,
+        count: usize,
+        rng: &mut rand::rngs::ThreadRng,
+    ) {
+        if let Some(rhythm) = self.get_rhythm_mut(voice_id) {
+            rhythm.add_wings(count, rng);
+        }
+    }
+
+    pub fn rhythm_stop_sequencer(
+        &mut self,
+        voice_id: VoiceId,
+        sequencer_service: &mut SequencerService,
+    ) {
+        if let Some(rhythm) = self.get_rhythm_mut(voice_id) {
+            rhythm.stop_sequencer(sequencer_service);
+        }
+    }
+
+    pub fn rhythm_modify_all_slots_length(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+        rng: &mut rand::rngs::ThreadRng,
+    ) {
+        if let Some(rhythm) = self.get_rhythm_mut(voice_id) {
+            rhythm.modify_all_slots_length(modification, rng);
+        }
+    }
+
+    pub fn rhythm_modify_all_slots_velocity(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+        rng: &mut rand::rngs::ThreadRng,
+    ) {
+        if let Some(rhythm) = self.get_rhythm_mut(voice_id) {
+            rhythm.modify_all_slots_velocity(modification, rng);
+        }
+    }
+
+    pub fn rhythm_modify_all_slots_cutoff(
+        &mut self,
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+        rng: &mut rand::rngs::ThreadRng,
+    ) {
+        if let Some(rhythm) = self.get_rhythm_mut(voice_id) {
+            rhythm.modify_all_slots_cutoff(modification, rng);
+        }
+    }
+
+    /// Update all the rhythm voices and their views. Returns a list of flags to indicate if we are on an active slot
+    pub fn update_rhythms(
+        &mut self,
+        tempo: f64,
+        rhythm_view: &mut RhythmView,
+        now: std::time::Instant,
+    ) -> Vec<bool> {
+        let mut events = Vec::new();
+
+        for (voice_id, voice) in self.voices.iter_mut() {
+            let Some(rhythm) = voice.as_rhythm_mut() else {
+                continue;
+            };
+
+            let (current_slot, current_wing) = rhythm.update();
+            let params = rhythm.get_params();
+
+            // Push a flag if we are on an active slot of the sequence
+            // This is part of the prototype for particle-based events for rhythms
+            if let Some(current_wing) = current_wing {
+                if params.wings.contains(&current_wing) {
+                    events.push(true);
+                }
+            }
+
+            let update_params = RhythmViewUpdateParams {
+                current_slot,
+                current_wing,
+                tempo,
+                subdivision: rhythm.get_subdivision().to_owned(),
+            };
+
+            rhythm_view.update_voice(voice_id, params, &update_params, now);
+        }
+
+        events
+    }
+
+    /****************** AIRhythm methods ******************** */
+
+    pub fn current_ai_status_text(&self) -> Option<&str> {
+        self.ai_rhythm_manager.current_ai_status_text()
+    }
+
+    pub fn is_ai_request_pending(&self) -> bool {
+        self.ai_rhythm_manager.is_ai_request_pending()
+    }
+
+    pub fn request_ai_rhythm_from(&mut self, sample_voice_id: VoiceId) {
+        let Some(sample_rhythm) = self.get_rhythm(sample_voice_id) else {
+            return;
+        };
+
+        let target_voice = AI_VOICE_ID;
+
+        println!(
+            "VoiceManager: sending rhythm [{}] from {:?} to AI for target {:?}",
+            sample_rhythm.to_rhythm_string(),
+            sample_voice_id,
+            target_voice
+        );
+
+        self.ai_rhythm_manager
+            .request_ai_rhythm(sample_rhythm.get_params().clone(), target_voice);
+    }
+
+    pub fn update_ai(
+        &mut self,
+        now: std::time::Instant,
+        sequencer_service: &mut SequencerService,
+        rhythm_view: &mut RhythmView,
+        rng: &mut rand::rngs::ThreadRng,
+    ) {
+        use crate::terminals::commands::rhythm::RhythmConfig;
+        use crate::view::rhythm::RhythmFormationType;
+
+        let Some(results) = self.ai_rhythm_manager.poll_ai() else {
+            return;
+        };
+
+        for result in results {
+            let voice_id = result.target_voice;
+
+            // If we don't have a rhythm for this voice, create one.
+            if !self.has_rhythm(voice_id) {
+                let config = RhythmConfig::get_defaults_for_voice(voice_id);
+                let resolved = config.merge_with_defaults();
+                let params = resolved.to_rhythm_params();
+                let mut rhythm = Rhythm::new_with_params(voice_id, params);
+
+                // Initialize default slots and wings so the rhythm is fully
+                // functional before we override wings via the AI pattern.
+                rhythm.initialize_slots(rng);
+                rhythm.randomize_wings(rng);
+
+                // Hook up sequencer and callbacks.
+                rhythm.add_sequencer(sequencer_service);
+                if let Some(data_rx) = sequencer_service.get_data_rx(voice_id) {
+                    rhythm.set_sequencer_data_rx(data_rx);
+                }
+
+                // Create a default formation for this voice.
+                let radius = if voice_id == VoiceId::Voice1 {
+                    800.0
+                } else {
+                    450.0
+                };
+
+                rhythm_view.add_formation(
+                    voice_id,
+                    RhythmFormationType::Circle { radius },
+                    rhythm.get_params(),
+                    now,
+                );
+
+                self.insert_voice(voice_id, Voice::new_from_rhythm(rhythm));
+            }
+
+            // Retrieve the pre-existing rhythm or the new one if just created
+            let Some(rhythm) = self.get_rhythm_mut(voice_id) else {
+                println!(
+                    "VoiceManager: failed to retrieve rhythm for voice {}",
+                    voice_id
+                );
+                return;
+            };
+
+            // Extract parameters from the AI result
+            let rhythm_params = result.params;
+
+            println!(
+                "RhythmManager: applying AI rhythm [{}] to {:?}",
+                rhythm_params.to_rhythm_string(),
+                voice_id
+            );
+
+            rhythm.set_params(rhythm_params);
+            rhythm.update_sequencer(sequencer_service);
+            rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), now);
+
+            // Schedule the target voice to start when Voice1 hits slot 0 on the
+            // next whole-note boundary. This keeps both voices time- and
+            // sequence-aligned without restarting Voice1.
+            sequencer_service.sync_start_to_voice(voice_id, VoiceId::Voice1);
         }
     }
 }

@@ -6,7 +6,7 @@ use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rand_distr::{Beta, Distribution};
 
 use crate::{
-    groups::{RhythmParams, RhythmSlotParams, VoiceId, VoiceParams},
+    groups::{RhythmParams, RhythmSlotParams, VoiceId},
     particle::emitter::Emitter,
     sequencer::SequencerService,
     terminals::commands::rhythm::RangeSize,
@@ -17,7 +17,7 @@ const NUM_SLOTS: usize = 32;
 pub struct Rhythm {
     pub id: VoiceId,
     params: RhythmParams,
-    pub voice_params: VoiceParams,
+    // unused:
     pub emitters: Vec<Box<dyn Emitter>>,
 
     // Callback channel from the sequencer
@@ -29,7 +29,6 @@ impl Rhythm {
         Self {
             id,
             params: RhythmParams::default(),
-            voice_params: VoiceParams::default(),
             emitters: Vec::new(),
             sequencer_data_rx: None,
         }
@@ -39,7 +38,6 @@ impl Rhythm {
         Self {
             id,
             params,
-            voice_params: VoiceParams::default(),
             emitters: Vec::new(),
             sequencer_data_rx: None,
         }

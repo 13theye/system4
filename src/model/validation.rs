@@ -8,11 +8,12 @@ use crate::model::Model;
 
 impl VoiceValidator for Model {
     fn voice_exists(&self, voice_id: VoiceId) -> bool {
-        self.voice_manager.has_voice(voice_id) || self.rhythm_manager.has_rhythm(voice_id)
+        self.drone_manager.validate_drone_exists(voice_id)
+            || self.rhythm_manager.has_rhythm(voice_id)
     }
 
     fn circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
-        if let Some(voice) = self.voice_manager.voices().get(&voice_id) {
+        if let Some(voice) = self.drone_manager.drones().get(&voice_id) {
             voice.wind_circles.contains_key(&circle_id)
         } else {
             false

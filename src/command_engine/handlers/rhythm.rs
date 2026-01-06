@@ -1,6 +1,6 @@
 use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, RhythmCommandBuilder},
-    groups::{Rhythm, VoiceId},
+    groups::{Rhythm, Voice, VoiceId},
     terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
     view::rhythm::RhythmFormationType,
 };
@@ -23,8 +23,8 @@ impl RhythmCommandHandler {
     ) {
         let voice_id = config.voice;
 
-        if ctx.has_rhythm(voice_id) {
-            println!("Controller: Rhythm for voice {} already exists", voice_id);
+        if ctx.has_rhythm(voice_id) || ctx.has_drone(voice_id) {
+            println!("Controller: Voice {} already exists", voice_id);
             return;
         }
 
@@ -62,7 +62,8 @@ impl RhythmCommandHandler {
         );
 
         // Insert rhythm before applying parameters so validation can find it
-        ctx.insert_rhythm(voice_id, rhythm);
+        let voice = Voice::new_from_rhythm(rhythm);
+        ctx.insert_voice(voice_id, voice);
 
         // Phase 2: Apply parameters through the command pipeline
         let parameter_commands = RhythmCommandBuilder::generate_all_parameter_commands(
@@ -91,15 +92,11 @@ impl RhythmCommandHandler {
         source: CommandSource,
         _now: Instant,
     ) {
-        if !ctx.validate_voice_exists(voice_id) {
-            println!("Error: Voice {:?} not found (ModifyRhythm)", voice_id);
-            return;
-        }
-
-        // Check if rhythm exists for this voice
         if !ctx.has_rhythm(voice_id) {
-            let error_message = format!("Voice {} has no rhythm to modify", voice_id.to_i32());
-            println!("Error: {}", error_message);
+            println!(
+                "Error: Rhythm not found for Voice {:?} (ModifyRhythm)",
+                voice_id
+            );
             return;
         }
 
@@ -294,7 +291,7 @@ impl RhythmCommandHandler {
         ctx.rhythm_view_mut().clear_formation(voice_id, now);
 
         // Remove the rhythm from the model (view continues animating)
-        ctx.remove_rhythm(voice_id);
+        ctx.remove_voice(voice_id);
 
         let status_message = format!(
             "Voice {} - Cleared rhythm and stopped sequencer",

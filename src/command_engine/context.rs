@@ -1,15 +1,13 @@
 use super::commands::Command;
 use crate::{
     forces::wind_field::WindField,
-    groups::{Rhythm, Voice, VoiceId},
+    groups::{Drone, Rhythm, Voice, VoiceId},
     osc::OscSender,
-    rendering::GpuSegmentBuffer,
     sequencer::SequencerService,
     terminals::commands::rhythm::RhythmParamModification,
     view::rhythm::RhythmView,
 };
 use rand::rngs::ThreadRng;
-use std::collections::HashMap;
 
 /// ExecutionContext provides command handlers with access to application state
 /// without requiring full Model ownership. This enables:
@@ -21,23 +19,19 @@ pub trait ExecutionContext {
     fn log_command(&mut self, command: &Command);
 
     // Voice state access
-    fn has_voice(&self, voice_id: VoiceId) -> bool;
-    fn get_voice(&self, voice_id: VoiceId) -> Option<&Voice>;
-    fn get_voice_mut(&mut self, voice_id: VoiceId) -> Option<&mut Voice>;
     fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice);
     fn remove_voice(&mut self, voice_id: VoiceId) -> Option<Voice>;
-    fn voices(&self) -> &HashMap<VoiceId, Voice>;
-    fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice>;
+
+    // Drone state access
+    fn has_drone(&self, voice_id: VoiceId) -> bool;
+    fn get_drone(&self, voice_id: VoiceId) -> Option<&Drone>;
+    fn get_drone_mut(&mut self, voice_id: VoiceId) -> Option<&mut Drone>;
     fn voice_particle_limit(&self) -> u32;
 
     // Rhythm state access
     fn has_rhythm(&self, voice_id: VoiceId) -> bool;
     fn get_rhythm(&self, voice_id: VoiceId) -> Option<&Rhythm>;
     fn get_rhythm_mut(&mut self, voice_id: VoiceId) -> Option<&mut Rhythm>;
-    fn insert_rhythm(&mut self, voice_id: VoiceId, rhythm: Rhythm);
-    fn remove_rhythm(&mut self, voice_id: VoiceId) -> Option<Rhythm>;
-    fn rhythms(&self) -> &HashMap<VoiceId, Rhythm>;
-    fn rhythms_mut(&mut self) -> &mut HashMap<VoiceId, Rhythm>;
 
     // Rhythm view access
     fn rhythm_view(&self) -> &RhythmView;
@@ -49,11 +43,6 @@ pub trait ExecutionContext {
     // Particle system defaults (for drone creation)
     fn default_particle_color(&self) -> nannou::color::Rgb;
     fn global_max_spawn_rate(&self) -> f32;
-
-    // GPU segment buffer access
-    fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer>;
-    fn insert_segment_buffer(&mut self, voice_id: VoiceId, buffer: GpuSegmentBuffer);
-    fn remove_segment_buffer(&mut self, voice_id: VoiceId) -> Option<GpuSegmentBuffer>;
 
     // Sequencer service access
     fn sequencer_service(&mut self) -> &mut SequencerService;
@@ -68,8 +57,6 @@ pub trait ExecutionContext {
     fn queue_command(&mut self, command: Command);
 
     // Validation
-    fn validate_voice_exists(&self, voice_id: VoiceId) -> bool;
-    fn validate_rhythm_exists(&self, voice_id: VoiceId) -> bool;
     fn validate_circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool;
 
     // Composite operations that need multiple mutable borrows

@@ -6,18 +6,17 @@ pub mod command_flow;
 pub mod command_helpers;
 pub mod queries;
 pub mod terminal_processor;
-pub mod validation;
 
 use crate::{
     command_engine::{
         context::ExecutionContext, Command, CommandInner, CommandSource, CompositeCommand,
         SimpleCommand,
     },
-    groups::{Rhythm, Voice, VoiceId},
-    managers::{RhythmManager, VoiceManager},
+    groups::{Drone, Rhythm, Voice, VoiceId},
+    managers::VoiceManager,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
-    rendering::{GpuSegmentBuffer, RenderState},
+    rendering::RenderState,
     sequencer::SequencerService,
     terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
@@ -28,14 +27,11 @@ use crate::{
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 
-use std::collections::HashMap;
-
 pub struct Model {
     pub particle_system: ParticleSystem,
 
     // State managers
     pub voice_manager: VoiceManager,
-    pub rhythm_manager: RhythmManager,
     pub rhythm_view: RhythmView,
 
     // Clock and Sequencers
@@ -97,9 +93,7 @@ impl ExecutionContext for Model {
         // If we receive OSC param updates for a voice that doesn't exist, ignore.
         // (Prevents params slot noise when no voice is active.)
         let should_ignore_osc_params_for_voice = |voice_id: VoiceId, source: CommandSource| {
-            source == CommandSource::OSC
-                && !(self.voice_manager.has_voice(voice_id)
-                    || self.rhythm_manager.has_rhythm(voice_id))
+            source == CommandSource::OSC && !self.voice_manager.validate_voice_exists(voice_id)
         };
 
         // Track per-frame auto-AI triggers for Voice1 rhythms.
@@ -146,17 +140,16 @@ impl ExecutionContext for Model {
         }
     }
 
-    // Voice state access - delegate to voice_manager
-    fn has_voice(&self, voice_id: VoiceId) -> bool {
-        self.voice_manager.has_voice(voice_id)
+    fn has_drone(&self, voice_id: VoiceId) -> bool {
+        self.voice_manager.has_drone(voice_id)
     }
 
-    fn get_voice(&self, voice_id: VoiceId) -> Option<&Voice> {
-        self.voice_manager.get_voice(voice_id)
+    fn get_drone(&self, voice_id: VoiceId) -> Option<&Drone> {
+        self.voice_manager.get_drone(voice_id)
     }
 
-    fn get_voice_mut(&mut self, voice_id: VoiceId) -> Option<&mut Voice> {
-        self.voice_manager.get_voice_mut(voice_id)
+    fn get_drone_mut(&mut self, voice_id: VoiceId) -> Option<&mut Drone> {
+        self.voice_manager.get_drone_mut(voice_id)
     }
 
     fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice) {
@@ -167,45 +160,21 @@ impl ExecutionContext for Model {
         self.voice_manager.remove_voice(voice_id)
     }
 
-    fn voices(&self) -> &HashMap<VoiceId, Voice> {
-        self.voice_manager.voices()
-    }
-
-    fn voices_mut(&mut self) -> &mut HashMap<VoiceId, Voice> {
-        self.voice_manager.voices_mut()
-    }
-
     fn voice_particle_limit(&self) -> u32 {
-        self.voice_manager.voice_particle_limit()
+        self.voice_manager.drone_particle_limit()
     }
 
     // Rhythm state access - delegate to rhythm_manager
     fn has_rhythm(&self, voice_id: VoiceId) -> bool {
-        self.rhythm_manager.has_rhythm(voice_id)
+        self.voice_manager.has_rhythm(voice_id)
     }
 
     fn get_rhythm(&self, voice_id: VoiceId) -> Option<&Rhythm> {
-        self.rhythm_manager.get_rhythm(voice_id)
+        self.voice_manager.get_rhythm(voice_id)
     }
 
     fn get_rhythm_mut(&mut self, voice_id: VoiceId) -> Option<&mut Rhythm> {
-        self.rhythm_manager.get_rhythm_mut(voice_id)
-    }
-
-    fn insert_rhythm(&mut self, voice_id: VoiceId, rhythm: Rhythm) {
-        self.rhythm_manager.insert_rhythm(voice_id, rhythm);
-    }
-
-    fn remove_rhythm(&mut self, voice_id: VoiceId) -> Option<Rhythm> {
-        self.rhythm_manager.remove_rhythm(voice_id)
-    }
-
-    fn rhythms(&self) -> &HashMap<VoiceId, Rhythm> {
-        self.rhythm_manager.rhythms()
-    }
-
-    fn rhythms_mut(&mut self) -> &mut HashMap<VoiceId, Rhythm> {
-        self.rhythm_manager.rhythms_mut()
+        self.voice_manager.get_rhythm_mut(voice_id)
     }
 
     // Rhythm view access
@@ -231,26 +200,6 @@ impl ExecutionContext for Model {
         self.particle_system.params.global_max_spawn_rate
     }
 
-    // GPU segment buffer access - delegate to voice_manager
-    fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer> {
-        self.voice_manager.get_segment_buffer(voice_id)
-    }
-
-    fn insert_segment_buffer(
-        &mut self,
-        voice_id: VoiceId,
-        buffer: crate::rendering::GpuSegmentBuffer,
-    ) {
-        self.voice_manager.insert_segment_buffer(voice_id, buffer);
-    }
-
-    fn remove_segment_buffer(
-        &mut self,
-        voice_id: VoiceId,
-    ) -> Option<crate::rendering::GpuSegmentBuffer> {
-        self.voice_manager.remove_segment_buffer(voice_id)
-    }
-
     // Sequencer service access
     fn sequencer_service(&mut self) -> &mut SequencerService {
         &mut self.sequencer_service
@@ -271,21 +220,13 @@ impl ExecutionContext for Model {
         self.command_queue.push(command);
     }
 
-    // Validation - delegate to managers
-    fn validate_voice_exists(&self, voice_id: VoiceId) -> bool {
-        self.voice_manager.validate_voice_exists(voice_id)
-    }
-
-    fn validate_rhythm_exists(&self, voice_id: VoiceId) -> bool {
-        self.rhythm_manager.validate_rhythm_exists(voice_id)
-    }
-
     fn validate_circle_exists(&self, voice_id: VoiceId, circle_id: usize) -> bool {
         self.voice_manager
-            .validate_circle_exists(voice_id, circle_id)
+            .voice_has_wind_circle(voice_id, circle_id)
     }
 
     // Composite operations - delegate to voice_manager with wind field access
+    // Note: this is sloppy for using bool instead of Result
     fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
         self.voice_manager
             .remove_circle_from_voice(voice_id, circle_id)
@@ -297,12 +238,12 @@ impl ExecutionContext for Model {
 
     // Rhythm composite operations - delegate to rhythm_manager with service access
     fn update_rhythm_sequencer(&mut self, voice_id: VoiceId) {
-        self.rhythm_manager
-            .update_rhythm_sequencer(voice_id, &mut self.sequencer_service);
+        self.voice_manager
+            .apply_rhythm_to_sequencer(voice_id, &mut self.sequencer_service);
     }
 
     fn rhythm_reroll_wings(&mut self, voice_id: VoiceId) {
-        self.rhythm_manager.rhythm_reroll_wings(
+        self.voice_manager.rhythm_reroll_wings(
             voice_id,
             &mut self.rng,
             &mut self.sequencer_service,
@@ -310,12 +251,12 @@ impl ExecutionContext for Model {
     }
 
     fn rhythm_add_wings(&mut self, voice_id: VoiceId, count: usize) {
-        self.rhythm_manager
+        self.voice_manager
             .rhythm_add_wings(voice_id, count, &mut self.rng);
     }
 
     fn rhythm_stop_sequencer(&mut self, voice_id: VoiceId) {
-        self.rhythm_manager
+        self.voice_manager
             .rhythm_stop_sequencer(voice_id, &mut self.sequencer_service);
     }
 
@@ -324,7 +265,7 @@ impl ExecutionContext for Model {
         voice_id: VoiceId,
         modification: RhythmParamModification,
     ) {
-        self.rhythm_manager
+        self.voice_manager
             .rhythm_modify_all_slots_length(voice_id, modification, &mut self.rng);
     }
 
@@ -333,7 +274,7 @@ impl ExecutionContext for Model {
         voice_id: VoiceId,
         modification: RhythmParamModification,
     ) {
-        self.rhythm_manager
+        self.voice_manager
             .rhythm_modify_all_slots_velocity(voice_id, modification, &mut self.rng);
     }
 
@@ -342,7 +283,7 @@ impl ExecutionContext for Model {
         voice_id: VoiceId,
         modification: RhythmParamModification,
     ) {
-        self.rhythm_manager
+        self.voice_manager
             .rhythm_modify_all_slots_cutoff(voice_id, modification, &mut self.rng);
     }
 }

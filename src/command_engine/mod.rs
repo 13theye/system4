@@ -2,12 +2,12 @@ pub mod builders;
 pub mod commands;
 pub mod context;
 pub mod handlers;
-pub mod validation;
+//pub mod validation;
 
 pub use builders::{DroneCommandBuilder, RhythmCommandBuilder};
 pub use commands::{Command, CommandInner, CommandSource, CompositeCommand, SimpleCommand};
 pub use context::ExecutionContext;
-pub use validation::{ValidationResult, VoiceValidator};
+//pub use validation::{ValidationResult, VoiceValidator};
 
 use handlers::{CircleCommandHandler, DroneCommandHandler, RhythmCommandHandler};
 use std::time::Instant;
@@ -101,8 +101,8 @@ impl CommandEngine {
                         .add_circle(ctx, voice_id, circle_config, command.source);
                 }
                 CompositeCommand::Clear { voice_id } => {
-                    if ctx.has_voice(voice_id) {
-                        self.drone_handler.clear_voice(ctx, voice_id);
+                    if ctx.has_drone(voice_id) {
+                        self.drone_handler.clear_drone(ctx, voice_id);
                     } else if ctx.has_rhythm(voice_id) {
                         self.rhythm_handler.clear_rhythm(ctx, voice_id, now);
                     }
@@ -227,7 +227,7 @@ impl CommandEngine {
                 self.rhythm_handler.clear_rhythm(ctx, voice_id, now);
             }
             ClearDrone { voice_id } => {
-                self.drone_handler.clear_voice(ctx, voice_id);
+                self.drone_handler.clear_drone(ctx, voice_id);
             }
 
             // Rhythm parameter ranges
