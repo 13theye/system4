@@ -62,6 +62,7 @@ pub trait ExecutionContext {
     // Composite operations that need multiple mutable borrows
     fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool;
     fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId);
+    fn fade_out_all_particles(&mut self, voice_id: VoiceId);
     fn update_rhythm_sequencer(&mut self, voice_id: VoiceId);
     fn rhythm_reroll_wings(&mut self, voice_id: VoiceId);
     fn rhythm_add_wings(&mut self, voice_id: VoiceId, count: usize);

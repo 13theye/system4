@@ -17,7 +17,9 @@ pub struct ParticleCore {
     pub age: f32,
     pub remaining_life_span: f32,
     pub age_per_tick: f32,
+    // A particle is alive as soon as it is created
     pub is_alive: bool,
+    // A particle is activated when it touches a force. Only then will it fade in to visibility.
     pub is_activated: bool,
     pub size: f32,
     pub mass: f32,

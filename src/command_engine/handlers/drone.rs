@@ -144,7 +144,20 @@ impl DroneCommandHandler {
     }
 
     pub fn clear_drone(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
-        self.kill_drone(ctx, voice_id);
+        if let Some(drone) = ctx.get_drone_mut(voice_id) {
+            // Mark voice as clearing (will be removed when all particles are dead)
+            drone.state = crate::groups::DroneState::Clearing;
+            // Stop spawning new particles
+            drone.set_is_spawning(false);
+        }
+
+        // Mark all particles to fade out
+        ctx.fade_out_all_particles(voice_id);
+
+        // Remove circles from wind field
+        ctx.remove_all_circles_from_voice(voice_id);
+
+        // OSC notification
         ctx.osc_send().send_drone_on_off(voice_id.to_i32(), 0);
     }
 

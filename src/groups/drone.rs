@@ -9,6 +9,12 @@ use crate::{
 use nannou::prelude::*;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DroneState {
+    Active,
+    Clearing, // Particles fading out, voice will be removed when all particles are dead
+}
+
 #[derive(Debug, Clone)]
 pub struct DroneParams {
     pub particle_limit: usize,
@@ -43,6 +49,7 @@ impl Default for DroneParams {
 
 pub struct Drone {
     pub id: VoiceId,
+    pub state: DroneState,
     pub params: DroneParams,
     pub bounds_rect: Rect,
 
@@ -55,6 +62,7 @@ impl Drone {
     pub fn new_with_id(id: VoiceId) -> Self {
         Self {
             id,
+            state: DroneState::Active,
             params: DroneParams::default(),
             bounds_rect: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
             emitters: Vec::new(),
@@ -187,6 +195,10 @@ impl Drone {
         self.emitters.push(Box::new(emitter_right));
 
         self.set_is_spawning(true);
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.state == DroneState::Active
     }
 
     pub fn set_alpha_limit(&mut self, value: f32) {

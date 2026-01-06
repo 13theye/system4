@@ -159,11 +159,10 @@ impl ParticleSystem {
 
         let physics_start = Instant::now();
         for (voice_id, cores) in self.particle_cores.iter_mut() {
-            let Some(voice) = voices.get(voice_id) else {
-                continue;
-            };
-
-            let Some(drone) = voice.as_drone() else {
+            // Check that drone exists
+            let Some(drone) = voices.get(voice_id).and_then(|v| v.as_drone()) else {
+                // Ensure tht a drone voice that doesn't exist has no particles, then skip
+                cores.clear();
                 continue;
             };
 
@@ -312,6 +311,34 @@ impl ParticleSystem {
                 physics_time.as_secs_f64() * 1000.0,
                 total_particle_count
             );
+        }
+
+        // Cleanup pass: Remove voices in Clearing state that have no particles left
+        // (culling has already removed dead particles, so we just check if the vec is empty)
+        let voices_to_remove: Vec<VoiceId> = voices
+            .iter()
+            .filter_map(|(voice_id, voice)| {
+                if let Some(drone) = voice.as_drone() {
+                    if drone.state == crate::groups::DroneState::Clearing {
+                        let is_empty = self
+                            .particle_cores
+                            .get(voice_id)
+                            .map(|cores| cores.is_empty())
+                            .unwrap_or(true);
+                        if is_empty {
+                            return Some(*voice_id);
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        for voice_id in voices_to_remove {
+            println!("Removing voice {}", voice_id);
+            voices.remove(&voice_id);
+            self.particle_cores.remove(&voice_id);
+            self.particle_feedback.remove(&voice_id);
         }
 
         let gpu_write_start = Instant::now();
@@ -517,41 +544,48 @@ impl ParticleSystem {
                 continue;
             };
 
+            // Only emit if drone is DroneState::Active
+            if !drone.is_active() {
+                continue;
+            }
+
             let mut emitters: Vec<_> = drone.emitters.iter().collect();
             emitters.shuffle(rng);
 
             for emitter in emitters.iter() {
-                if emitter.is_enabled() {
-                    let parent_voice = emitter.parent_voice();
-                    let core_vec = self.particle_cores.entry(parent_voice).or_default();
-                    let feedback_vec = self.particle_feedback.entry(parent_voice).or_default();
-                    let current_count = core_vec.len();
-
-                    // Calculate emission scaling based on how close we are to the limit
-                    let emission_scaling = Self::linear_emission_scaling(
-                        drone.params.particle_limit as f32,
-                        current_count,
-                    );
-
-                    // Skip emission entirely if scaling is near zero
-                    if emission_scaling < 0.001 {
-                        continue;
-                    }
-
-                    let mut new_particles = emitter.emit(
-                        emission_scaling,
-                        10.0,
-                        self.params.default_particle_size,
-                        rgba_from(drone.params.color_limit, 0.0),
-                        rng,
-                    );
-                    let new_particles_count = new_particles.len();
-                    let mut new_feedback =
-                        vec![Box::new(ParticleFeedback::new()); new_particles_count];
-
-                    core_vec.append(&mut new_particles);
-                    feedback_vec.append(&mut new_feedback);
+                // Only emit if emitter is enabled
+                if !emitter.is_enabled() {
+                    continue;
                 }
+
+                let parent_voice = emitter.parent_voice();
+                let core_vec = self.particle_cores.entry(parent_voice).or_default();
+                let feedback_vec = self.particle_feedback.entry(parent_voice).or_default();
+                let current_count = core_vec.len();
+
+                // Calculate emission scaling based on how close we are to the limit
+                let emission_scaling = Self::linear_emission_scaling(
+                    drone.params.particle_limit as f32 * drone.params.volume,
+                    current_count,
+                );
+
+                // Skip emission entirely if scaling is near zero
+                if emission_scaling < 0.001 {
+                    continue;
+                }
+
+                let mut new_particles = emitter.emit(
+                    emission_scaling,
+                    10.0,
+                    self.params.default_particle_size,
+                    rgba_from(drone.params.color_limit, 0.0),
+                    rng,
+                );
+                let new_particles_count = new_particles.len();
+                let mut new_feedback = vec![Box::new(ParticleFeedback::new()); new_particles_count];
+
+                core_vec.append(&mut new_particles);
+                feedback_vec.append(&mut new_feedback);
             }
         }
     }
@@ -598,7 +632,7 @@ impl ParticleSystem {
                 .get(voice_id)
                 .and_then(|v| v.as_drone())
                 .map(|d| d.params.volume * d.params.particle_limit as f32)
-                .unwrap_or(self.params.overall_particle_limit as f32);
+                .unwrap_or(0.0);
 
             let mut active_particles = 0;
             for core in cores.iter_mut().rev() {
@@ -608,6 +642,23 @@ impl ParticleSystem {
                         // assumes that the oldest particles are at the beginning
                         core.set_to_fade_out();
                     }
+                }
+            }
+        }
+    }
+
+    /// Mark all particles of a voice to fade out (used when clearing a voice)
+    pub fn fade_out_all_particles(&mut self, voice_id: VoiceId) {
+        if let Some(cores) = self.particle_cores.get_mut(&voice_id) {
+            for core in cores.iter_mut() {
+                // Immediately kill non-activated particles
+                if !core.is_activated {
+                    core.kill();
+                }
+
+                // Set all other particles to fade out
+                if core.remaining_life_span >= core.fade_out_duration() {
+                    core.set_to_fade_out();
                 }
             }
         }

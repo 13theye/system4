@@ -7,7 +7,7 @@ pub mod voice;
 pub use voice::Voice;
 
 pub mod drone;
-pub use drone::{Drone, DroneParams};
+pub use drone::{Drone, DroneParams, DroneState};
 
 pub mod rhythm;
 pub use rhythm::Rhythm;

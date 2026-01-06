@@ -236,6 +236,10 @@ impl ExecutionContext for Model {
         self.voice_manager.remove_all_circles_from_voice(voice_id);
     }
 
+    fn fade_out_all_particles(&mut self, voice_id: VoiceId) {
+        self.particle_system.fade_out_all_particles(voice_id);
+    }
+
     // Rhythm composite operations - delegate to rhythm_manager with service access
     fn update_rhythm_sequencer(&mut self, voice_id: VoiceId) {
         self.voice_manager
