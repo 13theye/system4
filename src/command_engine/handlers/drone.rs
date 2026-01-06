@@ -160,12 +160,4 @@ impl DroneCommandHandler {
         // OSC notification
         ctx.osc_send().send_drone_on_off(voice_id.to_i32(), 0);
     }
-
-    fn kill_drone(&self, ctx: &mut dyn ExecutionContext, voice_id: VoiceId) {
-        // Remove all circles from wind field
-        ctx.remove_all_circles_from_voice(voice_id);
-
-        // Now remove the voice from the hashmap
-        ctx.remove_voice(voice_id);
-    }
 }
