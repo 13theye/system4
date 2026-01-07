@@ -31,6 +31,10 @@ pub fn combined_wind_at_pos(circles: &[&WindCircle], position: Vec2, noise: f64)
         .map(|wind| wind.velocity)
         .reduce(|a, b| a + b)?;
 
+    if total_velocity.length() < 0.05 {
+        return None;
+    }
+
     Some(Wind {
         velocity: total_velocity,
     })
@@ -127,21 +131,27 @@ impl WindField {
         let vector_scale = 3.0; // Increased scale for better visibility
 
         let params = &self.params;
-        let (x_min, x_max) = (
-            (params.origin.x - params.bounds_size.x / 2.0) as isize,
-            (params.origin.x + params.bounds_size.x / 2.0) as isize,
-        );
-        let (y_min, y_max) = (
-            (params.origin.y - params.bounds_size.y / 2.0) as isize,
-            (params.origin.y + params.bounds_size.y / 2.0) as isize,
-        );
 
-        let mut x = x_min;
+        // Calculate bounds
+        let x_min = params.origin.x - params.bounds_size.x / 2.0;
+        let x_max = params.origin.x + params.bounds_size.x / 2.0;
+        let y_min = params.origin.y - params.bounds_size.y / 2.0;
+        let y_max = params.origin.y + params.bounds_size.y / 2.0;
 
-        while x <= x_max {
-            let mut y = y_min;
-            while y <= y_max {
-                let cell_origin = vec2(x as f32, y as f32);
+        // Calculate how many steps we can fit in each direction from origin
+        let steps_left = ((params.origin.x - x_min) / step_size as f32).floor() as isize;
+        let steps_right = ((x_max - params.origin.x) / step_size as f32).floor() as isize;
+        let steps_down = ((params.origin.y - y_min) / step_size as f32).floor() as isize;
+        let steps_up = ((y_max - params.origin.y) / step_size as f32).floor() as isize;
+
+        // Generate grid centered on origin
+        for x_step in -steps_left..=steps_right {
+            for y_step in -steps_down..=steps_up {
+                let cell_origin = params.origin
+                    + vec2(
+                        x_step as f32 * step_size as f32,
+                        y_step as f32 * step_size as f32,
+                    );
 
                 // Sample noise factor at slight offset from whole-number cell_origin
                 // because Perlin at whole-number coordinates gives noise factors of 0.
@@ -180,10 +190,7 @@ impl WindField {
                         }
                     }
                 }
-
-                y += step_size;
             }
-            x += step_size
         }
     }
 
