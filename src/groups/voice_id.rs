@@ -31,6 +31,23 @@ impl VoiceId {
             _ => VoiceId::Invalid,
         }
     }
+
+    pub fn all() -> Vec<VoiceId> {
+        vec![
+            VoiceId::Voice0,
+            VoiceId::Voice1,
+            VoiceId::Voice2,
+            VoiceId::Voice3,
+        ]
+    }
+
+    pub fn all_drones() -> Vec<VoiceId> {
+        vec![VoiceId::Voice0, VoiceId::Voice3]
+    }
+
+    pub fn all_rhythms() -> Vec<VoiceId> {
+        vec![VoiceId::Voice1, VoiceId::Voice2]
+    }
 }
 
 impl std::fmt::Display for VoiceId {

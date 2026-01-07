@@ -28,11 +28,12 @@ use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
 
 pub struct Model {
+    // Visual systems
     pub particle_system: ParticleSystem,
+    pub rhythm_view: RhythmView,
 
     // State managers
     pub voice_manager: VoiceManager,
-    pub rhythm_view: RhythmView,
 
     // Clock and Sequencers
     pub clock: ClockService,
@@ -78,7 +79,7 @@ impl Drop for Model {
 
 fn erase_drone(model: &mut Model, id: i32) {
     let voice_id = VoiceId::from_i32(id);
-    model.kill_voice(voice_id);
+    model.remove_voice_immediately(voice_id);
     // not needed for Forces2
     //model.particle_system.forces.recalculate_once();
     model.osc_send.send_drone_on_off(id, 0);

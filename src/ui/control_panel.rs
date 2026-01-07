@@ -63,6 +63,16 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                     ui
                         .checkbox(&mut model.ui_state.show_forces, "Show Forces")
                         .changed();
+
+                    let mut particle_system_mode_is_combined = model.particle_system.mode.is_combined();
+                    if ui
+                        .checkbox(
+                            &mut particle_system_mode_is_combined,
+                            "Combine voices' forces",
+                        )
+                        .changed() {
+                            model.particle_system.mode.toggle();
+                        }
                     ui.add_space(30.0);
 
                     // Enable debug settings
@@ -85,6 +95,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                     if show_engine_debug_changed {
                         model.render_state.set_render_engines_debug(model.engine_debug);
                     }
+                    
                     
 
                     // Push tab selector to bottom with expanding space

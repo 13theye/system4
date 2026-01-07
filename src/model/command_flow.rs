@@ -17,7 +17,7 @@ impl Model {
     }
 
     /// Hard-remove a voice immediately (used by shutdown paths).
-    pub fn kill_voice(&mut self, voice_id: VoiceId) {
+    pub fn remove_voice_immediately(&mut self, voice_id: VoiceId) {
         // Remove the voice from the hashmap
         self.voice_manager.remove_voice(voice_id);
     }

@@ -6,7 +6,7 @@ const DEFAULT_PARTICLE_SIZE: f32 = 4.0;
 const DEFAULT_PARTICLE_RGB: (f32, f32, f32) = (0.73, 0.73, 0.74);
 
 pub fn init_particle_system(render_size: Vec2, particle_limit: u32) -> ParticleSystem {
-    let mut particle_system = ParticleSystem::new(
+    let mut particle_system = ParticleSystem::init(
         pt2(0.0, 0.0),
         render_size.x,
         render_size.y,

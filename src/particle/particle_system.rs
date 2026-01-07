@@ -20,6 +20,28 @@ use crate::{
 
 use super::constants::*;
 
+/// Describes whether the Drones' forces are applied separately or combined
+/// When `separate`, essentially works as two particle systems.
+pub enum ParticleSystemMode {
+    Separate,
+    Combined,
+}
+
+impl ParticleSystemMode {
+    /// Convenience function to check the state of the ParticleSystemMode
+    pub fn is_combined(&self) -> bool {
+        matches!(self, ParticleSystemMode::Combined)
+    }
+
+    /// Convenience function to toggle the ParticleSystemMode
+    pub fn toggle(&mut self) {
+        match self {
+            ParticleSystemMode::Separate => *self = ParticleSystemMode::Combined,
+            ParticleSystemMode::Combined => *self = ParticleSystemMode::Separate,
+        }
+    }
+}
+
 pub struct ParticleSystem {
     // Split particle storage for cache locality
     // Core: hot data for physics updates (~100 bytes per particle)
@@ -41,6 +63,9 @@ pub struct ParticleSystem {
 
     // Perlin noise generator
     pub perlin_gen: Perlin,
+
+    // Voice mode
+    pub mode: ParticleSystemMode,
 }
 
 /// Global parameters for the ParticleSystem
@@ -67,7 +92,7 @@ pub struct MassVarianceParams {
 }
 
 impl ParticleSystem {
-    pub fn new(
+    pub fn init(
         origin: Point2,
         width: f32,
         height: f32,
@@ -101,6 +126,9 @@ impl ParticleSystem {
 
             // Init Perlin noise generator
             perlin_gen: Perlin::new(),
+
+            // Starting mode is separate
+            mode: ParticleSystemMode::Separate,
 
             last_update: Instant::now(),
         }
@@ -158,6 +186,10 @@ impl ParticleSystem {
         let mut computed_offsets_map: HashMap<VoiceId, Vec<Vec2>> = HashMap::new();
 
         let physics_start = Instant::now();
+
+        // Determine ParticleSystem mode
+        let should_combine = self.mode.is_combined();
+
         for (voice_id, cores) in self.particle_cores.iter_mut() {
             // Check that drone exists
             let Some(drone) = voices.get(voice_id).and_then(|v| v.as_drone()) else {
@@ -209,8 +241,17 @@ impl ParticleSystem {
             // Pre-allocate storage for computed offsets (to save for GPU write)
             let mut computed_offsets = vec![vec2(0.0, 0.0); cores.len()];
 
-            // Collect all WindCircles for all voices
-            let circles_vec: Vec<&WindCircle> = drone.wind_circles.values().collect();
+            // Collect WindCircles. If combined mode, collect all circles from all drones.
+            // Otherwise, collect only circles from this voice
+            let circles_vec: Vec<&WindCircle> = if should_combine {
+                voices
+                    .values()
+                    .filter_map(|v| v.as_drone())
+                    .flat_map(|d| d.wind_circles.values())
+                    .collect()
+            } else {
+                drone.wind_circles.values().collect()
+            };
 
             // Physics update for each particle
             // HOT LOOP in parallel execution
@@ -226,7 +267,7 @@ impl ParticleSystem {
                         .get([core.position.x as f64, core.position.y as f64]);
 
                     // Stage force applications
-                    self.force_fields.apply_forces_to_particle(
+                    self.force_fields.apply_unified_forces_to_particle(
                         core,
                         &circles_vec,
                         mass_variation_factor,
@@ -723,9 +764,14 @@ impl ParticleSystem {
 
         self.draw_origin(draw, scale_x, scale_y);
 
-        self.force_fields
-            .wind_field
-            .draw(&circles_vec, draw, scale_x, scale_y, self.perlin_gen);
+        self.force_fields.wind_field.draw(
+            &circles_vec,
+            draw,
+            scale_x,
+            scale_y,
+            self.perlin_gen,
+            self.mode.is_combined(),
+        );
         self.draw_emitters(voices, draw, scale_x, scale_y);
 
         for voice in voices.values() {

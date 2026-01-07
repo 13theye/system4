@@ -5,6 +5,7 @@ use nannou::prelude::*;
 
 use crate::{
     forces::wind::{wind_field, WindCircle, WindField},
+    groups::VoiceId,
     particle::ParticleCore,
 };
 
@@ -33,7 +34,7 @@ impl ForceFields {
 
     /// Apply all applicable forces to a particle with mass variation factor
     /// OPTIMIZED: Now works with ParticleCore for better cache locality
-    pub fn apply_forces_to_particle(
+    pub fn apply_unified_forces_to_particle(
         &self,
         particle: &mut ParticleCore,
         circles: &[&WindCircle],
@@ -41,6 +42,40 @@ impl ForceFields {
         noise: f64,
     ) {
         // Apply wind with mass variation
-        wind_field::apply_winds_to_particle(particle, circles, mass_variation_factor, noise);
+        wind_field::apply_combined_winds_to_particle(
+            particle,
+            circles,
+            mass_variation_factor,
+            noise,
+        );
+    }
+
+    /// This version considers the ParticleSystemState to determine if forces
+    /// should be combined or applied separately by voice.
+    pub fn apply_forces_to_particle(
+        &self,
+        particle: &mut ParticleCore,
+        circles: &[&WindCircle],
+        mass_variation_factor: f32,
+        noise: f64,
+        current_voice: &VoiceId,
+        should_combine: bool,
+    ) {
+        if should_combine {
+            wind_field::apply_combined_winds_to_particle(
+                particle,
+                circles,
+                mass_variation_factor,
+                noise,
+            );
+        } else {
+            wind_field::apply_voice_wind_to_particle(
+                particle,
+                circles,
+                mass_variation_factor,
+                noise,
+                current_voice,
+            );
+        }
     }
 }
