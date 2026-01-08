@@ -12,6 +12,7 @@ use super::constants::*;
 #[derive(Clone, Copy, Debug)]
 pub struct ParticleCore {
     pub position: Point2,
+    pub offset_position: Point2, // the position after a temporary offset is applied
     pub velocity: Vec2,
     pub acceleration: Vec2,
     pub age: f32,
@@ -61,6 +62,7 @@ impl ParticleCore {
     pub fn new(position: Point2, size: f32, color: Rgba) -> Self {
         Self {
             position,
+            offset_position: position,
             velocity: vec2(0.0, 0.0),
             acceleration: vec2(0.0, 0.0),
             age: 0.0,
@@ -149,18 +151,19 @@ impl ParticleCore {
     }
 
     /// Convert core particle data to GPU format
+    /// Use the final offset position of the core.
     #[inline]
-    pub fn to_gpu(&self, offset: Vec2) -> ParticleGpu {
+    pub fn to_gpu(&self) -> ParticleGpu {
         ParticleGpu::new(
-            [self.position.x + offset.x, self.position.y + offset.y],
+            [self.offset_position.x, self.offset_position.y],
             [self.rgba.red, self.rgba.green, self.rgba.blue],
             self.rgba.alpha,
         )
     }
 
-    pub fn to_gpu_invisible(&self, offset: Vec2) -> ParticleGpu {
+    pub fn to_gpu_invisible(&self) -> ParticleGpu {
         ParticleGpu::new(
-            [self.position.x + offset.x, self.position.y + offset.y],
+            [self.offset_position.x, self.offset_position.y],
             [0.0, 0.0, 0.0],
             0.0,
         )
@@ -175,7 +178,6 @@ impl ParticleCore {
 pub fn to_segment_gpu(
     core: &ParticleCore,
     feedback: &ParticleFeedback,
-    offset: Vec2,
     segment_length: f32,
     line_width: f32,
 ) -> SegmentGpu {
@@ -184,7 +186,7 @@ pub fn to_segment_gpu(
 
     // First point is current position
 
-    points[0] = [core.position.x + offset.x, core.position.y + offset.y];
+    points[0] = [core.offset_position.x, core.offset_position.y];
     colors[0] = [core.rgba.red, core.rgba.green, core.rgba.blue];
 
     // Fill remaining points and colors from feedback history (reading from ring buffer)

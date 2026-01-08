@@ -72,9 +72,6 @@ pub struct ParticleSystem {
 
     // Voice mode
     pub mode: ParticleSystemMode,
-
-    // Cached computed offsets from last physics update (for rendering)
-    pub computed_offsets_map: HashMap<VoiceId, Vec<Vec2>>,
 }
 
 /// Global parameters for the ParticleSystem
@@ -159,8 +156,6 @@ impl ParticleSystem {
             // Starting mode is separate
             mode: ParticleSystemMode::Separate,
 
-            computed_offsets_map: HashMap::new(),
-
             last_update: Instant::now(),
         }
     }
@@ -207,9 +202,6 @@ impl ParticleSystem {
 
         // Init empty particle counters
         let mut total_alive_count = 0;
-
-        // Clear and reuse the computed offsets map from last frame
-        self.computed_offsets_map.clear();
 
         let physics_start = Instant::now();
 
@@ -312,21 +304,18 @@ impl ParticleSystem {
                         vec2(0.0, 0.0)
                     };
 
+                    // Apply the offset (adding zero is fast, no need to check)
+                    core.offset_position = core.position + position_offset;
+
                     // Store the computed offset for GPU write
                     *computed_position_offset = position_offset;
 
-                    // Apply the offset (adding zero is fast, no need to check)
-                    let offset_position = core.position + position_offset;
-                    feedback.record(offset_position, color);
+                    feedback.record(core.offset_position, color);
 
                     if core.is_out_of_bounds(bounds_rect) {
                         core.kill();
                     }
                 });
-
-            // Save computed offsets for GPU write (must use SAME offsets)
-            self.computed_offsets_map
-                .insert(*voice_id, computed_position_offsets);
 
             // Count alive particles
             let count_start = Instant::now();
@@ -418,6 +407,7 @@ impl ParticleSystem {
     /// Write particles for a specific voice directly to GPU staging memory (zero-copy)
     /// Assemble GPU particle data for a voice (CPU work only, no GPU write)
     /// This can be called in parallel for different voices using Rayon
+    /// Internally sequential for speed
     pub fn assemble_particles_for_voice(
         &self,
         voice_id: VoiceId,
@@ -428,23 +418,14 @@ impl ParticleSystem {
             None => return Vec::new(),
         };
 
-        let computed_position_offsets = self.computed_offsets_map.get(&voice_id);
         let start_assembly = Instant::now();
 
         // Pre-allocate based on rough estimate
-        let mut gpu_particles = Vec::with_capacity(cores.len());
-
-        for (index, core) in cores.iter().enumerate() {
-            if core.is_alive && core.is_activated {
-                let offset = if let Some(offsets) = computed_position_offsets {
-                    offsets[index]
-                } else {
-                    vec2(0.0, 0.0)
-                };
-
-                gpu_particles.push(core.to_gpu(offset));
-            }
-        }
+        let gpu_particles: Vec<nnpipe::ParticleGpu> = cores
+            .iter()
+            .filter(|core| core.is_alive && core.is_activated)
+            .map(|core| core.to_gpu())
+            .collect();
 
         let assembly_time = start_assembly.elapsed();
         if engine_debug {
@@ -462,6 +443,7 @@ impl ParticleSystem {
     /// Write segments for a specific voice directly to GPU staging memory (zero-copy)
     /// Assemble GPU segment data for a voice (CPU work only, no GPU write)
     /// This can be called in parallel for different voices using Rayon
+    /// Internally parallel for speed
     pub fn assemble_segments_for_voice(
         &self,
         voice_id: VoiceId,
@@ -478,8 +460,6 @@ impl ParticleSystem {
             Some(fb) => fb,
             None => return Vec::new(),
         };
-
-        let computed_offsets = self.computed_offsets_map.get(&voice_id);
 
         let start_collect = Instant::now();
         let mut work_items = Vec::with_capacity(cores.len());
@@ -502,16 +482,9 @@ impl ParticleSystem {
         let segments: Vec<nnpipe::renderers::SegmentGpu> = work_items
             .par_iter()
             .map(|&particle_idx| {
-                let offset = if let Some(offsets) = computed_offsets {
-                    offsets[particle_idx]
-                } else {
-                    vec2(0.0, 0.0)
-                };
-
                 to_segment_gpu(
                     &cores[particle_idx],
                     &feedback_array[particle_idx],
-                    offset,
                     segment_length,
                     segment_line_width,
                 )
@@ -771,95 +744,4 @@ impl ParticleSystem {
 /// Helper to make a Rgba from an Rgb and alpha value
 fn rgba_from(rgb: Rgb, alpha: f32) -> Rgba {
     rgba(rgb.red, rgb.green, rgb.blue, alpha)
-}
-
-/// Experimental
-pub fn free_assemble_particles_for_voice(
-    //&self,
-    voice_id: VoiceId,
-    cores: &[ParticleCore],
-    computed_position_offsets: &[Vec2],
-    engine_debug: bool,
-) -> Vec<nnpipe::renderers::ParticleGpu> {
-    let start_assembly = Instant::now();
-
-    // Pre-allocate based on rough estimate
-    let mut gpu_particles = Vec::with_capacity(cores.len());
-
-    for (index, core) in cores.iter().enumerate() {
-        if core.is_alive && core.is_activated {
-            let offset = computed_position_offsets[index];
-
-            gpu_particles.push(core.to_gpu(offset));
-        }
-    }
-
-    let assembly_time = start_assembly.elapsed();
-    if engine_debug {
-        println!(
-            "  [PARALLEL Assembly Voice {}] CPU assembly: {:.3}ms ({} particles)",
-            voice_id.to_i32(),
-            assembly_time.as_secs_f64() * 1000.0,
-            gpu_particles.len()
-        );
-    }
-
-    gpu_particles
-}
-
-/// Experimental
-/// Write segments for a specific voice directly to GPU staging memory (zero-copy)
-/// Assemble GPU segment data for a voice (CPU work only, no GPU write)
-/// This can be called in parallel for different voices using Rayon
-pub fn free_assemble_segments_for_voice(
-    voice_id: VoiceId,
-    cores: &[ParticleCore],
-    feedback_array: &[Box<ParticleFeedback>],
-    offsets: &[Vec2],
-    segment_length: f32,
-    segment_line_width: f32,
-    engine_debug: bool,
-) -> Vec<nnpipe::renderers::SegmentGpu> {
-    let start_collect = Instant::now();
-    let mut work_items = Vec::with_capacity(cores.len());
-    for (index, core) in cores.iter().enumerate() {
-        if core.is_alive && core.is_activated {
-            work_items.push(index);
-        }
-    }
-
-    if engine_debug {
-        let collect_time = start_collect.elapsed();
-        println!(
-            "  [PARALLEL Segments Voice {}] Collect: {:.3}ms",
-            voice_id.to_i32(),
-            collect_time.as_secs_f64() * 1000.0
-        );
-    }
-
-    let start_assembly = Instant::now();
-    let segments: Vec<nnpipe::renderers::SegmentGpu> = work_items
-        .par_iter()
-        .map(|&particle_idx| {
-            to_segment_gpu(
-                &cores[particle_idx],
-                &feedback_array[particle_idx],
-                offsets[particle_idx],
-                segment_length,
-                segment_line_width,
-            )
-        })
-        .collect();
-
-    let assembly_time = start_assembly.elapsed();
-    if engine_debug {
-        println!(
-            "  [PARALLEL Segments Voice {}] CPU assembly: {:.3}ms ({} segments)",
-            voice_id.to_i32(),
-            assembly_time.as_secs_f64() * 1000.0,
-            segments.len()
-        );
-    }
-
-    segments
 }

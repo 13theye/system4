@@ -163,9 +163,11 @@ impl RenderState {
         rendering.create_named_texture(device, "particles_voice_0", hi_config);
         rendering.create_named_texture(device, "particles_voice_3", hi_config);
         rendering.create_named_texture(device, "particles_combined", hi_config);
+        /*
         rendering.create_named_texture(device, "heatmap", hi_config);
         rendering.create_named_texture(device, "heatmap_processed", hi_config);
         rendering.create_named_texture(device, "processed_composited", hi_config);
+         */
         rendering.create_named_texture(device, "post-processed", hi_config);
 
         // Build and add rendering pipelines
@@ -230,6 +232,7 @@ impl RenderState {
             rendering.add_multi_pipeline("particle_effects", effect);
         }
 
+        /*
         // Heatmap effects pipeline
         if let Ok(effect) = PipelineBuilder::new()
             .name("Heatmap Effects Pipeline")
@@ -251,6 +254,8 @@ impl RenderState {
         {
             rendering.add_multi_pipeline("composite_step", effect);
         }
+
+         */
 
         // Bloom effects pipeline
         if let Ok(effect) = PipelineBuilder::new()

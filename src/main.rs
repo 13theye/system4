@@ -286,7 +286,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             model.render_state.render_rect,
             rendering.get_named_texture("heatmap").unwrap(),
         );
-         */
+
 
         //Encode post processing
         if let Err(e) = rendering.execute_named_pipeline("heatmap_effects", device, &mut encoder) {
@@ -296,6 +296,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         if let Err(e) = rendering.execute_named_pipeline("composite_step", device, &mut encoder) {
             eprintln!("Error executing composite_step pipeline: {}", e);
         }
+        */
 
         if let Err(e) = rendering.execute_named_pipeline("effects", device, &mut encoder) {
             eprintln!("Error executing effects pipeline: {}", e);
