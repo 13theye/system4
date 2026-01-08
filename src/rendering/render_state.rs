@@ -39,8 +39,6 @@ pub struct RenderState {
     pub control_draw: nannou::Draw,
 
     // Rendering metadata
-    pub particle_count: usize,
-    pub segment_instance_count: usize,
     pub dpi_scale: f32,
     pub font: Font,
 }
@@ -49,16 +47,6 @@ impl RenderState {
     /// Get the rendering pipeline
     pub fn engine(&self) -> &RefCell<Nnpipe> {
         &self.render_engine
-    }
-
-    /// Update particle count for rendering
-    pub fn set_particle_count(&mut self, count: usize) {
-        self.particle_count = count;
-    }
-
-    /// Update segment instance count for rendering
-    pub fn set_segment_instance_count(&mut self, count: usize) {
-        self.segment_instance_count = count;
     }
 
     /// Get the GPU particle buffer
@@ -157,7 +145,9 @@ impl RenderState {
 
         // Create named textures for the pipeline
         rendering.create_named_texture(device, "terminal", hi_config);
-        rendering.create_named_texture(device, "particles", hi_config);
+        rendering.create_named_texture(device, "particles_voice_0", hi_config);
+        rendering.create_named_texture(device, "particles_voice_3", hi_config);
+        rendering.create_named_texture(device, "particles_combined", hi_config);
         rendering.create_named_texture(device, "heatmap", hi_config);
         rendering.create_named_texture(device, "heatmap_processed", hi_config);
         rendering.create_named_texture(device, "processed_composited", hi_config);
@@ -182,8 +172,6 @@ impl RenderState {
             audience_draw,
             performer_draw,
             control_draw,
-            particle_count: 0,
-            segment_instance_count: 0,
             dpi_scale,
             font,
         }
@@ -197,10 +185,27 @@ impl RenderState {
         med_config: TextureConfig,
         lo_config: TextureConfig,
     ) {
+        // Combine voice textures into a single particles texture
+        match PipelineBuilder::new()
+            .name("Combine Voice Particles")
+            .input_textures(&["particles_voice_0", "particles_voice_3"])
+            .output_texture("particles_combined")
+            .simple_additive_composite(hi_config, 1.0)
+            .build(device)
+        {
+            Ok(effect) => {
+                rendering.add_multi_pipeline("combine_voices", effect);
+                println!("Successfully created combine_voices pipeline");
+            }
+            Err(e) => {
+                eprintln!("ERROR: Failed to create combine_voices pipeline: {:?}", e);
+            }
+        }
+
         // Particle effects pipeline (currently disabled in original code)
         if let Ok(effect) = PipelineBuilder::new()
             .name("Particle Effects Pipeline")
-            .input_texture("particles")
+            .input_texture("particles_combined")
             .feedback(hi_config, 1.0, 60.0)
             .output_texture("particle_processed")
             .build(device)
@@ -222,7 +227,7 @@ impl RenderState {
         // Composite step pipeline
         if let Ok(effect) = PipelineBuilder::new()
             .name("Composite Step Pipeline")
-            .input_textures(&["particles", "heatmap_processed"])
+            .input_textures(&["particles_combined", "heatmap_processed"])
             .output_texture("processed_composited")
             .simple_additive_composite(hi_config, 0.5)
             .build(device)
@@ -233,7 +238,7 @@ impl RenderState {
         // Bloom effects pipeline
         if let Ok(effect) = PipelineBuilder::new()
             .name("Particle Effects Pipeline")
-            .input_texture("particles")
+            .input_texture("particles_combined")
             .output_texture("post-processed")
             .brightness_extract(med_config, 0.7)
             .downsample(lo_config)

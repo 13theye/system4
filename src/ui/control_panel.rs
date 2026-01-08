@@ -54,7 +54,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                     // Status info
                     ui.label(format!(
                         "Particles: {}",
-                        model.particle_system.get_particle_count()
+                        model.particle_system.get_total_particle_count()
                     ));
                     // FPS
                     ui.label(format!("FPS: {:.1}", model.ui_state.fps.fps()));

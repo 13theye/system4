@@ -157,24 +157,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     //let event = events.iter().any(|e| *e);
 
     // Update particle system with ZERO-COPY optimization
-    // Get GPU queue for direct staging memory writes
-    let window = app.main_window();
-    let queue = window.queue();
 
-    let (particles_written, segments_written) = model.particle_system.update_zero_copy(
+    model.particle_system.update(
         &mut model.voice_manager.voices,
         &mut model.rng,
-        queue,
-        &model.render_state.particle_renderer,
-        &model.render_state.segment_renderer,
         now,
         app.duration.since_start.as_millis() as u32,
         model.engine_debug,
     );
-
-    // Store counts for rendering
-    model.render_state.particle_count = particles_written;
-    model.render_state.segment_instance_count = segments_written;
 }
 
 /// Draw the audience view window's contents
@@ -196,19 +186,55 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Encode Nannou Draw
         rendering.encode_draw_commands(device, &mut encoder);
 
-        // ZERO-COPY: Encode particles and segments without re-uploading
-        // Data was already written directly to GPU staging in update_zero_copy
-        model.render_state.particle_renderer.encode_only(
-            &mut encoder,
-            model.render_state.particle_count,
-            rendering.get_named_texture("particles").unwrap(),
-        );
+        // ZERO-COPY: Write and encode particles and segments per voice
+        let voice0_texture = rendering
+            .get_named_texture("particles_voice_0")
+            .expect("Fatal Error: Missing texture for Voice0");
 
-        model.render_state.segment_renderer.encode_only(
-            &mut encoder,
-            model.render_state.segment_instance_count,
-            rendering.get_named_texture("particles").unwrap(),
-        );
+        let voice3_texture = rendering
+            .get_named_texture("particles_voice_3")
+            .expect("Fatal Error: Missing texture for Voice3");
+
+        for (voice_id, voice) in model.voice_manager.voices.iter() {
+            if voice.as_drone().is_none() {
+                continue;
+            }
+
+            let texture = match voice_id {
+                VoiceId::Voice0 => voice0_texture,
+                VoiceId::Voice3 => voice3_texture,
+                _ => continue,
+            };
+
+            let (particle_count, segment_instance_count) = model.particle_system.gpu_write(
+                voice_id,
+                voice,
+                queue,
+                &model.render_state.particle_renderer,
+                &model.render_state.segment_renderer,
+                model.engine_debug,
+            );
+
+            if particle_count == 0 {
+                continue;
+            }
+
+            model
+                .render_state
+                .particle_renderer
+                .encode_only(&mut encoder, particle_count, texture);
+
+            model.render_state.segment_renderer.encode_only(
+                &mut encoder,
+                segment_instance_count,
+                texture,
+            );
+        }
+
+        // Combine voice textures
+        if let Err(e) = rendering.execute_named_pipeline("combine_voices", device, &mut encoder) {
+            eprintln!("Error executing combine_voices pipeline: {}", e);
+        }
 
         // Encode heatmap (still uses legacy buffer for now)
         // will not work in the current ZERO-COPY implementation because buffer will

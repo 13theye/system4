@@ -9,7 +9,7 @@ use nannou::prelude::*;
 use nnpipe::renderers::{ParticleRenderer, SegmentRenderer};
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rayon::prelude::*;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::{
     forces::{field::ForceFields, wind_circle::WindCircle},
@@ -51,6 +51,9 @@ pub struct ParticleSystem {
     // Boxed for performance improvement when culling particles
     pub particle_feedback: HashMap<VoiceId, Vec<Box<ParticleFeedback>>>,
 
+    // Render State Helper
+    pub frame_state: ParticleSystemFrameState,
+
     // Masks
     pub masks: HashMap<VoiceId, Mask>,
 
@@ -70,6 +73,9 @@ pub struct ParticleSystem {
 
     // Voice mode
     pub mode: ParticleSystemMode,
+
+    // Cached computed offsets from last physics update (for rendering)
+    pub computed_offsets_map: HashMap<VoiceId, Vec<Vec2>>,
 }
 
 /// Global parameters for the ParticleSystem
@@ -93,6 +99,23 @@ pub struct MassVarianceParams {
     pub enabled: bool,
     // percentage of base mass to vary (e.g., 0.1 = 10%)
     pub amount: f32,
+}
+
+/// Update helper struct to track per-frame state
+pub struct ParticleSystemFrameState {
+    pub frame_start: Instant,
+    pub physics_time: Duration,
+    pub alive_particles: HashMap<VoiceId, usize>,
+}
+
+impl ParticleSystemFrameState {
+    pub fn init() -> Self {
+        Self {
+            frame_start: Instant::now(),
+            physics_time: Duration::ZERO,
+            alive_particles: HashMap::new(),
+        }
+    }
 }
 
 impl ParticleSystem {
@@ -124,6 +147,7 @@ impl ParticleSystem {
         Self {
             particle_cores: HashMap::new(),
             particle_feedback: HashMap::new(),
+            frame_state: ParticleSystemFrameState::init(),
             masks: HashMap::new(),
 
             force_fields: ForceFields::new(origin, bounds_size),
@@ -136,6 +160,8 @@ impl ParticleSystem {
             // Starting mode is separate
             mode: ParticleSystemMode::Separate,
 
+            computed_offsets_map: HashMap::new(),
+
             last_update: Instant::now(),
         }
     }
@@ -143,20 +169,17 @@ impl ParticleSystem {
     /********************* Update methods ********************************** */
 
     /// ZERO-COPY UPDATE: Updates particles and writes directly to GPU staging memory
-    /// Returns (particle_count, segment_count) of particles written to GPU buffers
+    /// Mutates particle_counts, segment_counts of particles written to GPU buffers
     #[allow(clippy::too_many_arguments)]
-    pub fn update_zero_copy(
+    pub fn update(
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
-        queue: &nannou::wgpu::Queue,
-        particle_renderer: &ParticleRenderer,
-        segment_renderer: &SegmentRenderer,
         now: Instant,
         perlin_seed: u32,
         engine_debug: bool,
-    ) -> (usize, usize) {
-        let frame_start = Instant::now();
+    ) {
+        self.frame_state.frame_start = Instant::now();
 
         // Calculate time delta
         let dt = (now - self.last_update).as_secs_f32();
@@ -184,12 +207,10 @@ impl ParticleSystem {
             .collect();
 
         // Init empty particle counters
-        let mut total_particle_count = 0;
-        let mut total_segment_count = 0;
-        let mut voice_particle_counts: HashMap<VoiceId, usize> = HashMap::new();
+        let mut total_alive_count = 0;
 
-        // Init Hashmap to Store computed offsets from physics loop to reuse in GPU write
-        let mut computed_position_offsets_map: HashMap<VoiceId, Vec<Vec2>> = HashMap::new();
+        // Clear and reuse the computed offsets map from last frame
+        self.computed_offsets_map.clear();
 
         let physics_start = Instant::now();
 
@@ -305,7 +326,8 @@ impl ParticleSystem {
                 });
 
             // Save computed offsets for GPU write (must use SAME offsets)
-            computed_position_offsets_map.insert(*voice_id, computed_position_offsets);
+            self.computed_offsets_map
+                .insert(*voice_id, computed_position_offsets);
 
             // Count alive particles
             let count_start = Instant::now();
@@ -313,9 +335,10 @@ impl ParticleSystem {
                 .iter()
                 .filter(|c| c.is_alive && c.is_activated)
                 .count();
-            voice_particle_counts.insert(*voice_id, alive_count);
-            total_particle_count += alive_count;
-            total_segment_count += alive_count;
+            total_alive_count += alive_count;
+            self.frame_state
+                .alive_particles
+                .insert(*voice_id, alive_count);
             let count_time = count_start.elapsed();
 
             // Cull dead particles
@@ -347,7 +370,7 @@ impl ParticleSystem {
             }
         }
 
-        let physics_time = physics_start.elapsed();
+        self.frame_state.physics_time = physics_start.elapsed();
         if engine_debug {
             println!(
                 "[Physics] Particle end of life marking time : {:.3}ms",
@@ -355,9 +378,9 @@ impl ParticleSystem {
             );
 
             println!(
-                "[Physics] Parallel update : {:.3}ms ({} particles)",
-                physics_time.as_secs_f64() * 1000.0,
-                total_particle_count
+                "[Physics] Parallel update : {:.3}ms ({} alive particles)",
+                self.frame_state.physics_time.as_secs_f64() * 1000.0,
+                total_alive_count
             );
         }
 
@@ -389,29 +412,57 @@ impl ParticleSystem {
             self.particle_feedback.remove(&voice_id);
         }
 
+        // Record the last update time as the last item of business
+        self.last_update = now;
+    }
+
+    pub fn gpu_write(
+        &self,
+        voice_id: &VoiceId,
+        voice: &Voice,
+        queue: &nannou::wgpu::Queue,
+        particle_renderer: &ParticleRenderer,
+        segment_renderer: &SegmentRenderer,
+        engine_debug: bool,
+    ) -> (usize, usize) {
         let gpu_write_start = Instant::now();
 
         // Second pass: ZERO-COPY write directly to GPU staging memory
         // Use the SAME computed offsets from physics loop for consistency
-        let particles_written = self.write_particles_zero_copy(
+        let Some(drone) = voice.as_drone() else {
+            return (0, 0);
+        };
+
+        let alive_count = self
+            .frame_state
+            .alive_particles
+            .get(voice_id)
+            .copied()
+            .unwrap_or(0);
+
+        let particles_written = self.write_particles_for_voice(
+            *voice_id,
             queue,
             particle_renderer,
-            &computed_position_offsets_map,
-            total_particle_count,
+            alive_count,
             engine_debug,
         );
 
-        let segments_written = self.write_segments_zero_copy(
+        let segment_length = drone.params.segment_length;
+        let segment_line_width = drone.params.segment_line_width;
+
+        let segment_instances_written = self.write_segments_for_voice(
+            *voice_id,
             queue,
             segment_renderer,
-            voices,
-            &computed_position_offsets_map,
-            total_segment_count,
+            segment_length,
+            segment_line_width,
+            alive_count,
             engine_debug,
         );
 
         let gpu_write_time = gpu_write_start.elapsed();
-        let frame_time = frame_start.elapsed();
+        let frame_time = self.frame_state.frame_start.elapsed();
 
         if engine_debug {
             println!(
@@ -421,41 +472,101 @@ impl ParticleSystem {
             println!(
                 "[FRAME] Total update_zero_copy: {:.3}ms (Physics: {:.1}%, GPU: {:.1}%)\n",
                 frame_time.as_secs_f64() * 1000.0,
-                (physics_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0,
+                (self.frame_state.physics_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0,
                 (gpu_write_time.as_secs_f64() / frame_time.as_secs_f64()) * 100.0
             );
         }
 
-        // Record the last update time as the last item of business
-        self.last_update = now;
-
-        (particles_written, segments_written)
+        (particles_written, segment_instances_written)
     }
 
+    /// Write particles for a specific voice directly to GPU staging memory (zero-copy)
+    pub fn write_particles_for_voice(
+        &self,
+        voice_id: VoiceId,
+        queue: &nannou::wgpu::Queue,
+        renderer: &ParticleRenderer,
+        alive_count: usize,
+        engine_debug: bool,
+    ) -> usize {
+        if alive_count == 0 {
+            return 0;
+        }
+
+        let cores = match self.particle_cores.get(&voice_id) {
+            Some(cores) => cores,
+            None => return 0,
+        };
+
+        let start_total = Instant::now();
+
+        let particle_count = renderer.write_particles_direct(queue, alive_count, |gpu_particles| {
+            let start_assembly = Instant::now();
+            let mut write_idx = 0;
+
+            let computed_position_offsets = self.computed_offsets_map.get(&voice_id);
+
+            for (index, core) in cores.iter().enumerate() {
+                if core.is_alive && core.is_activated {
+                    let offset = if let Some(computed_position_offsets) = computed_position_offsets
+                    {
+                        computed_position_offsets[index]
+                    } else {
+                        vec2(0.0, 0.0)
+                    };
+
+                    gpu_particles[write_idx] = core.to_gpu(offset);
+                    write_idx += 1;
+                }
+            }
+
+            let assembly_time = start_assembly.elapsed();
+            if engine_debug {
+                println!(
+                    "  [Particles Voice {}] Assembly: {:.3}ms ({} particles)",
+                    voice_id.to_i32(),
+                    assembly_time.as_secs_f64() * 1000.0,
+                    write_idx
+                );
+            }
+        });
+
+        let total_time = start_total.elapsed();
+        if engine_debug {
+            println!(
+                "[Particles Voice {}] Total write_particles_zero_copy: {:.3}ms",
+                voice_id.to_i32(),
+                total_time.as_secs_f64() * 1000.0
+            );
+        }
+
+        particle_count
+    }
+
+    #[allow(dead_code)]
     /// Write particles directly to GPU staging memory (zero-copy)
-    fn write_particles_zero_copy(
+    /// Deprecating for per-voice write
+    fn write_particles(
         &self,
         queue: &nannou::wgpu::Queue,
         renderer: &ParticleRenderer,
-        computed_position_offsets_map: &HashMap<VoiceId, Vec<Vec2>>,
-        total_count: usize,
+        alive_count: usize,
         engine_debug: bool,
     ) -> usize {
-        if total_count == 0 {
+        if alive_count == 0 {
             return 0;
         }
 
         let start_total = Instant::now();
 
-        let particle_count = renderer.write_particles_direct(queue, total_count, |gpu_particles| {
+        let particle_count = renderer.write_particles_direct(queue, alive_count, |gpu_particles| {
             let start_assembly = Instant::now();
 
             // Index position in the flattened array of ParticleCores
             let mut write_idx = 0;
 
             for (voice_id, cores) in self.particle_cores.iter() {
-                let computed_position_offsets = computed_position_offsets_map.get(voice_id);
-                let mask = self.masks.get(voice_id);
+                let computed_position_offsets = self.computed_offsets_map.get(voice_id);
 
                 for (index, core) in cores.iter().enumerate() {
                     if core.is_alive && core.is_activated {
@@ -468,17 +579,7 @@ impl ParticleSystem {
                                 vec2(0.0, 0.0)
                             };
 
-                        if let Some(mask) = mask {
-                            if mask.contains_point(core.position + offset) {
-                                gpu_particles[write_idx] = core.to_gpu(offset);
-                            } else {
-                                // if not in mask, write as invisible
-                                gpu_particles[write_idx] = core.to_gpu_invisible(offset);
-                            }
-                        } else {
-                            // if no mask, just write as visible
-                            gpu_particles[write_idx] = core.to_gpu(offset);
-                        }
+                        gpu_particles[write_idx] = core.to_gpu(offset);
 
                         write_idx += 1;
                     }
@@ -506,17 +607,104 @@ impl ParticleSystem {
         particle_count
     }
 
+    #[allow(clippy::too_many_arguments)]
+    /// Write segments for a specific voice directly to GPU staging memory (zero-copy)
+    pub fn write_segments_for_voice(
+        &self,
+        voice_id: VoiceId,
+        queue: &nannou::wgpu::Queue,
+        renderer: &SegmentRenderer,
+        segment_length: f32,
+        segment_line_width: f32,
+        alive_count: usize,
+        engine_debug: bool,
+    ) -> usize {
+        if alive_count == 0 {
+            return 0;
+        }
+
+        let cores = match self.particle_cores.get(&voice_id) {
+            Some(cores) => cores,
+            None => return 0,
+        };
+
+        let start_total = Instant::now();
+
+        // Collect work items for this voice
+        let start_collect = Instant::now();
+        let mut work_items = Vec::with_capacity(alive_count);
+        for (index, core) in cores.iter().enumerate() {
+            if core.is_alive && core.is_activated {
+                work_items.push((voice_id, index, segment_length, segment_line_width));
+            }
+        }
+        let collect_time = start_collect.elapsed();
+
+        let (_, segment_instance_count) =
+            renderer.write_segments_direct(queue, alive_count, |gpu_segments| {
+                let start_assembly = Instant::now();
+
+                let segments: Vec<_> = work_items
+                    .par_iter()
+                    .map(
+                        |(voice_id, particle_idx, segment_length, segment_line_width)| {
+                            let computed_offsets = self.computed_offsets_map.get(voice_id).unwrap();
+                            let feedback_array = self.particle_feedback.get(voice_id).unwrap();
+                            let cores = self.particle_cores.get(voice_id).unwrap();
+
+                            to_segment_gpu(
+                                &cores[*particle_idx],
+                                &feedback_array[*particle_idx],
+                                computed_offsets[*particle_idx],
+                                *segment_length,
+                                *segment_line_width,
+                            )
+                        },
+                    )
+                    .collect();
+
+                let assembly_time = start_assembly.elapsed();
+
+                let start_copy = Instant::now();
+                gpu_segments[..segments.len()].copy_from_slice(&segments);
+                let copy_time = start_copy.elapsed();
+
+                if engine_debug {
+                    println!("  [Segments Voice {}] Count: {}", voice_id.to_i32(), segments.len());
+                    println!(
+                        "  [Segments Voice {}] Collect: {:.3}ms, Parallel assembly: {:.3}ms, Copy: {:.3}ms",
+                        voice_id.to_i32(),
+                        collect_time.as_secs_f64() * 1000.0,
+                        assembly_time.as_secs_f64() * 1000.0,
+                        copy_time.as_secs_f64() * 1000.0,
+                    );
+                }
+            });
+
+        let total_time = start_total.elapsed();
+        if engine_debug {
+            println!(
+                "[Segments Voice {}] Total write_segments_zero_copy: {:.3}ms",
+                voice_id.to_i32(),
+                total_time.as_secs_f64() * 1000.0
+            );
+        }
+
+        segment_instance_count
+    }
+
+    #[allow(dead_code)]
     /// Write segments directly to GPU staging memory (zero-copy)
-    fn write_segments_zero_copy(
+    /// Deprecating for per-voice write
+    fn write_segments(
         &self,
         queue: &nannou::wgpu::Queue,
         renderer: &SegmentRenderer,
         voices: &HashMap<VoiceId, Voice>,
-        computed_offsets_map: &HashMap<VoiceId, Vec<Vec2>>,
-        total_count: usize,
+        alive_count: usize,
         engine_debug: bool,
     ) -> usize {
-        if total_count == 0 {
+        if alive_count == 0 {
             return (0, 0).1;
         }
 
@@ -524,7 +712,7 @@ impl ParticleSystem {
 
         // Phase 1: Collect work items (sequential - just bookkeeping)
         let start_collect = Instant::now();
-        let mut work_items = Vec::with_capacity(total_count);
+        let mut work_items = Vec::with_capacity(alive_count);
 
         for (voice_id, cores) in self.particle_cores.iter() {
             let Some(voice) = voices.get(voice_id) else {
@@ -535,7 +723,6 @@ impl ParticleSystem {
             };
             let segment_length = drone.params.segment_length;
             let segment_line_width = drone.params.segment_line_width;
-            let mask = self.masks.get(voice_id);
 
             for (index, core) in cores.iter().enumerate() {
                 if core.is_alive && core.is_activated {
@@ -545,8 +732,8 @@ impl ParticleSystem {
         }
         let collect_time = start_collect.elapsed();
 
-        let (_, segment_count) =
-            renderer.write_segments_direct(queue, total_count, |gpu_segments| {
+        let (_, segment_instance_count) =
+            renderer.write_segments_direct(queue, alive_count, |gpu_segments| {
                 // Phase 2: Parallel generation of SegmentGpu structs
                 let start_assembly = Instant::now();
 
@@ -554,7 +741,7 @@ impl ParticleSystem {
                     .par_iter()
                     .map(
                         |(voice_id, particle_idx, segment_length, segment_line_width)| {
-                            let computed_offsets = computed_offsets_map.get(voice_id).unwrap();
+                            let computed_offsets = self.computed_offsets_map.get(voice_id).unwrap();
                             let feedback_array = self.particle_feedback.get(voice_id).unwrap();
                             let cores = self.particle_cores.get(voice_id).unwrap();
 
@@ -595,7 +782,7 @@ impl ParticleSystem {
             );
         }
 
-        segment_count
+        segment_instance_count
     }
 
     pub fn handle_particle_emission(
@@ -757,7 +944,7 @@ impl ParticleSystem {
         self.params.bounds_size = Vec2::new(width, height);
     }
 
-    pub fn get_particle_count(&self) -> usize {
+    pub fn get_total_particle_count(&self) -> usize {
         self.particle_cores.values().map(|cores| cores.len()).sum()
     }
 
