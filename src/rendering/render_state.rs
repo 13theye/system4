@@ -21,8 +21,12 @@ pub struct RenderState {
     // Rendering engine
     pub render_engine: RefCell<Nnpipe>,
     pub heatmap_renderer: HeatmapRenderer,
-    pub particle_renderer: ParticleRenderer,
-    pub segment_renderer: SegmentRenderer,
+
+    // Voice-specific renderers (isolated buffers per voice)
+    pub particle_renderer_voice0: ParticleRenderer,
+    pub particle_renderer_voice3: ParticleRenderer,
+    pub segment_renderer_voice0: SegmentRenderer,
+    pub segment_renderer_voice3: SegmentRenderer,
 
     // Texture reshapers and window data
     pub render_size: Vec2,
@@ -61,8 +65,10 @@ impl RenderState {
 
     /// Set the ParticleRender and SegmentRenderer engine debug flags
     pub fn set_render_engines_debug(&mut self, debug: bool) {
-        self.particle_renderer.set_engine_debug(debug);
-        self.segment_renderer.set_engine_debug(debug);
+        self.particle_renderer_voice0.set_engine_debug(debug);
+        self.particle_renderer_voice3.set_engine_debug(debug);
+        self.segment_renderer_voice0.set_engine_debug(debug);
+        self.segment_renderer_voice3.set_engine_debug(debug);
     }
 
     /// Create a RenderState from the Nannou app with window IDs and settings
@@ -116,8 +122,15 @@ impl RenderState {
             format: wgpu::TextureFormat::Rgba16Float,
         };
 
-        let particle_renderer = ParticleRenderer::new(device, hi_config, particle_limit as usize);
-        let segment_renderer = SegmentRenderer::new(device, hi_config, particle_limit as usize);
+        // Create separate renderers for each voice to ensure buffer isolation
+        let particle_renderer_voice0 =
+            ParticleRenderer::new(device, hi_config, particle_limit as usize);
+        let particle_renderer_voice3 =
+            ParticleRenderer::new(device, hi_config, particle_limit as usize);
+        let segment_renderer_voice0 =
+            SegmentRenderer::new(device, hi_config, particle_limit as usize);
+        let segment_renderer_voice3 =
+            SegmentRenderer::new(device, hi_config, particle_limit as usize);
 
         // Create texture reshapers for multi-window rendering
         let audience_reshaper =
@@ -160,8 +173,10 @@ impl RenderState {
             gpu_particle_buffer,
             render_engine: RefCell::new(rendering),
             heatmap_renderer,
-            particle_renderer,
-            segment_renderer,
+            particle_renderer_voice0,
+            particle_renderer_voice3,
+            segment_renderer_voice0,
+            segment_renderer_voice3,
             render_size,
             render_rect,
             audience_window_id,
@@ -190,7 +205,7 @@ impl RenderState {
             .name("Combine Voice Particles")
             .input_textures(&["particles_voice_0", "particles_voice_3"])
             .output_texture("particles_combined")
-            .simple_additive_composite(hi_config, 1.0)
+            .simple_over_composite(hi_config, 1.0)
             .build(device)
         {
             Ok(effect) => {

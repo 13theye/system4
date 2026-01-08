@@ -195,40 +195,70 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             .get_named_texture("particles_voice_3")
             .expect("Fatal Error: Missing texture for Voice3");
 
-        for (voice_id, voice) in model.voice_manager.voices.iter() {
-            if voice.as_drone().is_none() {
-                continue;
+        // PHASE 1: GPU Buffer Writes
+        // Batch all writes first to enable driver-level parallelization across different buffers
+        let voice0_counts = model
+            .voice_manager
+            .voices
+            .get(&VoiceId::Voice0)
+            .filter(|v| v.as_drone().is_some())
+            .map(|voice| {
+                model.particle_system.gpu_write(
+                    &VoiceId::Voice0,
+                    voice,
+                    queue,
+                    &model.render_state.particle_renderer_voice0,
+                    &model.render_state.segment_renderer_voice0,
+                    model.engine_debug,
+                )
+            });
+
+        let voice3_counts = model
+            .voice_manager
+            .voices
+            .get(&VoiceId::Voice3)
+            .filter(|v| v.as_drone().is_some())
+            .map(|voice| {
+                model.particle_system.gpu_write(
+                    &VoiceId::Voice3,
+                    voice,
+                    queue,
+                    &model.render_state.particle_renderer_voice3,
+                    &model.render_state.segment_renderer_voice3,
+                    model.engine_debug,
+                )
+            });
+
+        // PHASE 2: Encode Render Commands
+        // These must be sequential since they append to the same command encoder
+        if let Some((particle_count, segment_instance_count)) = voice0_counts {
+            if particle_count > 0 {
+                model
+                    .render_state
+                    .particle_renderer_voice0
+                    .encode_only(&mut encoder, particle_count, voice0_texture);
+
+                model.render_state.segment_renderer_voice0.encode_only(
+                    &mut encoder,
+                    segment_instance_count,
+                    voice0_texture,
+                );
             }
+        }
 
-            let texture = match voice_id {
-                VoiceId::Voice0 => voice0_texture,
-                VoiceId::Voice3 => voice3_texture,
-                _ => continue,
-            };
+        if let Some((particle_count, segment_instance_count)) = voice3_counts {
+            if particle_count > 0 {
+                model
+                    .render_state
+                    .particle_renderer_voice3
+                    .encode_only(&mut encoder, particle_count, voice3_texture);
 
-            let (particle_count, segment_instance_count) = model.particle_system.gpu_write(
-                voice_id,
-                voice,
-                queue,
-                &model.render_state.particle_renderer,
-                &model.render_state.segment_renderer,
-                model.engine_debug,
-            );
-
-            if particle_count == 0 {
-                continue;
+                model.render_state.segment_renderer_voice3.encode_only(
+                    &mut encoder,
+                    segment_instance_count,
+                    voice3_texture,
+                );
             }
-
-            model
-                .render_state
-                .particle_renderer
-                .encode_only(&mut encoder, particle_count, texture);
-
-            model.render_state.segment_renderer.encode_only(
-                &mut encoder,
-                segment_instance_count,
-                texture,
-            );
         }
 
         // Combine voice textures
