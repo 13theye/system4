@@ -31,6 +31,7 @@ pub fn combined_wind_at_pos(circles: &[&WindCircle], position: Vec2, noise: f64)
         .map(|wind| wind.velocity)
         .reduce(|a, b| a + b)?;
 
+    // Very low strength winds are clamped to None for aesthetics
     if total_velocity.length() < 0.05 {
         return None;
     }
