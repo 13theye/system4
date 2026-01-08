@@ -195,70 +195,78 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             .get_named_texture("particles_voice_3")
             .expect("Fatal Error: Missing texture for Voice3");
 
-        // PHASE 1: GPU Buffer Writes
-        // Batch all writes first to enable driver-level parallelization across different buffers
-        let voice0_counts = model
-            .voice_manager
-            .voices
-            .get(&VoiceId::Voice0)
-            .filter(|v| v.as_drone().is_some())
-            .map(|voice| {
-                model.particle_system.gpu_write(
-                    &VoiceId::Voice0,
-                    voice,
-                    queue,
+        // PHASE 1: CPU ASSEMBLY (batched before GPU write)
+        // Assemble all GPU data on CPU first, leveraging internal Rayon parallelism in segment assembly
+        // Note: We can't use Rayon at the voice level due to Sync constraints, but segment assembly
+        // already uses Rayon internally for per-particle parallelism (see write_segments_for_voice)
+        let start_assembly = Instant::now();
+
+        let voice_data: Vec<_> = [VoiceId::Voice0, VoiceId::Voice3]
+            .iter()
+            .filter_map(|&voice_id| {
+                model.voice_manager.voices.get(&voice_id).and_then(|voice| {
+                    voice.as_drone().map(|drone| {
+                        // Assemble particle GPU data (CPU work)
+                        let particles = model
+                            .particle_system
+                            .assemble_particles_for_voice(voice_id, model.engine_debug);
+
+                        // Assemble segment GPU data (CPU work - uses Rayon internally for particles)
+                        let segments = model.particle_system.assemble_segments_for_voice(
+                            voice_id,
+                            drone.params.segment_length,
+                            drone.params.segment_line_width,
+                            model.engine_debug,
+                        );
+
+                        (voice_id, particles, segments)
+                    })
+                })
+            })
+            .collect();
+
+        if model.engine_debug {
+            let assembly_time = start_assembly.elapsed();
+            println!(
+                "[CPU ASSEMBLY] Total assembly time: {:.3}ms",
+                assembly_time.as_secs_f64() * 1000.0
+            );
+        }
+
+        // PHASE 2: SEQUENTIAL GPU WRITE
+        // Write pre-assembled data to GPU buffers (fast memcpy, must be sequential)
+        let start_gpu_write = Instant::now();
+
+        for (voice_id, particles, segments) in voice_data {
+            let (renderer, seg_renderer, texture) = match voice_id {
+                VoiceId::Voice0 => (
                     &model.render_state.particle_renderer_voice0,
                     &model.render_state.segment_renderer_voice0,
-                    model.engine_debug,
-                )
-            });
-
-        let voice3_counts = model
-            .voice_manager
-            .voices
-            .get(&VoiceId::Voice3)
-            .filter(|v| v.as_drone().is_some())
-            .map(|voice| {
-                model.particle_system.gpu_write(
-                    &VoiceId::Voice3,
-                    voice,
-                    queue,
+                    voice0_texture,
+                ),
+                VoiceId::Voice3 => (
                     &model.render_state.particle_renderer_voice3,
                     &model.render_state.segment_renderer_voice3,
-                    model.engine_debug,
-                )
-            });
+                    voice3_texture,
+                ),
+                _ => continue,
+            };
 
-        // PHASE 2: Encode Render Commands
-        // These must be sequential since they append to the same command encoder
-        if let Some((particle_count, segment_instance_count)) = voice0_counts {
+            let particle_count = renderer.update_buffer(queue, &particles);
+            let (_, segment_instance_count) = seg_renderer.update_buffer(queue, &segments);
+
             if particle_count > 0 {
-                model
-                    .render_state
-                    .particle_renderer_voice0
-                    .encode_only(&mut encoder, particle_count, voice0_texture);
-
-                model.render_state.segment_renderer_voice0.encode_only(
-                    &mut encoder,
-                    segment_instance_count,
-                    voice0_texture,
-                );
+                renderer.encode_only(&mut encoder, particle_count, texture);
+                seg_renderer.encode_only(&mut encoder, segment_instance_count, texture);
             }
         }
 
-        if let Some((particle_count, segment_instance_count)) = voice3_counts {
-            if particle_count > 0 {
-                model
-                    .render_state
-                    .particle_renderer_voice3
-                    .encode_only(&mut encoder, particle_count, voice3_texture);
-
-                model.render_state.segment_renderer_voice3.encode_only(
-                    &mut encoder,
-                    segment_instance_count,
-                    voice3_texture,
-                );
-            }
+        if model.engine_debug {
+            let gpu_write_time = start_gpu_write.elapsed();
+            println!(
+                "[GPU WRITE] Total GPU buffer write time: {:.3}ms",
+                gpu_write_time.as_secs_f64() * 1000.0
+            );
         }
 
         // Combine voice textures
@@ -269,6 +277,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Encode heatmap (still uses legacy buffer for now)
         // will not work in the current ZERO-COPY implementation because buffer will
         // remain empty.
+        /*
         model.render_state.heatmap_renderer.encode_into(
             device,
             &mut encoder,
@@ -277,6 +286,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             model.render_state.render_rect,
             rendering.get_named_texture("heatmap").unwrap(),
         );
+         */
 
         //Encode post processing
         if let Err(e) = rendering.execute_named_pipeline("heatmap_effects", device, &mut encoder) {

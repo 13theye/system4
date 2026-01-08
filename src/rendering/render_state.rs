@@ -16,7 +16,7 @@ pub type GpuParticleBuffer = Vec<ParticleGpu>;
 /// - Rendering metadata (counts, size, DPI)
 pub struct RenderState {
     // GPU buffers
-    pub gpu_particle_buffer: GpuParticleBuffer,
+    //pub gpu_particle_buffer: GpuParticleBuffer,
 
     // Rendering engine
     pub render_engine: RefCell<Nnpipe>,
@@ -53,6 +53,7 @@ impl RenderState {
         &self.render_engine
     }
 
+    /*
     /// Get the GPU particle buffer
     pub fn gpu_particle_buffer(&self) -> &GpuParticleBuffer {
         &self.gpu_particle_buffer
@@ -62,6 +63,7 @@ impl RenderState {
     pub fn gpu_particle_buffer_mut(&mut self) -> &mut GpuParticleBuffer {
         &mut self.gpu_particle_buffer
     }
+     */
 
     /// Set the ParticleRender and SegmentRenderer engine debug flags
     pub fn set_render_engines_debug(&mut self, debug: bool) {
@@ -103,7 +105,7 @@ impl RenderState {
         let device = audience_window.device();
 
         // Initialize empty GPU buffer
-        let gpu_particle_buffer = Vec::new();
+        //let gpu_particle_buffer = Vec::new();
 
         // Create main rendering pipeline
         let mut rendering = Nnpipe::new(device, texture_width, texture_height, texture_samples);
@@ -170,7 +172,7 @@ impl RenderState {
         Self::setup_rendering_pipelines(&mut rendering, device, hi_config, med_config, lo_config);
 
         Self {
-            gpu_particle_buffer,
+            //gpu_particle_buffer,
             render_engine: RefCell::new(rendering),
             heatmap_renderer,
             particle_renderer_voice0,
