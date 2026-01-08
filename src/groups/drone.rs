@@ -51,11 +51,12 @@ pub struct Drone {
     pub id: VoiceId,
     pub state: DroneState,
     pub params: DroneParams,
+    // smallest bounding box containing all wind_circles
     pub bounds_rect: Rect,
 
     pub emitters: Vec<Box<dyn Emitter>>,
     pub wind_circles: HashMap<usize, WindCircle>,
-    wind_circle_idx: usize,
+    current_wind_circle_idx: usize,
 }
 
 impl Drone {
@@ -67,7 +68,7 @@ impl Drone {
             bounds_rect: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
             emitters: Vec::new(),
             wind_circles: HashMap::new(),
-            wind_circle_idx: 0,
+            current_wind_circle_idx: 0,
         }
     }
 
@@ -77,11 +78,13 @@ impl Drone {
     }
 
     pub fn issue_wind_circle_idx(&mut self) -> usize {
-        if let Some(i) = (0..self.wind_circle_idx).find(|&i| !self.wind_circles.contains_key(&i)) {
+        if let Some(i) =
+            (0..self.current_wind_circle_idx).find(|&i| !self.wind_circles.contains_key(&i))
+        {
             i
         } else {
-            let idx = self.wind_circle_idx;
-            self.wind_circle_idx += 1;
+            let idx = self.current_wind_circle_idx;
+            self.current_wind_circle_idx += 1;
             idx
         }
     }

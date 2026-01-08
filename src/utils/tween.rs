@@ -38,8 +38,13 @@ pub fn get_interpolation_phase(
     }
 }
 
-pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a * (1.0 - t) + b * t
+/// Linear interpolation.
+/// - `Progress` must be between 0.0 and 1.0
+pub fn lerp<T>(start: T, end: T, progress: f32) -> T
+where
+    T: std::ops::Mul<f32, Output = T> + std::ops::Add<Output = T> + Copy,
+{
+    start * (1.0 - progress) + end * progress
 }
 
 #[allow(clippy::too_many_arguments)]

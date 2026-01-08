@@ -158,6 +158,14 @@ impl ParticleCore {
         )
     }
 
+    pub fn to_gpu_invisible(&self, offset: Vec2) -> ParticleGpu {
+        ParticleGpu::new(
+            [self.position.x + offset.x, self.position.y + offset.y],
+            [0.0, 0.0, 0.0],
+            0.0,
+        )
+    }
+
     pub fn fade_out_duration(&self) -> f32 {
         PARTICLE_FADE_OUT_DURATION
     }

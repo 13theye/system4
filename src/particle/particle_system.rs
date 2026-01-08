@@ -16,6 +16,7 @@ use crate::{
     groups::{Voice, VoiceId},
     particle::{to_segment_gpu, ParticleCore, ParticleFeedback},
     utils::tween,
+    view::mask::Mask,
 };
 
 use super::constants::*;
@@ -49,6 +50,9 @@ pub struct ParticleSystem {
     // Feedback: cold data for trail rendering (~3.4KB per particle)
     // Boxed for performance improvement when culling particles
     pub particle_feedback: HashMap<VoiceId, Vec<Box<ParticleFeedback>>>,
+
+    // Masks
+    pub masks: HashMap<VoiceId, Mask>,
 
     // forces
     pub force_fields: ForceFields,
@@ -120,6 +124,8 @@ impl ParticleSystem {
         Self {
             particle_cores: HashMap::new(),
             particle_feedback: HashMap::new(),
+            masks: HashMap::new(),
+
             force_fields: ForceFields::new(origin, bounds_size),
             params,
             mass_var_params,
@@ -183,7 +189,7 @@ impl ParticleSystem {
         let mut voice_particle_counts: HashMap<VoiceId, usize> = HashMap::new();
 
         // Init Hashmap to Store computed offsets from physics loop to reuse in GPU write
-        let mut computed_offsets_map: HashMap<VoiceId, Vec<Vec2>> = HashMap::new();
+        let mut computed_position_offsets_map: HashMap<VoiceId, Vec<Vec2>> = HashMap::new();
 
         let physics_start = Instant::now();
 
@@ -239,7 +245,7 @@ impl ParticleSystem {
             let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
 
             // Pre-allocate storage for computed offsets (to save for GPU write)
-            let mut computed_offsets = vec![vec2(0.0, 0.0); cores.len()];
+            let mut computed_position_offsets = vec![vec2(0.0, 0.0); cores.len()];
 
             // Collect WindCircles. If combined mode, collect all circles from all drones.
             // Otherwise, collect only circles from this voice
@@ -258,9 +264,9 @@ impl ParticleSystem {
             cores
                 .par_iter_mut()
                 .zip(feedback_array.par_iter_mut())
-                .zip(computed_offsets.par_iter_mut())
+                .zip(computed_position_offsets.par_iter_mut())
                 .enumerate()
-                .for_each(|(index, ((core, feedback), computed_offset))| {
+                .for_each(|(index, ((core, feedback), computed_position_offset))| {
                     let mass_variation_factor = mass_variations[index];
                     let noise_factor = self
                         .perlin_gen
@@ -278,7 +284,8 @@ impl ParticleSystem {
                     core.update(color, alpha_limit, framerate_factor);
 
                     // Calculate and apply offset
-                    let offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0 {
+                    let position_offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0
+                    {
                         let normal = vec2(-core.velocity.y, core.velocity.x).normalize_or_zero();
                         normal * PARTICLE_MAX_POSITION_OFFSET * offset_factors[index]
                     } else {
@@ -286,10 +293,10 @@ impl ParticleSystem {
                     };
 
                     // Store the computed offset for GPU write
-                    *computed_offset = offset;
+                    *computed_position_offset = position_offset;
 
                     // Apply the offset (adding zero is fast, no need to check)
-                    let offset_position = core.position + offset;
+                    let offset_position = core.position + position_offset;
                     feedback.record(offset_position, color);
 
                     if core.is_out_of_bounds(bounds_rect) {
@@ -298,7 +305,7 @@ impl ParticleSystem {
                 });
 
             // Save computed offsets for GPU write (must use SAME offsets)
-            computed_offsets_map.insert(*voice_id, computed_offsets);
+            computed_position_offsets_map.insert(*voice_id, computed_position_offsets);
 
             // Count alive particles
             let count_start = Instant::now();
@@ -389,7 +396,7 @@ impl ParticleSystem {
         let particles_written = self.write_particles_zero_copy(
             queue,
             particle_renderer,
-            &computed_offsets_map,
+            &computed_position_offsets_map,
             total_particle_count,
             engine_debug,
         );
@@ -398,7 +405,7 @@ impl ParticleSystem {
             queue,
             segment_renderer,
             voices,
-            &computed_offsets_map,
+            &computed_position_offsets_map,
             total_segment_count,
             engine_debug,
         );
@@ -430,7 +437,7 @@ impl ParticleSystem {
         &self,
         queue: &nannou::wgpu::Queue,
         renderer: &ParticleRenderer,
-        computed_offsets_map: &HashMap<VoiceId, Vec<Vec2>>,
+        computed_position_offsets_map: &HashMap<VoiceId, Vec<Vec2>>,
         total_count: usize,
         engine_debug: bool,
     ) -> usize {
@@ -442,21 +449,37 @@ impl ParticleSystem {
 
         let particle_count = renderer.write_particles_direct(queue, total_count, |gpu_particles| {
             let start_assembly = Instant::now();
+
+            // Index position in the flattened array of ParticleCores
             let mut write_idx = 0;
 
             for (voice_id, cores) in self.particle_cores.iter() {
-                let computed_offsets = computed_offsets_map.get(voice_id);
+                let computed_position_offsets = computed_position_offsets_map.get(voice_id);
+                let mask = self.masks.get(voice_id);
 
                 for (index, core) in cores.iter().enumerate() {
                     if core.is_alive && core.is_activated {
                         // Use pre-computed offset from physics loop (no recalculation!)
-                        let offset = if let Some(computed_offsets) = computed_offsets {
-                            computed_offsets[index]
-                        } else {
-                            vec2(0.0, 0.0)
-                        };
 
-                        gpu_particles[write_idx] = core.to_gpu(offset);
+                        let offset =
+                            if let Some(computed_position_offsets) = computed_position_offsets {
+                                computed_position_offsets[index]
+                            } else {
+                                vec2(0.0, 0.0)
+                            };
+
+                        if let Some(mask) = mask {
+                            if mask.contains_point(core.position + offset) {
+                                gpu_particles[write_idx] = core.to_gpu(offset);
+                            } else {
+                                // if not in mask, write as invisible
+                                gpu_particles[write_idx] = core.to_gpu_invisible(offset);
+                            }
+                        } else {
+                            // if no mask, just write as visible
+                            gpu_particles[write_idx] = core.to_gpu(offset);
+                        }
+
                         write_idx += 1;
                     }
                 }
@@ -512,6 +535,7 @@ impl ParticleSystem {
             };
             let segment_length = drone.params.segment_length;
             let segment_line_width = drone.params.segment_line_width;
+            let mask = self.masks.get(voice_id);
 
             for (index, core) in cores.iter().enumerate() {
                 if core.is_alive && core.is_activated {

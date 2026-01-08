@@ -1,4 +1,2 @@
-pub mod masks;
+pub mod mask;
 pub mod rhythm;
-
-pub use masks::Mask;
