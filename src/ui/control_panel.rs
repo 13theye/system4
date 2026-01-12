@@ -1,5 +1,5 @@
-use super::params::DroneVoiceParams;
 use super::drone_panel;
+use super::params::DroneVoiceParams;
 use crate::command_engine::Command;
 use crate::groups::VoiceId;
 use crate::model::Model;
@@ -27,8 +27,6 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
     let style = (*ctx.style()).clone();
     ctx.set_style(adjust_style_from(style));
 
-    let mut show_engine_debug_changed = false;
-    
     let mut command_queue = Vec::<Command>::new();
     let mut terminal_commands_to_process = Vec::new();
 
@@ -75,33 +73,18 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                         }
                     ui.add_space(30.0);
 
-                    // Enable debug settings
-                    ui.checkbox(&mut model.ui_state.debug_unlock, "Enable Debug");
-
-                    if model.ui_state.debug_unlock {
-                        ui
-                            .checkbox(&mut model.ui_state.show_bounds, "Bounding Box")
-                            .changed();
-                        show_engine_debug_changed = ui
-                            .checkbox(&mut model.engine_debug, "Particle Engine Logs")
-                            .changed();
-                    } else {
-                        // if debug is disabled, disable all debug visualization
-                        model.ui_state.show_bounds = false;
-                        model.engine_debug = false;
-                        model.render_state.set_render_engines_debug(false);
-                    }
-
-                    if show_engine_debug_changed {
-                        model.render_state.set_render_engines_debug(model.engine_debug);
-                    }
-                    
-                    
-
                     // Push tab selector to bottom with expanding space
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                         // Tab bar at bottom
                         ui.add_space(20.0);
+                        ui.horizontal(|ui| {
+                            if ui
+                                .selectable_label(model.ui_state.active_tab == 2, "Debug")
+                                .clicked()
+                            {
+                                model.ui_state.active_tab = 2;
+                            }
+                        });
                         ui.horizontal(|ui| {
                             if ui
                                 .selectable_label(model.ui_state.active_tab == 0, "Terminal")
@@ -115,6 +98,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                             {
                                 model.ui_state.active_tab = 1;
                             }
+
                         });
                     });
                 });
@@ -400,6 +384,35 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                     });
                                             });
                                         });
+                                    });
+                                }
+
+                                // Debug UI panel
+                                2 => {
+                                    ui.vertical(|ui| {
+                                        ui
+                                            .checkbox(&mut model.ui_state.show_bounds, "Bounding Box")
+                                            .changed();
+                                        let show_engine_debug_changed = ui
+                                            .checkbox(&mut model.engine_debug, "Particle Engine Logs")
+                                            .changed();
+
+                                        if show_engine_debug_changed {
+                                            model.render_state.set_render_engines_debug(model.engine_debug);
+                                        }
+                                        
+                                        ui.add_space(12.0);
+                                    });
+
+                                    ui.vertical(|ui| {
+                                        let audience_window = app.window(model.render_state.audience_window_id).unwrap().rect();
+
+                                        ui.label(format!("Render size:           {} x {}", model.render_state.render_size.x, model.render_state.render_size.y));
+                                        ui.label(format!("Audience window size: {} x {}", audience_window.w(), audience_window.h()));
+                                        ui.label(format!("Particle system size:  {} x {}", model.particle_system.size().x, model.particle_system.size().y));
+                                        ui.label(format!("Wind field size:       {} x {}", model.particle_system.force_fields.wind_field.size().x, model.particle_system.force_fields.wind_field.size().y));
+
+
                                     });
                                 }
                                 _ => {}

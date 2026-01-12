@@ -15,7 +15,6 @@ use crate::{
     groups::{Voice, VoiceId},
     particle::{to_segment_gpu, ParticleCore, ParticleFeedback},
     utils::tween,
-    view::mask::Mask,
 };
 
 use super::constants::*;
@@ -52,9 +51,6 @@ pub struct ParticleSystem {
 
     // Render State Helper
     pub frame_state: ParticleSystemFrameState,
-
-    // Masks
-    pub masks: HashMap<VoiceId, Mask>,
 
     // forces
     pub force_fields: ForceFields,
@@ -144,7 +140,6 @@ impl ParticleSystem {
             particle_cores: HashMap::new(),
             particle_feedback: HashMap::new(),
             frame_state: ParticleSystemFrameState::init(),
-            masks: HashMap::new(),
 
             force_fields: ForceFields::new(origin, bounds_size),
             params,
@@ -158,6 +153,10 @@ impl ParticleSystem {
 
             last_update: Instant::now(),
         }
+    }
+
+    pub fn size(&self) -> Vec2 {
+        self.params.bounds_size
     }
 
     /********************* Update methods ********************************** */

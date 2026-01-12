@@ -174,7 +174,9 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         let mut rendering = model.render_state.render_engine.borrow_mut();
 
         // Get GPU resources
-        let window = app.main_window();
+        let window = app
+            .window(model.render_state.audience_window_id)
+            .expect("Audience window not found");
         let device = window.device();
         let mut encoder = rendering.create_command_encoder(device);
         let queue = window.queue();
@@ -189,21 +191,13 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         /************ Particle and segment drawing ************* */
 
         // ZERO-COPY: Write and encode particles and segments per voice
-        let voice0_texture = rendering
-            .get_named_texture("particles_voice_0")
-            .expect("Fatal Error: Missing texture for Voice0");
-
-        let voice3_texture = rendering
-            .get_named_texture("particles_voice_3")
-            .expect("Fatal Error: Missing texture for Voice3");
-
         // PHASE 1: CPU ASSEMBLY (batched before GPU write)
         // Assemble all GPU data on CPU first, leveraging internal Rayon parallelism in segment assembly
         // Note: We can't use Rayon at the voice level due to Sync constraints, but segment assembly
         // already uses Rayon internally for per-particle parallelism (see write_segments_for_voice)
         let start_assembly = Instant::now();
 
-        let voice_data: Vec<_> = [VoiceId::Voice0, VoiceId::Voice3]
+        let drone_physics_views: Vec<_> = [VoiceId::Voice0, VoiceId::Voice3]
             .iter()
             .filter_map(|&voice_id| {
                 model.voice_manager.voices.get(&voice_id).and_then(|voice| {
@@ -221,7 +215,9 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
                             model.engine_debug,
                         );
 
-                        (voice_id, particles, segments)
+                        let mask = drone.mask;
+
+                        (voice_id, particles, segments, mask)
                     })
                 })
             })
@@ -239,17 +235,25 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Write pre-assembled data to GPU buffers (fast memcpy, must be sequential)
         let start_gpu_write = Instant::now();
 
-        for (voice_id, particles, segments) in voice_data {
+        for (voice_id, particles, segments, mask) in drone_physics_views {
+            let Some(texture_name) = model.render_state.get_texture_name(voice_id) else {
+                continue;
+            };
+
+            let texture = rendering
+                .get_named_texture(&texture_name)
+                .expect("Fatal Error: Missing texture");
+
             let (renderer, seg_renderer, texture) = match voice_id {
                 VoiceId::Voice0 => (
                     &model.render_state.particle_renderer_voice0,
                     &model.render_state.segment_renderer_voice0,
-                    voice0_texture,
+                    texture,
                 ),
                 VoiceId::Voice3 => (
                     &model.render_state.particle_renderer_voice3,
                     &model.render_state.segment_renderer_voice3,
-                    voice3_texture,
+                    texture,
                 ),
                 _ => continue,
             };
@@ -260,6 +264,21 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             if particle_count > 0 {
                 renderer.encode_only(&mut encoder, particle_count, texture);
                 seg_renderer.encode_only(&mut encoder, segment_instance_count, texture);
+            }
+
+            // Draw & encode mask
+            let scale_x = window.rect().w() / texture.size()[0] as f32;
+            let scale_y = window.rect().h() / texture.size()[1] as f32;
+
+            mask.draw(
+                &rendering.draw,
+                model.render_state.render_rect,
+                scale_x,
+                scale_y,
+            );
+
+            if let Some(texture_name) = model.render_state.get_texture_name(voice_id) {
+                rendering.encode_draw_commands_into(device, &mut encoder, &texture_name);
             }
         }
 

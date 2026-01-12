@@ -1,3 +1,5 @@
+use crate::groups::VoiceId;
+
 use nannou::{prelude::*, text::Font, wgpu::TextureReshaper, App};
 use nnpipe::{
     renderers::{HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentRenderer},
@@ -71,6 +73,14 @@ impl RenderState {
         self.particle_renderer_voice3.set_engine_debug(debug);
         self.segment_renderer_voice0.set_engine_debug(debug);
         self.segment_renderer_voice3.set_engine_debug(debug);
+    }
+
+    pub fn get_texture_name(&self, voice_id: VoiceId) -> Option<String> {
+        match voice_id {
+            VoiceId::Voice0 => Some("particles_voice_0".to_string()),
+            VoiceId::Voice3 => Some("particles_voice_3".to_string()),
+            _ => None,
+        }
     }
 
     /// Create a RenderState from the Nannou app with window IDs and settings
@@ -209,7 +219,7 @@ impl RenderState {
             .name("Combine Voice Particles")
             .input_textures(&["particles_voice_0", "particles_voice_3"])
             .output_texture("particles_combined")
-            .simple_over_composite(hi_config, 1.0)
+            .simple_screen_composite(hi_config, 1.0)
             .build(device)
         {
             Ok(effect) => {

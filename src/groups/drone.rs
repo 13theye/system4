@@ -5,6 +5,7 @@ use crate::{
     groups::VoiceId,
     particle::emitter::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
+    view::mask::Mask,
 };
 use nannou::prelude::*;
 use std::collections::HashMap;
@@ -52,11 +53,14 @@ pub struct Drone {
     pub state: DroneState,
     pub params: DroneParams,
     // smallest bounding box containing all wind_circles
-    pub bounds_rect: Rect,
+    pub emitter_bounds: Rect,
 
     pub emitters: Vec<Box<dyn Emitter>>,
     pub wind_circles: HashMap<usize, WindCircle>,
     current_wind_circle_idx: usize,
+
+    // Mask
+    pub mask: Mask,
 }
 
 impl Drone {
@@ -65,10 +69,11 @@ impl Drone {
             id,
             state: DroneState::Active,
             params: DroneParams::default(),
-            bounds_rect: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
+            emitter_bounds: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
             emitters: Vec::new(),
             wind_circles: HashMap::new(),
             current_wind_circle_idx: 0,
+            mask: Mask::init_for_voice(id).unwrap(),
         }
     }
 
@@ -127,7 +132,7 @@ impl Drone {
         self.add_wind_circle(circle);
 
         // Create particle emitters (now that bounds can be calculated correctly)
-        self.bounds_rect = self.calculate_bounds();
+        self.emitter_bounds = self.calculate_bounds();
         self.add_linear_emitters();
 
         // Set the default color (this is structural, not a DroneConfig parameter)
@@ -166,16 +171,16 @@ impl Drone {
 
     fn add_linear_emitters(&mut self) {
         let p = self.params.emitter_position;
-        let center_y = self.bounds_rect.y();
-        let offset = self.bounds_rect.h() / 2.0 - 100.0;
+        let center_y = self.emitter_bounds.y();
+        let offset = self.emitter_bounds.h() / 2.0 - 100.0;
 
         // Left emitter (slides downward as p increases)
-        let left_start = vec2(self.bounds_rect.left(), center_y + offset * (1.0 - p));
-        let left_end = vec2(self.bounds_rect.left(), center_y - offset * p);
+        let left_start = vec2(self.emitter_bounds.left(), center_y + offset * (1.0 - p));
+        let left_end = vec2(self.emitter_bounds.left(), center_y - offset * p);
 
         // Right emitter (slides upward as p increases)
-        let right_start = vec2(self.bounds_rect.right(), center_y + offset * p);
-        let right_end = vec2(self.bounds_rect.right(), center_y - offset * (1.0 - p));
+        let right_start = vec2(self.emitter_bounds.right(), center_y + offset * p);
+        let right_end = vec2(self.emitter_bounds.right(), center_y - offset * (1.0 - p));
 
         let emitter_left = LinearEmitter::new(
             self.id,
@@ -244,7 +249,7 @@ impl Drone {
     }
 
     fn recalculate_emitters(&mut self) {
-        self.bounds_rect = self.calculate_bounds();
+        self.emitter_bounds = self.calculate_bounds();
         self.emitters.clear();
         self.add_linear_emitters();
     }

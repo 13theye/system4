@@ -5,7 +5,7 @@ use crate::{
     osc::OscSender,
     sequencer::SequencerService,
     terminals::commands::rhythm::RhythmParamModification,
-    view::{mask::Mask, rhythm::RhythmView},
+    view::rhythm::RhythmView,
 };
 use rand::rngs::ThreadRng;
 
@@ -39,12 +39,6 @@ pub trait ExecutionContext {
 
     // Wind field access
     fn wind_field(&mut self) -> &mut WindField;
-
-    // Mask access
-    fn get_mask(&self, voice_id: VoiceId) -> Option<&Mask>;
-    fn get_mask_mut(&mut self, voice_id: VoiceId) -> Option<&mut Mask>;
-    fn insert_mask(&mut self, voice_id: VoiceId, mask: Mask);
-    fn init_default_mask_for_voice(&mut self, voice_id: VoiceId);
 
     // Particle system defaults (for drone creation)
     fn default_particle_color(&self) -> nannou::color::Rgb;

@@ -47,7 +47,6 @@ impl DroneCommandHandler {
         // Insert voice before applying parameters so validation can find it
         let voice = Voice::new_from_drone(drone);
         ctx.insert_voice(voice_id, voice);
-        ctx.init_default_mask_for_voice(voice_id);
 
         // Phase 2: Apply parameters through the command pipeline
         let parameter_commands = DroneCommandBuilder::generate_all_parameter_commands(

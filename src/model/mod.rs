@@ -21,7 +21,7 @@ use crate::{
     terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
     utils::IdGenerator,
-    view::{mask::Mask, rhythm::RhythmView},
+    view::rhythm::RhythmView,
 };
 
 use prat::clockservice::ClockService;
@@ -191,25 +191,6 @@ impl ExecutionContext for Model {
     // Wind field access
     fn wind_field(&mut self) -> &mut crate::forces::wind_field::WindField {
         &mut self.particle_system.force_fields.wind_field
-    }
-
-    // Mask access
-    fn get_mask(&self, voice_id: VoiceId) -> Option<&Mask> {
-        self.particle_system.masks.get(&voice_id)
-    }
-
-    fn get_mask_mut(&mut self, voice_id: VoiceId) -> Option<&mut Mask> {
-        self.particle_system.masks.get_mut(&voice_id)
-    }
-
-    fn insert_mask(&mut self, voice_id: VoiceId, mask: Mask) {
-        self.particle_system.masks.insert(voice_id, mask);
-    }
-
-    fn init_default_mask_for_voice(&mut self, voice_id: VoiceId) {
-        if let Some(mask) = Mask::init_for_voice(voice_id) {
-            self.insert_mask(voice_id, mask);
-        }
     }
 
     // Particle system defaults

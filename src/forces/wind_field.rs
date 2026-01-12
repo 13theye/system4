@@ -102,6 +102,10 @@ impl WindField {
         Self { params }
     }
 
+    pub fn size(&self) -> Vec2 {
+        self.params.bounds_size
+    }
+
     /******************* Drawing methods ****************************************/
 
     /// Draw the WindField with force vectors and origin

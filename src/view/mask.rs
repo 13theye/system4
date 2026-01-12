@@ -137,4 +137,46 @@ impl Mask {
             }
         }
     }
+
+    /*************** Drawing methods ************************** */
+
+    /// Split the screen into rectangles that exclude the Mask rect
+    pub fn dissect_screen(&self, texture_rect: Rect, scale_x: f32, scale_y: f32) -> Vec<Rect> {
+        let mask_rect = Rect::from_x_y_w_h(
+            self.rect().x() / scale_x,
+            self.rect().y() / scale_y,
+            self.rect().w() / scale_x,
+            self.rect().h() / scale_y,
+        );
+
+        // Between the left edge of screen and the Mask
+        let left_rect = Rect::from_corners(
+            texture_rect.top_left(),
+            vec2(mask_rect.bottom_left().x, texture_rect.bottom_left().y),
+        );
+
+        // Between the right edge of screen and the Mask
+        let right_rect = Rect::from_corners(
+            texture_rect.top_right(),
+            vec2(mask_rect.bottom_right().x, texture_rect.bottom_right().y),
+        );
+
+        // Between the top edge of the screen and the Mask
+        let top_rect = Rect::from_corners(left_rect.top_right(), mask_rect.top_right());
+
+        // Between the bottom edge of the screen and the Mask
+        let bottom_rect = Rect::from_corners(left_rect.bottom_right(), mask_rect.bottom_right());
+
+        vec![left_rect, right_rect, top_rect, bottom_rect]
+    }
+
+    pub fn draw(&self, draw: &Draw, texture_rect: Rect, scale_x: f32, scale_y: f32) {
+        let rects = self.dissect_screen(texture_rect, scale_x, scale_y);
+        for rect in rects.iter() {
+            draw.rect()
+                .xy(rect.xy() * vec2(scale_x, scale_y))
+                .wh(rect.wh() * vec2(scale_x, scale_y))
+                .color(BLACK);
+        }
+    }
 }

@@ -19,7 +19,6 @@ pub struct UiState {
     pub fps: FpsManager,
 
     // Debug visualization flags
-    pub debug_unlock: bool,
     pub show_bounds: bool,
     pub show_forces: bool,
 
@@ -43,7 +42,6 @@ impl UiState {
         Self {
             egui,
             fps,
-            debug_unlock: false,
             show_bounds: false,
             show_forces: false,
             command_inputs: HashMap::from([
