@@ -101,7 +101,7 @@ pub struct MassVarianceParams {
 pub struct ParticleSystemFrameState {
     pub frame_start: Instant,
     pub physics_time: Duration,
-    pub alive_particles: HashMap<VoiceId, usize>,
+    pub alive_particle_counts: HashMap<VoiceId, usize>,
 }
 
 impl ParticleSystemFrameState {
@@ -109,7 +109,7 @@ impl ParticleSystemFrameState {
         Self {
             frame_start: Instant::now(),
             physics_time: Duration::ZERO,
-            alive_particles: HashMap::new(),
+            alive_particle_counts: HashMap::new(),
         }
     }
 }
@@ -162,9 +162,8 @@ impl ParticleSystem {
 
     /********************* Update methods ********************************** */
 
-    /// ZERO-COPY UPDATE: Updates particles and writes directly to GPU staging memory
+    /// ZERO-COPY UPDATE: Updates particles only -- no longer writes
     /// Mutates particle_counts, segment_counts of particles written to GPU buffers
-    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         voices: &mut HashMap<VoiceId, Voice>,
@@ -175,39 +174,37 @@ impl ParticleSystem {
     ) {
         self.frame_state.frame_start = Instant::now();
 
-        // Calculate time delta
+        // Calculate time delta for the physics simulation.
+        // This is measured from the end of the previous update().
         let dt = (now - self.last_update).as_secs_f32();
 
-        // Calculate the bounds rect
+        // Calculate the bounds rect of the sim space
         let bounds_rect = self.bounds_rect();
 
-        // Update perlin nouse with app time as seed
+        // Update perlin noise with app time as seed
         self.perlin_gen = self.perlin_gen.set_seed(perlin_seed);
 
-        // how many frames have passed with 60fps target
+        // The percentage of framerate with 60fps target
         let framerate_factor = (dt / 0.0167).min(1.5);
 
+        // Emit particles according to spawn rates
         self.handle_particle_emission(voices, rng);
 
+        // Set the oldest particles to fade out, considering the particle limit
         let cull_start = Instant::now();
         self.cull_excess_particles(voices);
         let cull_time = cull_start.elapsed();
 
-        // Pre-compute "vibration" position offset factors for all voices
-        let vibration_values: HashMap<VoiceId, f32> = voices
-            .values()
-            .filter_map(|v| v.as_drone())
-            .map(|drone| (drone.id, drone.params.vibration))
-            .collect();
-
         // Init empty particle counters
         let mut total_alive_count = 0;
-
-        let physics_start = Instant::now();
 
         // Determine ParticleSystem mode
         let should_combine = self.mode.is_combined();
 
+        // Init physics timer
+        let physics_start = Instant::now();
+
+        // Update the particle cores by iterating over all Drone voices
         for (voice_id, cores) in self.particle_cores.iter_mut() {
             // Check that drone exists
             let Some(drone) = voices.get(voice_id).and_then(|v| v.as_drone()) else {
@@ -216,10 +213,12 @@ impl ParticleSystem {
                 continue;
             };
 
+            // Retrieve rgba parameter state for this Drone
             let color_limit = drone.params.color_limit;
             let alpha_limit = drone.params.alpha_limit;
 
             // Interpolate color (same for all particles)
+            // This is where voice-wide color affects are applied, if any.
             let color = tween::interpolate_color(
                 color_limit,
                 rgb(PARTICLE_HIGH_R, PARTICLE_HIGH_G, PARTICLE_HIGH_B),
@@ -233,6 +232,8 @@ impl ParticleSystem {
             );
 
             // Pre-compute mass variance using bulk RNG fill for better performance
+            // Values are indexed by the same value as cores' position in its vector
+            // Must be done before the parallelization step later
             let mut mass_variations = vec![0.0; cores.len()];
             if self.mass_var_params.enabled && self.mass_var_params.amount > 0.0 {
                 rng.fill(&mut mass_variations[..]);
@@ -242,8 +243,10 @@ impl ParticleSystem {
                 }
             }
 
-            // Pre-compute "vibration" position offset factors
-            let vibration = vibration_values.get(voice_id).copied().unwrap_or(0.0);
+            // Pre-compute "vibration" position offset factors using bulk RNG fill.
+            // Values are indexed by the same value as cores' position in its vector
+            // Must be done before the parallelization step later.
+            let vibration = drone.params.vibration;
             let mut offset_factors = vec![0.0; cores.len()];
             if vibration > 0.0 {
                 rng.fill(&mut offset_factors[..]);
@@ -255,9 +258,6 @@ impl ParticleSystem {
 
             // Retrieve a mutable reference to the feedback array for this voice
             let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
-
-            // Pre-allocate storage for computed offsets (to save for GPU write)
-            let mut computed_position_offsets = vec![vec2(0.0, 0.0); cores.len()];
 
             // Collect WindCircles. If combined mode, collect all circles from all drones.
             // Otherwise, collect only circles from this voice
@@ -276,15 +276,18 @@ impl ParticleSystem {
             cores
                 .par_iter_mut()
                 .zip(feedback_array.par_iter_mut())
-                .zip(computed_position_offsets.par_iter_mut())
                 .enumerate()
-                .for_each(|(index, ((core, feedback), computed_position_offset))| {
+                .for_each(|(index, (core, feedback))| {
+                    // Get the mass variation from the pre-computed array
                     let mass_variation_factor = mass_variations[index];
+
+                    // Look up noise factor based on pre-seeded Perlin noise at particle position
                     let noise_factor = self
                         .perlin_gen
                         .get([core.position.x as f64, core.position.y as f64]);
 
-                    // Stage force applications
+                    // Apply forces to the particle core.
+                    // These changes are "staged" as velocity/acceleration parameter updates.
                     self.force_fields.apply_unified_forces_to_particle(
                         core,
                         &circles_vec,
@@ -292,10 +295,11 @@ impl ParticleSystem {
                         noise_factor,
                     );
 
-                    // Apply forces and color changes to particle core
+                    // Apply forces to the particle position.
+                    // Apply particle-level color change.
                     core.update(color, alpha_limit, framerate_factor);
 
-                    // Calculate and apply offset
+                    // Calculate the "vibration" position offset
                     let position_offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0
                     {
                         let normal = vec2(-core.velocity.y, core.velocity.x).normalize_or_zero();
@@ -305,33 +309,47 @@ impl ParticleSystem {
                     };
 
                     // Apply the offset (adding zero is fast, no need to check)
+                    // This is stored in a separate "offset_position" so that vibrations
+                    // don't accumulate from frame to frame.
                     core.offset_position = core.position + position_offset;
 
-                    // Store the computed offset for GPU write
-                    *computed_position_offset = position_offset;
-
+                    // However, we do save the offset_position in the particle's feedback positions
+                    // so that the trails make sense, because the offset_position is the position
+                    // that is displayed.
                     feedback.record(core.offset_position, color);
 
+                    // Mark a particle for immediate deletion if it's offscreen and past the
+                    // buffer zone.
                     if core.is_out_of_bounds(bounds_rect) {
-                        core.kill();
+                        core.mark_for_deletion();
                     }
                 });
 
-            // Count alive particles
+            // Count particles that are both alive and activated after the update.
+            // These are the ones that will be drawn.
             let count_start = Instant::now();
             let alive_count = cores
                 .iter()
                 .filter(|c| c.is_alive && c.is_activated)
                 .count();
+
+            // Total_alive_count is the running total number of alive particles for all voices.
+            // Used mostly for benchmarking.
             total_alive_count += alive_count;
+
+            // Store the value so that it can be read in the view function elsewhere.
             self.frame_state
-                .alive_particles
+                .alive_particle_counts
                 .insert(*voice_id, alive_count);
             let count_time = count_start.elapsed();
 
-            // Cull dead particles
-            let overall_cull_start = Instant::now();
+            // Delete dead particles
+            let dead_particle_delete_start = Instant::now();
             let mut write_index = 0;
+
+            // Fast pointer swap to remove dead particles and consolidate the vector
+            // This technique saves a lot of time especially for feedback.
+            // Moves the pointer instead of the data.
             for read_index in 0..cores.len() {
                 if cores[read_index].is_alive {
                     if write_index != read_index {
@@ -341,10 +359,13 @@ impl ParticleSystem {
                     write_index += 1;
                 }
             }
+
+            // Truncate the vectors since the particles beyond the alive_count have already
+            // been shifted forward.
             cores.truncate(write_index);
             feedback_array.truncate(write_index);
 
-            let overall_cull_time = overall_cull_start.elapsed();
+            let dead_particle_delete_time = dead_particle_delete_start.elapsed();
 
             if engine_debug {
                 println!(
@@ -352,8 +373,8 @@ impl ParticleSystem {
                     count_time.as_secs_f64() * 1000.0
                 );
                 println!(
-                    "[Physics] Overall cull time : {:.3}ms",
-                    overall_cull_time.as_secs_f64() * 1000.0
+                    "[Physics] Dead particle delete time : {:.3}ms",
+                    dead_particle_delete_time.as_secs_f64() * 1000.0
                 );
             }
         }
@@ -420,7 +441,9 @@ impl ParticleSystem {
 
         let start_assembly = Instant::now();
 
-        // Pre-allocate based on rough estimate
+        // Assemble the ParticleGpu from ParticleCores.
+        // This could have been parallelized but at particle counts of about 30,000
+        // it's not worth the overhead.
         let gpu_particles: Vec<nnpipe::ParticleGpu> = cores
             .iter()
             .filter(|core| core.is_alive && core.is_activated)
@@ -451,6 +474,7 @@ impl ParticleSystem {
         segment_line_width: f32,
         engine_debug: bool,
     ) -> Vec<nnpipe::renderers::SegmentGpu> {
+        // Get the particle cores and feedback array
         let cores = match self.particle_cores.get(&voice_id) {
             Some(cores) => cores,
             None => return Vec::new(),
@@ -462,7 +486,18 @@ impl ParticleSystem {
         };
 
         let start_collect = Instant::now();
-        let mut work_items = Vec::with_capacity(cores.len());
+
+        // Pre-allocate Vec of work items. We know it won't be larger than the
+        // total number of particles in the system.
+        let mut work_items = Vec::with_capacity(
+            *self
+                .frame_state
+                .alive_particle_counts
+                .get(&voice_id)
+                .unwrap_or(&cores.len()),
+        );
+
+        // Collect activated & alive items.
         for (index, core) in cores.iter().enumerate() {
             if core.is_alive && core.is_activated {
                 work_items.push(index);
@@ -478,6 +513,8 @@ impl ParticleSystem {
             );
         }
 
+        // Assemble SegmentGpu instances. This is a parallel for performance as the
+        // number of segments is much larger than the nubmer of particles.
         let start_assembly = Instant::now();
         let segments: Vec<nnpipe::renderers::SegmentGpu> = work_items
             .par_iter()
@@ -504,12 +541,16 @@ impl ParticleSystem {
         segments
     }
 
+    /// For all active Drones, emit particles from active emitters.
+    /// The emission is scaled based on how close we are to the particle limit.
+    /// The particle limit is the max particles allowed for a voice times the
+    /// "Volume" parameter of the voice.
     pub fn handle_particle_emission(
         &mut self,
         voices: &HashMap<VoiceId, Voice>,
         rng: &mut ThreadRng,
     ) {
-        for voice in voices.values() {
+        for (voice_id, voice) in voices {
             // Only handle Drone voices
             let Some(drone) = voice.as_drone() else {
                 continue;
@@ -520,6 +561,7 @@ impl ParticleSystem {
                 continue;
             }
 
+            // Collect the emitters of this Drone and shuffle the order.
             let mut emitters: Vec<_> = drone.emitters.iter().collect();
             emitters.shuffle(rng);
 
@@ -529,22 +571,22 @@ impl ParticleSystem {
                     continue;
                 }
 
-                let parent_voice = emitter.parent_voice();
-                let core_vec = self.particle_cores.entry(parent_voice).or_default();
-                let feedback_vec = self.particle_feedback.entry(parent_voice).or_default();
+                let core_vec = self.particle_cores.entry(*voice_id).or_default();
+                let feedback_vec = self.particle_feedback.entry(*voice_id).or_default();
                 let current_count = core_vec.len();
 
-                // Calculate emission scaling based on how close we are to the limit
+                // Calculate emission scaling based on how close we are to the particle limit
                 let emission_scaling = Self::linear_emission_scaling(
                     drone.params.particle_limit as f32 * drone.params.volume,
                     current_count,
                 );
 
-                // Skip emission entirely if scaling is near zero
+                // Skip emission entirely if scaling is near zero (account for float error)
                 if emission_scaling < 0.001 {
                     continue;
                 }
 
+                // Emit new particles
                 let mut new_particles = emitter.emit(
                     emission_scaling,
                     10.0,
@@ -552,9 +594,12 @@ impl ParticleSystem {
                     rgba_from(drone.params.color_limit, 0.0),
                     rng,
                 );
+
+                // Extend the feedback vector by the number of new particles
                 let new_particles_count = new_particles.len();
                 let mut new_feedback = vec![Box::new(ParticleFeedback::new()); new_particles_count];
 
+                // Append to the particle core and feedback vectors.
                 core_vec.append(&mut new_particles);
                 feedback_vec.append(&mut new_feedback);
             }
@@ -596,9 +641,11 @@ impl ParticleSystem {
         1.0 - ratio
     }
 
-    /// Sets the n oldest particles to fade out, where n is the number of particles above the limit
+    /// Sets the n oldest particles to fade out, where n is the number of particles above the limit.
+    /// This should happen before calculating physics.
     fn cull_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
         for (voice_id, cores) in self.particle_cores.iter_mut() {
+            // Calculate particle limit
             let limit = voices
                 .get(voice_id)
                 .and_then(|v| v.as_drone())
@@ -606,11 +653,15 @@ impl ParticleSystem {
                 .unwrap_or(0.0);
 
             let mut active_particles = 0;
+
+            // iterate over all cores
             for core in cores.iter_mut().rev() {
                 if core.remaining_life_span > core.fade_out_duration() {
                     active_particles += 1;
                     if active_particles > limit as usize {
-                        // assumes that the oldest particles are at the beginning
+                        // assumes that the oldest particles are at the beginning of the vec,
+                        // which is why we iterate in reverse so that oldest particles are last.
+                        // We fade out the particles instead of immediately deleting them.
                         core.set_to_fade_out();
                     }
                 }
@@ -624,7 +675,7 @@ impl ParticleSystem {
             for core in cores.iter_mut() {
                 // Immediately kill non-activated particles
                 if !core.is_activated {
-                    core.kill();
+                    core.mark_for_deletion();
                 }
 
                 // Set all other particles to fade out
@@ -686,14 +737,17 @@ impl ParticleSystem {
         scale_x: f32,
         scale_y: f32,
     ) {
+        // Collect all WindCircles across all voices
         let circles_vec: Vec<&WindCircle> = voices
             .values()
             .filter_map(|v| v.as_drone())
             .flat_map(|d| d.wind_circles.values())
             .collect();
 
+        // Draw the origin of the ParticleSystem
         self.draw_origin(draw, scale_x, scale_y);
 
+        // Draw representative vectors of the WindField
         self.force_fields.wind_field.draw(
             &circles_vec,
             draw,
@@ -702,17 +756,15 @@ impl ParticleSystem {
             self.perlin_gen,
             self.mode.is_combined(),
         );
+
+        // Draw all voices' emitters
         self.draw_emitters(voices, draw, scale_x, scale_y);
 
-        for voice in voices.values() {
-            let Some(drone) = voice.as_drone() else {
-                continue;
-            };
-            for circle in drone.wind_circles.values() {
-                circle.draw_center(draw, scale_x, scale_y);
-                circle.draw(draw, scale_x, scale_y);
-            }
-        }
+        // Draw the circles themselves
+        circles_vec.iter().for_each(|circle| {
+            circle.draw_center(draw, scale_x, scale_y);
+            circle.draw(draw, scale_x, scale_y);
+        });
     }
 
     /// Draw the origin
@@ -723,7 +775,7 @@ impl ParticleSystem {
             .color(rgba(1.0, 0.0, 1.0, 0.2));
     }
 
-    /// Draw the emitters
+    /// Draw all voices' emitters
     pub fn draw_emitters(
         &self,
         voices: &HashMap<VoiceId, Voice>,

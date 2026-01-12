@@ -77,6 +77,7 @@ impl Drop for Model {
     }
 }
 
+/// Free function to remove a voice from the Model and send a kill signal via OSC
 fn erase_drone(model: &mut Model, id: i32) {
     let voice_id = VoiceId::from_i32(id);
     model.remove_voice_immediately(voice_id);
@@ -85,7 +86,7 @@ fn erase_drone(model: &mut Model, id: i32) {
     model.osc_send.send_drone_on_off(id, 0);
 }
 
-// ExecutionContext implementation for Model
+/// ExecutionContext implementation for Model
 impl ExecutionContext for Model {
     fn log_command(&mut self, command: &Command) {
         // Prefer the unified text overlay system.

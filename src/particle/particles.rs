@@ -116,12 +116,11 @@ impl ParticleCore {
         // Increment natural age and decrement remaining life span
         // Only increment age if the particle is activated
         if self.is_activated {
-            self.age += self.age_per_tick * framerate_factor;
-            self.remaining_life_span -= self.age_per_tick * framerate_factor;
+            self.increment_age(framerate_factor);
         }
 
         if self.remaining_life_span <= 0.0 {
-            self.kill();
+            self.mark_for_deletion();
         }
     }
 
@@ -135,7 +134,13 @@ impl ParticleCore {
     }
 
     #[inline]
-    pub fn kill(&mut self) {
+    pub fn increment_age(&mut self, framerate_factor: f32) {
+        self.age += self.age_per_tick * framerate_factor;
+        self.remaining_life_span -= self.age_per_tick * framerate_factor;
+    }
+
+    #[inline]
+    pub fn mark_for_deletion(&mut self) {
         self.remaining_life_span = 0.0;
         self.is_alive = false;
     }
@@ -150,7 +155,7 @@ impl ParticleCore {
         self.is_activated = true;
     }
 
-    /// Convert core particle data to GPU format
+    /// Convert core particle data to Nnpipe's GPU format
     /// Use the final offset position of the core.
     #[inline]
     pub fn to_gpu(&self) -> ParticleGpu {
@@ -161,20 +166,12 @@ impl ParticleCore {
         )
     }
 
-    pub fn to_gpu_invisible(&self) -> ParticleGpu {
-        ParticleGpu::new(
-            [self.offset_position.x, self.offset_position.y],
-            [0.0, 0.0, 0.0],
-            0.0,
-        )
-    }
-
     pub fn fade_out_duration(&self) -> f32 {
         PARTICLE_FADE_OUT_DURATION
     }
 }
 
-/// Helper function to generate SegmentGpu from core and feedback data
+/// Helper function to generate Nnpipe's SegmentGpu from core and feedback data
 pub fn to_segment_gpu(
     core: &ParticleCore,
     feedback: &ParticleFeedback,
@@ -185,7 +182,6 @@ pub fn to_segment_gpu(
     let mut colors = [[0.0f32; 3]; FEEDBACK_POSITIONS];
 
     // First point is current position
-
     points[0] = [core.offset_position.x, core.offset_position.y];
     colors[0] = [core.rgba.red, core.rgba.green, core.rgba.blue];
 
@@ -196,6 +192,7 @@ pub fn to_segment_gpu(
         // (because the most recent is the current position)
         let ring_index = (feedback.current_index + FEEDBACK_POSITIONS - 2 - i) % FEEDBACK_POSITIONS;
 
+        // Fill the positions
         if let Some(feedback_pos) = feedback.positions[ring_index] {
             points[i + 1] = [feedback_pos.x, feedback_pos.y];
             last_valid_pos = [feedback_pos.x, feedback_pos.y];
@@ -204,6 +201,7 @@ pub fn to_segment_gpu(
             points[i + 1] = last_valid_pos;
         }
 
+        // Fill the colors
         if let Some(feedback_color) = feedback.colors[ring_index] {
             colors[i + 1] = [
                 feedback_color.red,
@@ -217,7 +215,10 @@ pub fn to_segment_gpu(
     }
 
     // Calculate actual history length from particle age, ensuring it's at least 1
-    // and doesn't exceed the maximum feedback positions
+    // and doesn't exceed the maximum feedback positions.
+    // If the particle's age is less than the number of feedback positions, then the rest of the
+    // vec is "junk data".
+    // This helps us keep the feedback array constant length, which keeps the GPU happy.
     let actual_history_length = (core.age as u32).clamp(1, FEEDBACK_POSITIONS as u32);
 
     SegmentGpu::new(

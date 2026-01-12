@@ -1,5 +1,5 @@
 use super::params::DroneVoiceParams;
-use super::voice_panel;
+use super::drone_panel;
 use crate::command_engine::Command;
 use crate::groups::VoiceId;
 use crate::model::Model;
@@ -110,7 +110,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                 model.ui_state.active_tab = 0;
                             }
                             if ui
-                                .selectable_label(model.ui_state.active_tab == 1, "Voices")
+                                .selectable_label(model.ui_state.active_tab == 1, "Drones")
                                 .clicked()
                             {
                                 model.ui_state.active_tab = 1;
@@ -134,12 +134,12 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                 1 => {
                                     // Voices tab content with scrollable columns
                                     ui.horizontal(|ui| {
-                                        // Voice 0 (col 2) - column with scrollable content
+                                        // Voice 0 - column with scrollable content
                                         ui.vertical(|ui| {
-                                            ui.set_width(320.0);
+                                            ui.set_width(640.0);
                                             ui.set_min_height(height);
                                             if model.voice_manager.has_drone(VoiceId::Voice0) {
-                                                let voice0_commands = voice_panel::render_drone_voice_panel(
+                                                let voice0_commands = drone_panel::render_drone_voice_panel(
                                                     ui,
                                                     &voice0_params,
                                                     "Voice 0: Drone",
@@ -154,40 +154,13 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             }
                                         }); // end Voice 0 column
 
-                                        // Voice 1 (col 3) - column with scrollable content
-                                        ui.vertical(|ui| {
-                                            ui.set_width(320.0);
-                                            ui.set_min_height(height);
-                                            ui.heading("Voice 1: Rhythm");
-                                            ui.add_space(2.0);
-                                            egui::ScrollArea::vertical()
-                                                .id_source("voice1_scroll")
-                                                .auto_shrink([false, false])
-                                                .show(ui, |_ui| {}); // end Voice 1 scroll area
-                                        }); // end Voice 1 column
 
-                                        // Voice 2 - column with scrollable content
+                                        // Voice 3 - column with scrollable content
                                         ui.vertical(|ui| {
-                                            ui.set_width(320.0);
-                                            ui.set_min_height(height);
-                                            ui.heading("Voice 2: Rhythm");
-                                            ui.add_space(2.0);
-                                            egui::ScrollArea::vertical()
-                                                .id_source("voice2_scroll")
-                                                .auto_shrink([false, false])
-                                                .show(ui, |ui| {
-                                                    // Voice 2 rhythm controls placeholder
-                                                    ui.label("Rhythm controls");
-                                                    ui.label("coming soon...");
-                                                }); // end Voice 2 scroll area
-                                        }); // end Voice 2 column
-
-                                        // Voice 3: Column 5 - column with scrollable content
-                                        ui.vertical(|ui| {
-                                            ui.set_width(320.0);
+                                            ui.set_width(640.0);
                                             ui.set_min_height(height);
                                             if model.voice_manager.has_drone(VoiceId::Voice3) {
-                                                let voice3_commands = voice_panel::render_drone_voice_panel(
+                                                let voice3_commands = drone_panel::render_drone_voice_panel(
                                                     ui,
                                                     &voice3_params,
                                                     "Voice 3: Drone",

@@ -186,6 +186,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
         // Encode Nannou Draw
         rendering.encode_draw_commands(device, &mut encoder);
 
+        /************ Particle and segment drawing ************* */
+
         // ZERO-COPY: Write and encode particles and segments per voice
         let voice0_texture = rendering
             .get_named_texture("particles_voice_0")
@@ -268,6 +270,8 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
                 gpu_write_time.as_secs_f64() * 1000.0
             );
         }
+
+        /************ Executing the pipelines ************* */
 
         // Combine voice textures
         if let Err(e) = rendering.execute_named_pipeline("combine_voices", device, &mut encoder) {
@@ -390,7 +394,7 @@ fn control_view(app: &App, model: &Model, frame: Frame) {
 
 // ******************************* Input Capture *****************************
 
-/// Handle Raw Window Events, for Control window
+/// Keypress events for Control window
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     model.ui_state.egui.handle_raw_event(event);
 
@@ -421,7 +425,8 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
 
                     VirtualKeyCode::P => {
                         /*
-                        // Toggle debug and FPS display
+                        // Toggle debug and FPS display - disabled, now handled
+                        // via a checkbox
                         model.ui_state.show_bounds = !model.ui_state.show_bounds;
                          */
                     }

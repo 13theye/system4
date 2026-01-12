@@ -33,7 +33,7 @@ impl ForceFields {
     }
 
     /// Apply all applicable forces to a particle with mass variation factor
-    /// OPTIMIZED: Now works with ParticleCore for better cache locality
+    /// - OPTIMIZED: Now works with ParticleCore for better cache locality
     pub fn apply_unified_forces_to_particle(
         &self,
         particle: &mut ParticleCore,
@@ -50,7 +50,7 @@ impl ForceFields {
         );
     }
 
-    /// This version considers the ParticleSystemState to determine if forces
+    /// This version uses the `should_combine` flag to determine if forces
     /// should be combined or applied separately by voice.
     pub fn apply_forces_to_particle(
         &self,
