@@ -33,12 +33,12 @@ impl MaskParams {
     /// Convenience function to init a default mask parameters for a specific voice
     pub fn init_for_voice(voice_id: VoiceId) -> Option<Self> {
         let origin = match voice_id {
-            VoiceId::Voice0 => vec2(-800.0, 0.0),
-            VoiceId::Voice3 => vec2(800.0, 0.0),
+            VoiceId::Voice0 => vec2(-950.0, 0.0),
+            VoiceId::Voice3 => vec2(950.0, 0.0),
             _ => return None,
         };
 
-        let size = vec2(700.0, 1000.0);
+        let size = vec2(900.0, 1300.0);
         Some(Self { origin, size })
     }
 }
@@ -142,12 +142,7 @@ impl Mask {
 
     /// Split the screen into rectangles that exclude the Mask rect
     pub fn dissect_screen(&self, texture_rect: Rect, scale_x: f32, scale_y: f32) -> Vec<Rect> {
-        let mask_rect = Rect::from_x_y_w_h(
-            self.rect().x() / scale_x,
-            self.rect().y() / scale_y,
-            self.rect().w() / scale_x,
-            self.rect().h() / scale_y,
-        );
+        let mask_rect = self.rect();
 
         // Between the left edge of screen and the Mask
         let left_rect = Rect::from_corners(
@@ -173,10 +168,7 @@ impl Mask {
     pub fn draw(&self, draw: &Draw, texture_rect: Rect, scale_x: f32, scale_y: f32) {
         let rects = self.dissect_screen(texture_rect, scale_x, scale_y);
         for rect in rects.iter() {
-            draw.rect()
-                .xy(rect.xy() * vec2(scale_x, scale_y))
-                .wh(rect.wh() * vec2(scale_x, scale_y))
-                .color(BLACK);
+            draw.rect().xy(rect.xy()).wh(rect.wh()).color(BLACK);
         }
     }
 }

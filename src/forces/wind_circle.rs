@@ -98,9 +98,9 @@ impl WindCircle {
 
     /// Draw the center of the WindCircle
     pub fn draw_center(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
-        let center = self.params.center;
+        let center = self.params.center * vec2(scale_x, scale_y);
         draw.ellipse()
-            .xy(center * vec2(scale_x, scale_y))
+            .xy(center)
             .w_h(40.0 * scale_x, 40.0 * scale_y)
             .color(rgba(1.0, 0.2, 0.0, 0.2));
     }
@@ -114,7 +114,7 @@ impl WindCircle {
         // Draw outer radius circle
         draw.ellipse()
             .xy(center)
-            .radius(outer_radius * scale_x.min(scale_y))
+            .w_h(outer_radius * scale_x * 2.0, outer_radius * scale_y * 2.0)
             .stroke_color(rgba(0.8, 0.4, 0.0, 0.6))
             .stroke_weight(2.0)
             .no_fill();
@@ -122,7 +122,7 @@ impl WindCircle {
         // Draw inner radius circle
         draw.ellipse()
             .xy(center)
-            .radius(inner_radius * scale_x.min(scale_y))
+            .w_h(inner_radius * scale_x * 2.0, inner_radius * scale_y * 2.0)
             .stroke_color(rgba(0.8, 0.4, 0.0, 0.4))
             .stroke_weight(1.0)
             .no_fill();

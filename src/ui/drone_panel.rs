@@ -243,7 +243,7 @@ pub fn render_drone_voice_panel(
                                     let mut center_x = circle_params.center.x;
                                     if ui
                                         .add(
-                                            egui::Slider::new(&mut center_x, -800.0..=800.0)
+                                            egui::Slider::new(&mut center_x, -1920.0..=1920.0)
                                                 .text("Ctr X")
                                                 .custom_formatter(|n, _| format!("{:.0}", n)),
                                         )
@@ -263,7 +263,7 @@ pub fn render_drone_voice_panel(
                                     let mut center_y = circle_params.center.y;
                                     if ui
                                         .add(
-                                            egui::Slider::new(&mut center_y, -600.0..=600.0)
+                                            egui::Slider::new(&mut center_y, -1080.0..=1080.0)
                                                 .text("Ctr Y")
                                                 .custom_formatter(|n, _| format!("{:.0}", n)),
                                         )
