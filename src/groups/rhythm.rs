@@ -1,9 +1,9 @@
 // src/groups/rhythm.rs
 
-use crossbeam_channel as channel;
 use prat::BeatSubdivision;
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use rand_distr::{Beta, Distribution};
+use tokio::sync::broadcast;
 
 use crate::{
     groups::{RhythmParams, RhythmSlotParams, VoiceId},
@@ -21,7 +21,7 @@ pub struct Rhythm {
     pub emitters: Vec<Box<dyn Emitter>>,
 
     // Callback channel from the sequencer
-    pub sequencer_data_rx: Option<channel::Receiver<usize>>,
+    pub sequencer_data_rx: Option<broadcast::Receiver<usize>>,
 }
 
 impl Rhythm {
@@ -50,7 +50,7 @@ impl Rhythm {
     }
 
     fn receive_beat(&mut self) -> Option<usize> {
-        let sequencer = self.sequencer_data_rx.as_ref()?;
+        let sequencer = self.sequencer_data_rx.as_mut()?;
 
         let result = sequencer.try_recv();
         result.ok()
@@ -69,7 +69,7 @@ impl Rhythm {
 
     /*************** Parameter setting ****************************** */
 
-    pub fn set_sequencer_data_rx(&mut self, rx: channel::Receiver<usize>) {
+    pub fn set_sequencer_data_rx(&mut self, rx: broadcast::Receiver<usize>) {
         self.sequencer_data_rx = Some(rx);
     }
 

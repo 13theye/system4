@@ -366,6 +366,7 @@ impl From<responses::ReasoningEffort> for ReasoningEffort {
             responses::ReasoningEffort::Low => ReasoningEffort::Low,
             responses::ReasoningEffort::Medium => ReasoningEffort::Medium,
             responses::ReasoningEffort::High => ReasoningEffort::High,
+            responses::ReasoningEffort::None => ReasoningEffort::None,
         }
     }
 }

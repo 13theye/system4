@@ -8,7 +8,6 @@ use crate::{
     settings::OscSendConfig,
 };
 
-use crossbeam_channel as channel;
 use prat::clockservice::{BeatEvent, BeatSubdivision, ClockService, TickEvent};
 use std::{
     collections::HashMap,
@@ -16,6 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use thread_priority::*;
+use tokio::sync::broadcast;
 
 /// A Euclidian-like sequencer that sends OSC beat messages based on an internal pattern.
 pub struct Sequencer {
@@ -23,8 +23,8 @@ pub struct Sequencer {
     params: RhythmParams,
 
     // Data callback channel
-    data_tx: channel::Sender<usize>,
-    data_rx: channel::Receiver<usize>,
+    data_tx: broadcast::Sender<usize>,
+    data_rx: broadcast::Receiver<usize>,
 
     // State and Config
     state: SequencerState,
@@ -35,19 +35,18 @@ pub struct Sequencer {
     next_beat: Option<usize>,
 }
 
-#[allow(clippy::too_many_arguments)]
 impl Sequencer {
     pub fn new(
         id: VoiceId,
         params: RhythmParams,
-        data_tx: channel::Sender<usize>,
-        data_rx: channel::Receiver<usize>,
+        data_tx: broadcast::Sender<usize>,
         debug: bool,
     ) -> Self {
         let state = SequencerState {
             is_advancing: false,
             is_sending: false,
         };
+        let data_rx = data_tx.subscribe();
         Self {
             id,
             params,
@@ -112,10 +111,10 @@ impl Sequencer {
     }
 
     /// Via callback channel, send the current beat
-    fn send_callback(&self, beat: usize) {
-        let _ = self.data_tx.try_send(beat).or_else(|_| {
+    fn send_callback(&mut self, beat: usize) {
+        let _ = self.data_tx.send(beat).or_else(|_| {
             let _ = self.data_rx.try_recv(); // clear the old data from the channel
-            self.data_tx.try_send(beat)
+            self.data_tx.send(beat)
         });
     }
 
@@ -187,20 +186,20 @@ pub struct SequencerService {
     sequencer_states: HashMap<VoiceId, SequencerState>,
 
     // Command channel
-    command_tx: channel::Sender<SequencerCommand>,
+    command_tx: broadcast::Sender<SequencerCommand>,
 
     // State channel
-    state_rx: channel::Receiver<(VoiceId, SequencerState)>,
+    state_rx: broadcast::Receiver<(VoiceId, SequencerState)>,
 
     // Data channels (return from Sequencers by ID)
-    data_rxs: HashMap<VoiceId, channel::Receiver<usize>>,
-    data_txs: HashMap<VoiceId, channel::Sender<usize>>,
+    data_rxs: HashMap<VoiceId, broadcast::Receiver<usize>>,
+    data_txs: HashMap<VoiceId, broadcast::Sender<usize>>,
 
     // Subscribed clock's channels
     #[allow(dead_code)]
-    beat_rx: channel::Receiver<BeatEvent>,
+    beat_rx: broadcast::Receiver<BeatEvent>,
     #[allow(dead_code)]
-    tick_rx: channel::Receiver<TickEvent>,
+    tick_rx: broadcast::Receiver<TickEvent>,
 
     // Debug messages
     debug: bool,
@@ -240,13 +239,12 @@ impl SequencerService {
 
     /// Add a new sequencer to the service.
     pub fn add_sequencer(&mut self, id: VoiceId, params: RhythmParams) {
-        let (data_tx, data_rx) = channel::bounded(1);
+        let (data_tx, data_rx) = broadcast::channel(1);
 
         let result = self.command_tx.send(SequencerCommand::Add {
             id,
             params,
             data_tx: data_tx.clone(),
-            data_rx: data_rx.clone(),
         });
 
         // Save the data channels
@@ -360,12 +358,12 @@ impl SequencerService {
     /********************* Sequencer Communication Wiring **************************/
 
     /// Get the data channel to receive from a sequencer.
-    pub fn get_data_rx(&self, id: VoiceId) -> Option<channel::Receiver<usize>> {
-        self.data_rxs.get(&id).cloned()
+    pub fn get_data_rx(&self, id: VoiceId) -> Option<broadcast::Receiver<usize>> {
+        self.data_txs.get(&id).map(|tx| tx.subscribe())
     }
 
     /// Get the command channel for sending to the sequencer service.
-    pub fn get_command_tx(&self) -> channel::Sender<SequencerCommand> {
+    pub fn get_command_tx(&self) -> broadcast::Sender<SequencerCommand> {
         self.command_tx.clone()
     }
 }
@@ -374,17 +372,17 @@ impl SequencerService {
 /// It receives commands and clock events and triggers individual sequencers to process the events.
 pub struct SequencerThread {
     // Beat channel
-    beat_rx: channel::Receiver<BeatEvent>,
+    beat_rx: broadcast::Receiver<BeatEvent>,
 
     // Tick channel
-    tick_rx: channel::Receiver<TickEvent>,
+    tick_rx: broadcast::Receiver<TickEvent>,
 
     // Command channels
-    command_rx: channel::Receiver<SequencerCommand>,
+    command_rx: broadcast::Receiver<SequencerCommand>,
 
     // State channels
-    state_tx: channel::Sender<(VoiceId, SequencerState)>,
-    state_rx: channel::Receiver<(VoiceId, SequencerState)>,
+    state_tx: broadcast::Sender<(VoiceId, SequencerState)>,
+    state_rx: broadcast::Receiver<(VoiceId, SequencerState)>,
 
     // Sequencers
     sequencers: HashMap<VoiceId, Sequencer>,
@@ -430,13 +428,12 @@ impl SequencerThread {
                         id,
                         params,
                         data_tx,
-                        data_rx,
                     } => {
                         if self.debug {
                             println!("SequencerThread: Adding sequencer {}", id);
                         }
                         self.sequencers
-                            .insert(id, Sequencer::new(id, params, data_tx, data_rx, self.debug));
+                            .insert(id, Sequencer::new(id, params, data_tx, self.debug));
                     }
                     SequencerCommand::Pause { id } => {
                         if let Some(sequencer) = self.sequencers.get_mut(&id) {
@@ -585,11 +582,10 @@ impl SequencerThread {
                 for sequencer in self.sequencers.values() {
                     let _ = self
                         .state_tx
-                        .try_send((sequencer.id, sequencer.state.clone()))
+                        .send((sequencer.id, sequencer.state.clone()))
                         .or_else(|_| {
                             let _ = self.state_rx.try_recv(); // clear the old data from the channel
-                            self.state_tx
-                                .try_send((sequencer.id, sequencer.state.clone()))
+                            self.state_tx.send((sequencer.id, sequencer.state.clone()))
                         });
                 }
                 last_state_send = now;
@@ -627,13 +623,12 @@ impl SequencerThread {
 }
 
 /// Commands to the SequencerThread.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SequencerCommand {
     Add {
         id: VoiceId,
         params: RhythmParams,
-        data_tx: channel::Sender<usize>,
-        data_rx: channel::Receiver<usize>,
+        data_tx: broadcast::Sender<usize>,
     },
 
     Pause {
@@ -730,15 +725,15 @@ impl<'a> SequencerServiceBuilder<'a> {
             eprintln!("SequencerService: OscSender failed to initialize");
             return None;
         };
-        let (command_tx, command_rx) = channel::bounded(32);
-        let (state_tx, state_rx) = channel::bounded(32);
+        let (command_tx, _) = broadcast::channel(32);
+        let (state_tx, state_rx) = broadcast::channel(32);
 
         let mut sequencer_thread = SequencerThread {
-            beat_rx: beat_rx.clone(),
-            tick_rx: tick_rx.clone(),
-            command_rx: command_rx.clone(),
+            beat_rx,
+            tick_rx,
+            command_rx: command_tx.subscribe(),
             state_tx: state_tx.clone(),
-            state_rx: state_rx.clone(),
+            state_rx: state_tx.subscribe(),
             sequencers: HashMap::new(),
             osc_sender,
             last_tick_time: 0,
@@ -763,6 +758,15 @@ impl<'a> SequencerServiceBuilder<'a> {
             .unwrap();
 
         let sequencer_thread_join = Some(sequencer_thread_handle);
+
+        let Some(beat_rx) = self.clock.subscribe_to_beats() else {
+            eprintln!("SequencerService: Clock service needs to be initialized before building SequencerService");
+            return None;
+        };
+        let Some(tick_rx) = self.clock.subscribe_to_ticks() else {
+            eprintln!("SequencerService: Clock service needs to be initialized before building SequencerService");
+            return None;
+        };
 
         Some(SequencerService {
             sequencer_thread_join,
