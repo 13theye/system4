@@ -191,7 +191,7 @@ impl ParticleSystem {
 
         // Set the oldest particles to fade out, considering the particle limit
         let cull_start = Instant::now();
-        self.cull_excess_particles(voices);
+        self.cull_oldest_excess_particles(voices);
         let cull_time = cull_start.elapsed();
 
         // Init empty particle counters
@@ -612,8 +612,9 @@ impl ParticleSystem {
     /// - 1.0 when far from the limit (aggressive emission)
     /// - 0.0 when at or over the limit (no emission)
     /// - Smooth curve in between to avoid jerky transitions
+    /// - Not currently used (linear scaling used instead)
     #[allow(dead_code)]
-    fn calculate_emission_scaling(limit: f32, current_count: usize) -> f32 {
+    fn curved_emission_scaling(limit: f32, current_count: usize) -> f32 {
         if limit < 0.001 {
             return 0.0;
         }
@@ -634,7 +635,6 @@ impl ParticleSystem {
     }
 
     /// Linearly scale emission rate based on how close we are to the particle limit
-    #[allow(dead_code)]
     fn linear_emission_scaling(limit: f32, current_count: usize) -> f32 {
         let ratio = current_count as f32 / limit;
         1.0 - ratio
@@ -642,7 +642,7 @@ impl ParticleSystem {
 
     /// Sets the n oldest particles to fade out, where n is the number of particles above the limit.
     /// This should happen before calculating physics.
-    fn cull_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
+    fn cull_oldest_excess_particles(&mut self, voices: &HashMap<VoiceId, Voice>) {
         for (voice_id, cores) in self.particle_cores.iter_mut() {
             // Calculate particle limit
             let limit = voices
@@ -688,7 +688,7 @@ impl ParticleSystem {
     /********************* Mass Variation methods ********************************** */
 
     /// Enable or disable mass variation for all particles
-    pub fn set_mass_variation_enabled(&mut self, enabled: bool) {
+    pub fn set_mass_variation(&mut self, enabled: bool) {
         self.mass_var_params.enabled = enabled;
     }
 
@@ -699,7 +699,7 @@ impl ParticleSystem {
     }
 
     /// Get current mass variation settings
-    pub fn get_mass_variation_enabled(&self) -> bool {
+    pub fn is_mass_variation_enabled(&self) -> bool {
         self.mass_var_params.enabled
     }
 
@@ -729,6 +729,8 @@ impl ParticleSystem {
     /********************* Draw methods ********************************** */
 
     /// Draw the forces and emitters
+    /// - Requires scale_x and scale_y because this is meant for the performer window,
+    ///   which is a scaled version of the audience window.
     pub fn draw_forces(
         &self,
         voices: &HashMap<VoiceId, Voice>,

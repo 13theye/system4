@@ -17,11 +17,11 @@ pub type GpuParticleBuffer = Vec<ParticleGpu>;
 /// - Window IDs and drawing contexts
 /// - Rendering metadata (counts, size, DPI)
 pub struct RenderState {
-    // GPU buffers
-    //pub gpu_particle_buffer: GpuParticleBuffer,
-
     // Rendering engine
     pub render_engine: RefCell<Nnpipe>,
+
+    // Heatmap graphics, currently unused and nnpipe impl is not working with the current direct-write
+    // particle buffer setup.
     pub heatmap_renderer: HeatmapRenderer,
 
     // Voice-specific renderers (isolated buffers per voice)
@@ -45,8 +45,7 @@ pub struct RenderState {
     pub control_draw: nannou::Draw,
 
     // Rendering metadata
-    pub dpi_scale: f32,
-    pub font: Font,
+    pub terminal_font: Font,
 }
 
 impl RenderState {
@@ -54,18 +53,6 @@ impl RenderState {
     pub fn engine(&self) -> &RefCell<Nnpipe> {
         &self.render_engine
     }
-
-    /*
-    /// Get the GPU particle buffer
-    pub fn gpu_particle_buffer(&self) -> &GpuParticleBuffer {
-        &self.gpu_particle_buffer
-    }
-
-    /// Get mutable access to the GPU particle buffer
-    pub fn gpu_particle_buffer_mut(&mut self) -> &mut GpuParticleBuffer {
-        &mut self.gpu_particle_buffer
-    }
-     */
 
     /// Set the ParticleRender and SegmentRenderer engine debug flags
     pub fn set_render_engines_debug(&mut self, debug: bool) {
@@ -75,6 +62,7 @@ impl RenderState {
         self.segment_renderer_voice3.set_engine_debug(debug);
     }
 
+    /// Convenience function to get the texture name by Voice (added for masking)
     pub fn get_texture_name(&self, voice_id: VoiceId) -> Option<String> {
         match voice_id {
             VoiceId::Voice0 => Some("particles_voice_0".to_string()),
@@ -95,7 +83,6 @@ impl RenderState {
         texture_height: u32,
         texture_samples: u32,
         particle_limit: u32,
-        dpi_scale: f32,
         font: Font,
     ) -> Self {
         let render_size = vec2(texture_width as f32, texture_height as f32);
@@ -113,9 +100,6 @@ impl RenderState {
 
         // Get device from audience window
         let device = audience_window.device();
-
-        // Initialize empty GPU buffer
-        //let gpu_particle_buffer = Vec::new();
 
         // Create main rendering pipeline
         let mut rendering = Nnpipe::new(device, texture_width, texture_height, texture_samples);
@@ -201,8 +185,7 @@ impl RenderState {
             audience_draw,
             performer_draw,
             control_draw,
-            dpi_scale,
-            font,
+            terminal_font: font,
         }
     }
 

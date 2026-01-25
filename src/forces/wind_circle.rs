@@ -85,6 +85,7 @@ impl WindCircle {
     }
 
     /******************* Methods to change circle properties *******************/
+    // These functions require scale parameters because they are meant to be drawn in the performer window.
 
     /// Return a reference to the WindCircleParams
     pub fn params(&self) -> &WindCircleParams {
@@ -133,10 +134,9 @@ impl WindCircle {
 /// - Center: The centerpoint of the circle in ParticleSystem space
 /// - Outer radius: The outer radius of the circle
 /// - Inner radius: The radius of the hole in the center of the circle
-/// - Strength: The strength of the wind applied within the circle
-/// - Center bias: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
-/// - Angle variation: Amount of random angle variation (0.0-1.0, where 1.0 = �90� deviation)
-/// - Dirty: Flag to indicate that one or more parameters have changed so that WindField will recalculate
+/// - Force: The strength of the wind applied within the circle
+/// - Gravity: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
+/// - Noise: Amount of random angle variation (0.0-1.0, where 1.0 = �90� deviation)
 #[derive(Clone, Debug)]
 pub struct WindCircleParams {
     /// center of the circle in the ParticleSystem space

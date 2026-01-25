@@ -9,8 +9,7 @@ pub fn init_render_state(
     window_ids: WindowIds,
     settings: &Settings,
     particle_limit: u32,
-    dpi_scale: f32,
-    font: Font,
+    terminal_font: Font,
 ) -> RenderState {
     RenderState::from_app(
         app,
@@ -21,7 +20,6 @@ pub fn init_render_state(
         settings.rendering.texture_height,
         settings.rendering.texture_samples,
         particle_limit,
-        dpi_scale,
-        font,
+        terminal_font,
     )
 }

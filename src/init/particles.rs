@@ -19,7 +19,7 @@ pub fn init_particle_system(render_size: Vec2, particle_limit: u32) -> ParticleS
         particle_limit,
     );
 
-    particle_system.set_mass_variation_enabled(true);
+    particle_system.set_mass_variation(true);
     particle_system.set_mass_variation_amount(0.5);
 
     particle_system

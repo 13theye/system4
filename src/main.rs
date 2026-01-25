@@ -1,6 +1,6 @@
 //! System 4
 //!
-//! (c) 2025 13th Eye LLC & Tacit Group
+//! (c) 2026 13th Eye LLC for Tacit Group
 //!
 //!
 //! src/main.rs
@@ -32,9 +32,6 @@ fn model(app: &App) -> Model {
     let particle_limit = per_voice_particle_limit * 2;
     let render_size = init::config::render_size(&settings);
 
-    // DPI scale is used to scale the size of draw objects to account for DPI scaling.
-    let dpi_scale = settings.rendering.dpi_scale;
-
     let (clock, sequencer_service) = init::timing::init_clock_and_sequencer(&settings);
     let (osc, osc_send, osc_loop) = init::osc::init_osc(&settings);
 
@@ -45,8 +42,8 @@ fn model(app: &App) -> Model {
 
     let window_ids = init::windows::create_windows(app, &settings);
 
-    let font = init::text::load_font(app);
-    let text_overlay = init::text::init_text_overlay(render_size, &font);
+    let terminal_font = init::text::load_font(app);
+    let text_overlay = init::text::init_text_overlay(render_size, &terminal_font);
     let ui_state = init::ui::init_ui(app, window_ids, text_overlay);
 
     // Set up rng
@@ -57,8 +54,7 @@ fn model(app: &App) -> Model {
         window_ids,
         &settings,
         particle_limit,
-        dpi_scale,
-        font,
+        terminal_font,
     );
 
     Model {
@@ -156,8 +152,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // This enables particles to flash with rhythm
     //let event = events.iter().any(|e| *e);
 
-    // Update particle system with ZERO-COPY optimization
-
+    // Update particle system
     model.particle_system.update(
         &mut model.voice_manager.voices,
         &mut model.rng,
@@ -267,15 +262,7 @@ fn audience_view(app: &App, model: &Model, frame: Frame) {
             }
 
             // Draw & encode mask
-            let scale_x = window.rect().w() / texture.size()[0] as f32;
-            let scale_y = window.rect().h() / texture.size()[1] as f32;
-
-            mask.draw(
-                &rendering.draw,
-                model.render_state.render_rect,
-                scale_x,
-                scale_y,
-            );
+            mask.draw(&rendering.draw, model.render_state.render_rect);
 
             if let Some(texture_name) = model.render_state.get_texture_name(voice_id) {
                 rendering.encode_draw_commands_into(device, &mut encoder, &texture_name);

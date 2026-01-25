@@ -29,7 +29,7 @@ pub struct UiState {
     pub text_overlay: RefCell<TextOverlay>,
 
     // UI state
-    pub active_tab: usize, // 0 = Voices, 1 = NTerminal
+    pub active_tab: UIActiveTab,
 
     /// When enabled, automatically trigger AI rhythm generation for Voice2
     /// whenever the rhythm for Voice1 is created or modified.
@@ -51,7 +51,7 @@ impl UiState {
                 (VoiceId::Voice3, CommandInput::new()),
             ]),
             text_overlay: RefCell::new(text_overlay),
-            active_tab: 0,
+            active_tab: UIActiveTab::Terminal,
             auto_ai_from_voice1: false,
         }
     }
@@ -65,9 +65,21 @@ impl UiState {
     pub fn toggle_forces(&mut self) {
         self.show_forces = !self.show_forces;
     }
+}
 
-    /// Set the active tab
-    pub fn set_active_tab(&mut self, tab_index: usize) {
-        self.active_tab = tab_index;
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum UIActiveTab {
+    Terminal,
+    Drones,
+    Debug,
+}
+
+impl UIActiveTab {
+    pub fn display_text(&self) -> &'static str {
+        match self {
+            UIActiveTab::Terminal => "Terminal",
+            UIActiveTab::Drones => "Drones",
+            UIActiveTab::Debug => "Debug",
+        }
     }
 }

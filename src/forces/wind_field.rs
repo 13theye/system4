@@ -92,8 +92,7 @@ pub struct WindField {
 }
 
 impl WindField {
-    /// Create a new WindField, with a center origin, x&y size, number of columns and number of rows.
-    /// Top-left is (0,0).
+    /// Create a new WindField, with a center origin and x&y size
     pub fn new(origin: Vec2, bounds_size: Vec2) -> Self {
         let params = WindFieldParams {
             origin,

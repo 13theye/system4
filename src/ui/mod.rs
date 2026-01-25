@@ -5,4 +5,4 @@ pub mod drone_panel;
 pub mod params;
 pub mod ui_state;
 
-pub use ui_state::UiState;
+pub use ui_state::{UIActiveTab, UiState};

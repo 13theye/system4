@@ -5,6 +5,7 @@ use crate::groups::VoiceId;
 use crate::model::Model;
 use crate::terminals::{command_input::CommandInput, commands::TerminalCommand};
 use crate::text::{TextBlock, TextFadeMode, TextPaneId, TextSlot, TextStyle, WrapPolicy};
+use crate::ui::UIActiveTab;
 use nannou::App;
 use std::time::Instant;
 
@@ -79,24 +80,24 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                         ui.add_space(20.0);
                         ui.horizontal(|ui| {
                             if ui
-                                .selectable_label(model.ui_state.active_tab == 2, "Debug")
+                                .selectable_label(model.ui_state.active_tab == UIActiveTab::Debug, UIActiveTab::Debug.display_text())
                                 .clicked()
                             {
-                                model.ui_state.active_tab = 2;
+                                model.ui_state.active_tab = UIActiveTab::Debug;
                             }
                         });
                         ui.horizontal(|ui| {
                             if ui
-                                .selectable_label(model.ui_state.active_tab == 0, "Terminal")
+                                .selectable_label(model.ui_state.active_tab == UIActiveTab::Terminal, UIActiveTab::Terminal.display_text())
                                 .clicked()
                             {
-                                model.ui_state.active_tab = 0;
+                                model.ui_state.active_tab = UIActiveTab::Terminal;
                             }
                             if ui
-                                .selectable_label(model.ui_state.active_tab == 1, "Drones")
+                                .selectable_label(model.ui_state.active_tab == UIActiveTab::Drones, UIActiveTab::Drones.display_text())
                                 .clicked()
                             {
-                                model.ui_state.active_tab = 1;
+                                model.ui_state.active_tab = UIActiveTab::Drones;
                             }
 
                         });
@@ -115,7 +116,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                         // Tab content (top-aligned)
                         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             match model.ui_state.active_tab {
-                                1 => {
+                                UIActiveTab::Drones => {
                                     // Voices tab content with scrollable columns
                                     ui.horizontal(|ui| {
                                         // Voice 0 - column with scrollable content
@@ -160,7 +161,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         }); // end Voice 3 column
                                     }); // end voices horizontal layout
                                 }
-                                0 => {
+                                UIActiveTab::Terminal => {
                                     // Terminal tab content - 4 per-voice terminals in columns
                                     ui.vertical(|ui| {
                                         ui.heading("Terminals (per voice)");
@@ -388,7 +389,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                 }
 
                                 // Debug UI panel
-                                2 => {
+                                UIActiveTab::Debug => {
                                     ui.vertical(|ui| {
                                         ui
                                             .checkbox(&mut model.ui_state.show_bounds, "Bounding Box")
@@ -408,14 +409,13 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         let audience_window = app.window(model.render_state.audience_window_id).unwrap().rect();
 
                                         ui.label(format!("Render size:           {} x {}", model.render_state.render_size.x, model.render_state.render_size.y));
-                                        ui.label(format!("Audience window size: {} x {}", audience_window.w(), audience_window.h()));
+                                        ui.label(format!("Audience window size:  {} x {}", audience_window.w(), audience_window.h()));
                                         ui.label(format!("Particle system size:  {} x {}", model.particle_system.size().x, model.particle_system.size().y));
                                         ui.label(format!("Wind field size:       {} x {}", model.particle_system.force_fields.wind_field.size().x, model.particle_system.force_fields.wind_field.size().y));
 
 
                                     });
                                 }
-                                _ => {}
                             }
                         }); // end top-aligned layout
                     });
