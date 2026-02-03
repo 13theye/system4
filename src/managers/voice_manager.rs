@@ -68,7 +68,7 @@ impl VoiceManager {
     }
 
     /// Attempt to retrieve a mutable reference to a `Drone` from a `VoiceId`. Returns `None` if the `VoiceId` does not exist or is not a `Drone`.
-    pub fn get_drone_mut(&mut self, voice_id: VoiceId) -> Option<&mut Drone> {
+    pub fn get_mut_drone(&mut self, voice_id: VoiceId) -> Option<&mut Drone> {
         let voice = self.voices.get_mut(&voice_id)?;
         voice.as_drone_mut()
     }
@@ -86,7 +86,7 @@ impl VoiceManager {
 
     /// Remove a `WindCircle` from a `VoiceId`
     pub fn remove_circle_from_voice(&mut self, voice_id: VoiceId, circle_id: usize) -> bool {
-        let Some(drone) = self.get_drone_mut(voice_id) else {
+        let Some(drone) = self.get_mut_drone(voice_id) else {
             return false;
         };
         drone.remove_wind_circle(circle_id);
@@ -95,7 +95,7 @@ impl VoiceManager {
 
     /// Remove all `WindCircles` from a `VoiceId`
     pub fn remove_all_circles_from_voice(&mut self, voice_id: VoiceId) {
-        let Some(drone) = self.get_drone_mut(voice_id) else {
+        let Some(drone) = self.get_mut_drone(voice_id) else {
             return;
         };
 

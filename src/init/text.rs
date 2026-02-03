@@ -20,9 +20,10 @@ pub fn load_font(app: &App) -> Font {
     // or relative to the project root if running with `cargo run`
     let assets = app.assets_path().expect("Could not find assets directory");
     let font_path = assets.join("terminal_font.ttf");
-    let font_bytes =
-        fs::read(&font_path).unwrap_or_else(|_| panic!("Failed to read font file at {:?}", font_path));
-    Font::from_bytes(font_bytes).unwrap_or_else(|_| panic!("Failed to load font at {:?}", font_path))
+    let font_bytes = fs::read(&font_path)
+        .unwrap_or_else(|_| panic!("Failed to read font file at {:?}", font_path));
+    Font::from_bytes(font_bytes)
+        .unwrap_or_else(|_| panic!("Failed to load font at {:?}", font_path))
 }
 
 pub fn init_text_overlay(render_size: Vec2, font: &Font) -> TextOverlay {

@@ -19,7 +19,7 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
             settings.audience_window.height,
         )
         .msaa_samples(1)
-        .view(crate::audience_view)
+        .view(system4::view::windows::audience::audience_view)
         .build()
         .unwrap();
 
@@ -31,7 +31,7 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
             settings.performer_window.height,
         )
         .msaa_samples(1)
-        .view(crate::performer_view)
+        .view(system4::view::windows::performer::performer_view)
         .build()
         .unwrap();
 
@@ -43,8 +43,8 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
             settings.control_window.height,
         )
         .msaa_samples(1)
-        .raw_event(crate::raw_window_event)
-        .view(crate::control_view)
+        .raw_event(system4::view::windows::key_capture::raw_window_event)
+        .view(system4::view::windows::control::control_view)
         .build()
         .unwrap();
 

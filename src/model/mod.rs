@@ -151,7 +151,7 @@ impl ExecutionContext for Model {
     }
 
     fn get_drone_mut(&mut self, voice_id: VoiceId) -> Option<&mut Drone> {
-        self.voice_manager.get_drone_mut(voice_id)
+        self.voice_manager.get_mut_drone(voice_id)
     }
 
     fn insert_voice(&mut self, voice_id: VoiceId, voice: Voice) {
