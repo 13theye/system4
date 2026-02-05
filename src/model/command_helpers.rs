@@ -1,6 +1,6 @@
-// src/model/command_helpers.rs
-//
-// Small helpers for constructing common commands.
+//! src/model/command_helpers.rs
+//!
+//! Small helpers for constructing common commands.
 
 use crate::{
     command_engine::{Command, CommandInner, CommandSource, SimpleCommand},

@@ -1,9 +1,18 @@
+//! src/command_engine/handlers/drone.rs
+//!
+//! Handler for Drone-related commands
+//! This module encapsulates command functions for creating, modifying, and deleting drones.
+//! - Owned by the CommandEngine
+//! - Has no fields of its own -- &self is used to enable dot syntax
+
 use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, DroneCommandBuilder},
     groups::{Drone, Voice, VoiceId},
     terminals::commands::drone::DroneConfig,
 };
-use std::time::Instant;
+
+use nannou::prelude::*;
+use std::time::{Duration, Instant};
 
 #[derive(Default)]
 pub struct DroneCommandHandler;
@@ -31,7 +40,13 @@ impl DroneCommandHandler {
         let resolved_config = config.merge_with_defaults();
 
         // Phase 1: Initialize drone structure (WindCircle and emitters)
-        let mut drone = Drone::new_with_id(voice_id);
+        let Some(mut drone) = Drone::new_with_voice_id(voice_id) else {
+            println!(
+                "DroneCommandHandler: Voice {} is not supposed to be a Drone",
+                voice_id
+            );
+            return;
+        };
 
         // Get particle system defaults
         let default_color = ctx.default_particle_color();
@@ -62,7 +77,7 @@ impl DroneCommandHandler {
         }
     }
 
-    pub fn modify_drone(
+    pub fn modify_drone_params(
         &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
@@ -140,6 +155,19 @@ impl DroneCommandHandler {
 
         if let Some(voice) = ctx.get_drone_mut(voice_id) {
             voice.set_emitter_position(value);
+        }
+    }
+
+    pub fn animate_mask_to(
+        &self,
+        ctx: &mut dyn ExecutionContext,
+        voice_id: VoiceId,
+        new_origin: Vec2,
+        new_size: Vec2,
+        duration: Duration,
+    ) {
+        if let Some(drone) = ctx.get_drone_mut(voice_id) {
+            drone.animate_mask(new_origin, new_size, duration);
         }
     }
 

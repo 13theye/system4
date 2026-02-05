@@ -1,3 +1,14 @@
+//! src/command_engine/mod.rs
+//!
+//! The main command engine for the application.
+//! - Invoked by the Model in process_command_queue()
+//! - Only fields are the handlers for different types of commands.
+//!
+//! Commands follow the following pattern:
+//! - `Command` instances are created by text commands or UI
+//! - `CommandEngine` receives the Commands as a Vec<Command>
+//! - One of the CommandHandlers executes the Command by calling relevant function in `ExecutionContext`
+
 pub mod builders;
 pub mod commands;
 pub mod context;
@@ -82,8 +93,13 @@ impl CommandEngine {
                         .create_drone(ctx, config, command.source, now);
                 }
                 CompositeCommand::ModifyDrone { voice_id, config } => {
-                    self.drone_handler
-                        .modify_drone(ctx, voice_id, config, command.source, now);
+                    self.drone_handler.modify_drone_params(
+                        ctx,
+                        voice_id,
+                        config,
+                        command.source,
+                        now,
+                    );
                 }
                 CompositeCommand::CreateRhythm { config } => {
                     self.rhythm_handler
@@ -262,6 +278,17 @@ impl CommandEngine {
             } => {
                 self.rhythm_handler
                     .modify_cutoff(ctx, voice_id, modification);
+            }
+
+            // Mask Animation
+            MaskAnimation {
+                voice_id,
+                new_origin,
+                new_size,
+                duration,
+            } => {
+                self.drone_handler
+                    .animate_mask_to(ctx, voice_id, new_origin, new_size, duration);
             }
         }
     }

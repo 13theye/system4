@@ -2,7 +2,7 @@ use crate::groups::VoiceId;
 
 use nannou::{prelude::*, text::Font, wgpu::TextureReshaper, App};
 use nnpipe::{
-    renderers::{HeatmapRenderer, ParticleGpu, ParticleRenderer, SegmentRenderer},
+    renderers::{ParticleGpu, ParticleRenderer, SegmentRenderer},
     Nnpipe, PipelineBuilder, TextureConfig,
 };
 use std::cell::RefCell;
@@ -22,7 +22,7 @@ pub struct RenderState {
 
     // Heatmap graphics, currently unused and nnpipe impl is not working with the current direct-write
     // particle buffer setup.
-    pub heatmap_renderer: HeatmapRenderer,
+    // pub heatmap_renderer: HeatmapRenderer,
 
     // Voice-specific renderers (isolated buffers per voice)
     pub particle_renderer_voice0: ParticleRenderer,
@@ -62,7 +62,7 @@ impl RenderState {
         self.segment_renderer_voice3.set_engine_debug(debug);
     }
 
-    /// Convenience function to get the texture name by Voice (added for masking)
+    /// Get the particle texture name for a voice (straight alpha)
     pub fn get_texture_name(&self, voice_id: VoiceId) -> Option<String> {
         match voice_id {
             VoiceId::Voice0 => Some("particles_voice_0".to_string()),
@@ -105,12 +105,14 @@ impl RenderState {
         let mut rendering = Nnpipe::new(device, texture_width, texture_height, texture_samples);
 
         // Create renderers
+        /*
         let heatmap_renderer = HeatmapRenderer::new(
             device,
             texture_width,
             texture_height,
             particle_limit as usize,
         );
+         */
 
         let hi_config = TextureConfig {
             width: texture_width,
@@ -153,15 +155,25 @@ impl RenderState {
         };
 
         // Create named textures for the pipeline
+        // All rendering textures use straight alpha - the composite shader handles conversion
+
+        // Terminal texture for UI overlay (rhythm views, text)
         rendering.create_named_texture(device, "terminal", hi_config);
+
+        // Particle textures - straight alpha from particle/segment shaders and Nannou Draw masks
+        // Both particles and masks render to the same texture using standard alpha blending
         rendering.create_named_texture(device, "particles_voice_0", hi_config);
         rendering.create_named_texture(device, "particles_voice_3", hi_config);
+
+        // Combined particles texture (premultiplied alpha - output from composite shader)
         rendering.create_named_texture(device, "particles_combined", hi_config);
+
         /*
         rendering.create_named_texture(device, "heatmap", hi_config);
         rendering.create_named_texture(device, "heatmap_processed", hi_config);
         rendering.create_named_texture(device, "processed_composited", hi_config);
-         */
+        */
+
         rendering.create_named_texture(device, "post-processed", hi_config);
 
         // Build and add rendering pipelines
@@ -170,7 +182,7 @@ impl RenderState {
         Self {
             //gpu_particle_buffer,
             render_engine: RefCell::new(rendering),
-            heatmap_renderer,
+            // heatmap_renderer,
             particle_renderer_voice0,
             particle_renderer_voice3,
             segment_renderer_voice0,
@@ -197,12 +209,15 @@ impl RenderState {
         med_config: TextureConfig,
         lo_config: TextureConfig,
     ) {
-        // Combine voice textures into a single particles texture
+        // === Voice Combination ===
+        // Combine straight-alpha voice textures into a single particles texture
+        // The composite shader accepts straight alpha and outputs premultiplied alpha
+        // Uses Lighten blend: brighter pixel wins
         match PipelineBuilder::new()
             .name("Combine Voice Particles")
             .input_textures(&["particles_voice_0", "particles_voice_3"])
             .output_texture("particles_combined")
-            .simple_screen_composite(hi_config, 1.0)
+            .simple_lighten_composite(hi_config, 1.0)
             .build(device)
         {
             Ok(effect) => {
@@ -214,43 +229,9 @@ impl RenderState {
             }
         }
 
-        // Particle effects pipeline (currently disabled in original code)
-        if let Ok(effect) = PipelineBuilder::new()
-            .name("Particle Effects Pipeline")
-            .input_texture("particles_combined")
-            .feedback(hi_config, 1.0, 60.0)
-            .output_texture("particle_processed")
-            .build(device)
-        {
-            rendering.add_multi_pipeline("particle_effects", effect);
-        }
-
-        /*
-        // Heatmap effects pipeline
-        if let Ok(effect) = PipelineBuilder::new()
-            .name("Heatmap Effects Pipeline")
-            .input_texture("heatmap")
-            .feedback(hi_config, 1.0, 10.0)
-            .output_texture("heatmap_processed")
-            .build(device)
-        {
-            rendering.add_multi_pipeline("heatmap_effects", effect);
-        }
-
-        // Composite step pipeline
-        if let Ok(effect) = PipelineBuilder::new()
-            .name("Composite Step Pipeline")
-            .input_textures(&["particles_combined", "heatmap_processed"])
-            .output_texture("processed_composited")
-            .simple_additive_composite(hi_config, 0.5)
-            .build(device)
-        {
-            rendering.add_multi_pipeline("composite_step", effect);
-        }
-
-         */
-
         // Bloom effects pipeline
+        // Input: particles_combined (premultiplied alpha from composite)
+        // Output: post-processed (premultiplied alpha)
         if let Ok(effect) = PipelineBuilder::new()
             .name("Particle Effects Pipeline")
             .input_texture("particles_combined")
@@ -265,6 +246,8 @@ impl RenderState {
         }
 
         // Final composite overlay
+        // Input: post-processed (premultiplied), terminal (straight alpha)
+        // The composite shader handles the straight→premultiplied conversion for terminal
         if let Ok(effect) = PipelineBuilder::new()
             .name("Final overlay composite")
             .input_textures(&["post-processed", "terminal"])

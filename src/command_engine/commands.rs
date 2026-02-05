@@ -1,4 +1,6 @@
-// Command types for the system
+//! src/command_engine/commands.rs
+//!
+//! Command types for the system
 
 use crate::{
     groups::VoiceId,
@@ -7,6 +9,9 @@ use crate::{
         rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
     },
 };
+
+use nannou::prelude::Vec2;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandSource {
@@ -137,6 +142,12 @@ pub enum SimpleCommand {
     RhythmModifyCutoff {
         voice_id: VoiceId,
         modification: RhythmParamModification,
+    },
+    MaskAnimation {
+        voice_id: VoiceId,
+        new_origin: Vec2,
+        new_size: Vec2,
+        duration: Duration,
     },
 }
 
@@ -283,6 +294,9 @@ impl Command {
                 }
                 SimpleCommand::RhythmModifyCutoff { voice_id, .. } => {
                     format!("RhythmModifyCutoff_{:?}", voice_id)
+                }
+                SimpleCommand::MaskAnimation { voice_id, .. } => {
+                    format!("MaskAnimation_{:?}", voice_id)
                 }
             },
         }

@@ -30,16 +30,13 @@ impl MaskParams {
         Self { origin, size }
     }
 
-    /// Convenience function to init a default mask parameters for a specific voice
-    pub fn init_for_voice(voice_id: VoiceId) -> Option<Self> {
-        let origin = match voice_id {
-            VoiceId::Voice0 => vec2(-950.0, 0.0),
-            VoiceId::Voice3 => vec2(950.0, 0.0),
-            _ => return None,
-        };
+    /**************** Basic utility methods ********************** */
+    pub fn contains_point(&self, point: Vec2) -> bool {
+        self.rect().contains(point)
+    }
 
-        let size = vec2(900.0, 1300.0);
-        Some(Self { origin, size })
+    pub fn rect(&self) -> Rect {
+        Rect::from_x_y_w_h(self.origin.x, self.origin.y, self.size.x, self.size.y)
     }
 }
 
@@ -73,36 +70,14 @@ impl Mask {
         }
     }
 
-    /// Convenience function to init a default mask for a specific voice
-    pub fn init_for_voice(voice_id: VoiceId) -> Option<Self> {
-        let params = MaskParams::init_for_voice(voice_id)?;
-        Some(Self {
-            parent_voice: voice_id,
-            params,
-            state: MaskState::Active,
-        })
-    }
-
     pub fn with_state(self, state: MaskState) -> Self {
         Self { state, ..self }
     }
 
-    /**************** Basic utility methods ********************** */
-    pub fn contains_point(&self, point: Vec2) -> bool {
-        self.rect().contains(point)
-    }
-
-    pub fn rect(&self) -> Rect {
-        Rect::from_x_y_w_h(
-            self.params.origin.x,
-            self.params.origin.y,
-            self.params.size.x,
-            self.params.size.y,
-        )
-    }
-
     /************** Animation methods ************************** */
-    pub fn animate_to(&mut self, end_params: MaskParams, duration: Duration) {
+    pub fn animate_to(&mut self, new_origin: Vec2, new_size: Vec2, duration: Duration) {
+        let end_params = MaskParams::init(new_origin, new_size);
+
         self.state = MaskState::Animating(MaskAnimation {
             start_time: Instant::now(),
             duration,
@@ -141,7 +116,7 @@ impl Mask {
     /*************** Drawing methods ************************** */
 
     pub fn draw(&self, draw: &Draw, texture_rect: Rect) {
-        let rects = dissect_screen(self.rect(), texture_rect);
+        let rects = dissect_screen(self.params.rect(), texture_rect);
         for rect in rects.iter() {
             draw.rect().xy(rect.xy()).wh(rect.wh()).color(BLACK);
         }

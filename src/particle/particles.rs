@@ -67,7 +67,7 @@ impl ParticleCore {
             acceleration: vec2(0.0, 0.0),
             age: 0.0,
             remaining_life_span: PARTICLE_LIFE_SPAN,
-            age_per_tick: 1.0,
+            age_per_tick: PARTICLE_AGE_PER_TICK,
             is_alive: true,
             is_activated: false,
             size,

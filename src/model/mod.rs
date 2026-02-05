@@ -323,7 +323,8 @@ fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
             | SimpleCommand::RhythmCutoffRange { voice_id, .. }
             | SimpleCommand::RhythmModifyLength { voice_id, .. }
             | SimpleCommand::RhythmModifyVelocity { voice_id, .. }
-            | SimpleCommand::RhythmModifyCutoff { voice_id, .. } => Some(*voice_id),
+            | SimpleCommand::RhythmModifyCutoff { voice_id, .. }
+            | SimpleCommand::MaskAnimation { voice_id, .. } => Some(*voice_id),
         },
         CommandInner::Composite(comp) => match comp {
             CompositeCommand::CreateDrone { config } => Some(config.voice),

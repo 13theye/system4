@@ -12,7 +12,7 @@ use crate::{
     view::rhythm::{RhythmView, RhythmViewUpdateParams},
 };
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 const AI_VOICE_ID: VoiceId = VoiceId::Voice2;
 
@@ -105,6 +105,17 @@ impl VoiceManager {
     /// Return a reference to the DroneManager's segment buffer for a `VoiceId`
     pub fn get_segment_buffer(&self, voice_id: VoiceId) -> Option<&GpuSegmentBuffer> {
         self.drone_manager.get_segment_buffer(voice_id)
+    }
+
+    /// Update all Drone's masks
+    pub fn update_drone_masks(&mut self, now: Instant) {
+        for (_, voice) in self.voices.iter_mut() {
+            let Some(drone) = voice.as_drone_mut() else {
+                continue;
+            };
+
+            drone.mask.update_animation(now);
+        }
     }
 
     /**************** Rhythm methods ************************* */

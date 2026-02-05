@@ -8,7 +8,7 @@ use crate::{
     view::mask::Mask,
 };
 use nannou::prelude::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DroneState {
@@ -49,7 +49,7 @@ impl Default for DroneParams {
 }
 
 pub struct Drone {
-    pub id: VoiceId,
+    pub voice_id: VoiceId,
     pub state: DroneState,
     pub params: DroneParams,
     // smallest bounding box containing all wind_circles
@@ -64,17 +64,19 @@ pub struct Drone {
 }
 
 impl Drone {
-    pub fn new_with_id(id: VoiceId) -> Self {
-        Self {
-            id,
+    pub fn new_with_voice_id(voice_id: VoiceId) -> Option<Self> {
+        let mask = init_mask(voice_id)?;
+
+        Some(Self {
+            voice_id,
             state: DroneState::Active,
             params: DroneParams::default(),
             emitter_bounds: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
             emitters: Vec::new(),
             wind_circles: HashMap::new(),
             current_wind_circle_idx: 0,
-            mask: Mask::init_for_voice(id).unwrap(),
-        }
+            mask,
+        })
     }
 
     pub fn with_particle_limit(mut self, limit: usize) -> Self {
@@ -119,7 +121,7 @@ impl Drone {
         let circle_id = self.issue_wind_circle_idx();
         let circle = WindCircle::new(
             circle_id,
-            self.id,
+            self.voice_id,
             center,
             outer_radius,
             inner_radius,
@@ -183,7 +185,7 @@ impl Drone {
         let right_end = vec2(self.emitter_bounds.right(), center_y - offset * (1.0 - p));
 
         let emitter_left = LinearEmitter::new(
-            self.id,
+            self.voice_id,
             left_start,
             left_end,
             EmitDirection::East,
@@ -191,7 +193,7 @@ impl Drone {
         );
 
         let emitter_right = LinearEmitter::new(
-            self.id,
+            self.voice_id,
             right_start,
             right_end,
             EmitDirection::West,
@@ -286,7 +288,7 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set OR: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
@@ -299,7 +301,7 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set IR: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
@@ -311,7 +313,7 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set CX: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
@@ -323,7 +325,7 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set CY: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
@@ -335,7 +337,7 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set gravity: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
@@ -347,7 +349,7 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set force: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
@@ -359,8 +361,27 @@ impl Drone {
         } else {
             println!(
                 "Voice {} set noise: Wind circle not found for id: {}",
-                self.id, id
+                self.voice_id, id
             );
         }
     }
+
+    /******************* Mask methods ********************* */
+
+    /// Begin a new animation of the mask to the new size & origin over a given `Duration`.
+    pub fn animate_mask(&mut self, new_origin: Vec2, new_size: Vec2, duration: Duration) {
+        self.mask.animate_to(new_origin, new_size, duration);
+    }
+}
+
+/// Convenience function to initialize a Mask for the given Voice
+fn init_mask(voice_id: VoiceId) -> Option<Mask> {
+    let origin = match voice_id {
+        VoiceId::Voice0 => vec2(-950.0, 0.0),
+        VoiceId::Voice3 => vec2(950.0, 0.0),
+        _ => return None,
+    };
+
+    let size = vec2(900.0, 1300.0);
+    Some(Mask::init(voice_id, origin, size))
 }

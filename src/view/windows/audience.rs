@@ -17,9 +17,11 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
         let mut rendering = model.render_state.render_engine.borrow_mut();
 
         // Get GPU resources
-        let window = app
-            .window(model.render_state.audience_window_id)
-            .expect("Audience window not found");
+        let Some(window) = app.window(model.render_state.audience_window_id) else {
+            eprintln!("Audience window not found. Exiting app.");
+            std::process::exit(1);
+        };
+
         let device = window.device();
         let mut encoder = rendering.create_command_encoder(device);
         let queue = window.queue();
@@ -85,8 +87,9 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
 
             let texture = rendering
                 .get_named_texture(&texture_name)
-                .expect("Fatal Error: Missing texture");
+                .expect("Fatal Error: Missing particle texture");
 
+            // Encode particles and segments to particle texture (straight alpha)
             let (renderer, seg_renderer, texture) = match voice_id {
                 VoiceId::Voice0 => (
                     &model.render_state.particle_renderer_voice0,
@@ -109,12 +112,10 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
                 seg_renderer.encode_only(&mut encoder, segment_instance_count, texture);
             }
 
-            // Draw & encode mask
+            // Draw mask to the same particle texture (both use straight alpha)
+            // Masks and particles can share a texture because they both use standard alpha blending
             mask.draw(&rendering.draw, model.render_state.render_rect);
-
-            if let Some(texture_name) = model.render_state.get_texture_name(voice_id) {
-                rendering.encode_draw_commands_into(device, &mut encoder, &texture_name);
-            }
+            rendering.encode_draw_commands_into(device, &mut encoder, &texture_name);
         }
 
         if model.engine_debug {
@@ -127,7 +128,8 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         /************ Executing the pipelines ************* */
 
-        // Combine voice textures
+        // Combine voice textures (straight alpha inputs → premultiplied output)
+        // The composite shader handles straight→premultiplied conversion internally
         if let Err(e) = rendering.execute_named_pipeline("combine_voices", device, &mut encoder) {
             eprintln!("Error executing combine_voices pipeline: {}", e);
         }
@@ -177,9 +179,11 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             overlay.update_and_draw_all(&rendering.draw, now);
         }
 
-        // Encode Nannou Draw
+        // Encode Nannou Draw (rhythm views, text overlay) to terminal texture
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
 
+        // Final composite (straight alpha terminal over premultiplied post-processed)
+        // The composite shader handles straight→premultiplied conversion for terminal
         if let Err(e) = rendering.execute_named_pipeline("final composite", device, &mut encoder) {
             eprintln!("Error executing final composite pipeline: {}", e);
         }

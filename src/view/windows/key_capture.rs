@@ -1,4 +1,11 @@
+//! src/view/windows/key_capture.rs
+//!
+//! Input capture for Control window
+
+use std::time::Duration;
+
 use crate::{
+    command_engine::{Command, CommandInner, CommandSource, SimpleCommand},
     groups::VoiceId,
     model::Model,
     text::{TextPaneId, TextSlot},
@@ -44,6 +51,51 @@ pub fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::ev
                         model.ui_state.show_bounds = !model.ui_state.show_bounds;
                          */
                     }
+
+                    VirtualKeyCode::M => {
+                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                            voice_id: VoiceId::Voice0,
+                            new_origin: vec2(0.0, 0.0),
+                            new_size: vec2(3840.0, 2160.0),
+                            duration: Duration::from_secs(3),
+                        });
+
+                        model.queue_command(Command::new(command, CommandSource::Terminal));
+                    }
+
+                    VirtualKeyCode::N => {
+                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                            voice_id: VoiceId::Voice0,
+                            new_origin: vec2(-950.0, 0.0),
+                            new_size: vec2(900.0, 1300.0),
+                            duration: Duration::from_secs(1),
+                        });
+
+                        model.queue_command(Command::new(command, CommandSource::Terminal));
+                    }
+
+                    VirtualKeyCode::J => {
+                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                            voice_id: VoiceId::Voice3,
+                            new_origin: vec2(0.0, 0.0),
+                            new_size: vec2(3840.0, 2160.0),
+                            duration: Duration::from_secs(3),
+                        });
+
+                        model.queue_command(Command::new(command, CommandSource::Terminal));
+                    }
+
+                    VirtualKeyCode::K => {
+                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                            voice_id: VoiceId::Voice3,
+                            new_origin: vec2(950.0, 0.0),
+                            new_size: vec2(900.0, 1300.0),
+                            duration: Duration::from_secs(1),
+                        });
+
+                        model.queue_command(Command::new(command, CommandSource::Terminal));
+                    }
+
                     _ => {}
                 }
             }

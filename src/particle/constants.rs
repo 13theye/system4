@@ -5,6 +5,7 @@ use crate::rendering::{render_state::GpuParticleBuffer, GpuSegmentBuffer};
 // Constants for the Particle Core
 pub const PARTICLE_MASS: f32 = 11.0;
 pub const PARTICLE_LIFE_SPAN: f32 = 1800.0;
+pub const PARTICLE_AGE_PER_TICK: f32 = 1.0;
 pub const PARTICLE_FADE_IN_DURATION: f32 = 180.0; // frames to fade in
 pub const PARTICLE_FADE_OUT_DURATION: f32 = 100.0;
 /// Buffer for out-of-bounds particles

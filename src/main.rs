@@ -145,6 +145,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         app.duration.since_start.as_millis() as u32,
         model.engine_debug,
     );
+
+    // Update masks animations
+    model.voice_manager.update_drone_masks(now);
 }
 
 /// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.
