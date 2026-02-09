@@ -1,0 +1,378 @@
+use nannou::prelude::*;
+use std::{collections::HashMap, time::Instant};
+
+use super::{
+    animation::*,
+    element::{RhythmElement, RhythmElementActivation, RhythmElementMovement},
+};
+use crate::{
+    groups::{RhythmParams, VoiceId},
+    view::rhythm::RhythmViewUpdateParams,
+};
+
+/// The state of the `RhythmFormation`
+#[derive(Copy, Clone, Debug)]
+pub enum RhythmFormationState {
+    Inactive,
+    Active { start_time: Instant },
+    Initializing { start_time: Instant },
+    Reinitializing { start_time: Instant },
+    Clearing { start_time: Instant },
+}
+
+/// Which side of the screen the formation is on
+#[derive(Copy, Clone, Debug)]
+pub enum RhythmFormationSide {
+    Left,
+    Right,
+}
+
+/// Parameters for the `RhythmFormation` used for drawing
+#[derive(Debug)]
+pub struct RhythmFormationParams {
+    // The center of the formation
+    pub center: Vec2,
+    // The radius of the circle that contains the centers of inactive elements
+    pub min_radius: f32,
+    // The radius of the circle that contains the centers of active elements with velocity = 1.0
+    pub max_radius: f32,
+}
+
+impl Default for RhythmFormationParams {
+    fn default() -> Self {
+        Self {
+            center: Vec2::new(0.0, 0.0),
+            min_radius: 400.0,
+            max_radius: 600.0,
+        }
+    }
+}
+
+/// A `HashMap` of `RhythmElement`s where:
+/// - Key is the rhythm slot index.
+/// - Value is the `RhythmElement`
+pub type ElementMap = HashMap<usize, RhythmElement>;
+
+#[derive(Debug)]
+pub struct RhythmFormation {
+    pub voice_id: VoiceId,
+    pub side: RhythmFormationSide,
+    pub params: RhythmFormationParams,
+    pub capacity: usize,
+    pub elements: ElementMap,
+    pub state: RhythmFormationState,
+}
+
+impl RhythmFormation {
+    /// Initialize a new rhythm formation from given `RhythmParams`
+    pub fn init_rhythm(
+        voice_id: VoiceId,
+        rhythm_params: &RhythmParams,
+        now: Instant,
+    ) -> Option<Self> {
+        let Some(side) = Self::get_side(voice_id) else {
+            eprintln!(
+                "RhythmFormation: VoiceId: {} shouldn't be a rhythm. No formation will be created",
+                voice_id
+            );
+            return None;
+        };
+
+        let params = RhythmFormationParams::default();
+        let elements = Self::init_elements(side, rhythm_params, &params, now);
+
+        Some(Self {
+            voice_id,
+            side,
+            params,
+            capacity: rhythm_params.capacity,
+            elements,
+            state: RhythmFormationState::Initializing { start_time: now },
+        })
+    }
+
+    /// Initialize all `RhythmElements` for the given `RhythmParams`
+    fn init_elements(
+        side: RhythmFormationSide,
+        rhythm_params: &RhythmParams,
+        formation_params: &RhythmFormationParams,
+        now: Instant,
+    ) -> ElementMap {
+        let mut element_map: ElementMap = HashMap::new();
+
+        // Calculate element positions
+        let formation_positions = Self::calculate_formation_positions(
+            side,
+            rhythm_params.capacity,
+            formation_params.min_radius,
+        );
+
+        let initial_position = vec2(0.0, 0.0);
+
+        // Iterate through the positions and create elements for each.
+        formation_positions
+            .iter()
+            .for_each(|(i, formation_position)| {
+                let wing_position = Self::calculate_slot_position(
+                    *i,
+                    side,
+                    rhythm_params.capacity,
+                    formation_params.max_radius,
+                );
+                let slot_params = rhythm_params.slot_params[*i];
+                let mut element = RhythmElement::new(
+                    initial_position,
+                    *formation_position,
+                    wing_position,
+                    slot_params,
+                    now,
+                );
+                if rhythm_params.wings.contains(i) {
+                    element.set_is_wing(now);
+                }
+                element_map.insert(*i, element);
+            });
+
+        element_map
+    }
+
+    /// Helper function to get the side of the screen that this `RhythmFormation` is on
+    fn get_side(voice_id: VoiceId) -> Option<RhythmFormationSide> {
+        match voice_id {
+            VoiceId::Voice1 => Some(RhythmFormationSide::Left),
+            VoiceId::Voice2 => Some(RhythmFormationSide::Right),
+            _ => None,
+        }
+    }
+
+    /// Regenerate this `RhythmFormation` from given `RhythmParams`
+    pub fn reinit_rhythm(&mut self, rhythm_params: &RhythmParams, now: Instant) {
+        let (new_capacity, old_capacity) = (rhythm_params.capacity, self.capacity);
+
+        // Calculate new target positions for the new capacity
+        let new_formation_positions = Self::calculate_formation_positions(
+            self.side,
+            rhythm_params.capacity,
+            self.params.min_radius,
+        );
+
+        // Update capacity
+        self.capacity = new_capacity;
+
+        // Add new elements
+        if new_capacity > old_capacity {
+            let initial_position = vec2(0.0, 0.0);
+
+            for i in old_capacity..new_capacity {
+                let Some(formation_position) = new_formation_positions.get(&i) else {
+                    continue;
+                };
+                let wing_position = Self::calculate_slot_position(
+                    i,
+                    self.side,
+                    rhythm_params.capacity,
+                    self.params.max_radius,
+                );
+                let slot_params = rhythm_params.slot_params[i];
+                self.elements.insert(
+                    i,
+                    RhythmElement::new(
+                        initial_position,
+                        *formation_position,
+                        wing_position,
+                        slot_params,
+                        now,
+                    ),
+                );
+            }
+        } else if new_capacity < old_capacity {
+            // Remove excess elements
+            for i in new_capacity..old_capacity {
+                let Some(element) = self.elements.get_mut(&i) else {
+                    continue;
+                };
+
+                element.movement = RhythmElementMovement::Clearing {
+                    start_pos: element.params.current_position,
+                    target_pos: self.params.center,
+                    start_time: now,
+                };
+            }
+        }
+
+        // Move all elements to the new positions and update formation_position and wing_position
+        for (i, element) in self.elements.iter_mut() {
+            let Some(new_position) = new_formation_positions.get(i) else {
+                // Elements that don't have a new position were marked for clearing above, and are skipped here.
+                continue;
+            };
+            let wing_position = Self::calculate_slot_position(
+                *i,
+                self.side,
+                rhythm_params.capacity,
+                self.params.max_radius,
+            );
+            element.params.formation_position = *new_position;
+            element.params.wing_position = wing_position;
+            element.movement = RhythmElementMovement::Moving {
+                start_pos: element.params.current_position,
+                target_pos: *new_position,
+                start_time: now,
+            };
+        }
+
+        // Update wing status of elements within the new capacity
+        self.elements.iter_mut().for_each(|(i, element)| {
+            // Skip elements that are marked for clearing
+            if *i >= self.capacity {
+                return;
+            }
+            if rhythm_params.wings.contains(i) {
+                element.set_is_wing(now);
+            } else {
+                element.set_is_not_wing(now);
+            }
+        });
+
+        // Set own state flag
+        self.state = RhythmFormationState::Reinitializing { start_time: now };
+    }
+
+    /// Initiate a clearing animation
+    pub fn clear_rhythm(&mut self, now: Instant) {
+        let target_pos = self.params.center;
+
+        self.elements.values_mut().for_each(|element| {
+            element.movement = RhythmElementMovement::Clearing {
+                start_pos: element.params.current_position,
+                target_pos,
+                start_time: now,
+            }
+        });
+
+        self.state = RhythmFormationState::Clearing { start_time: now };
+    }
+
+    /// Helper function to calculate all center positions of a rhythm along the formation semicircle of a given radius
+    fn calculate_formation_positions(
+        side: RhythmFormationSide,
+        capacity: usize,
+        radius: f32,
+    ) -> HashMap<usize, Vec2> {
+        let mut formation_positions = HashMap::new();
+        for i in 0..capacity {
+            let pos = Self::calculate_slot_position(i, side, capacity, radius);
+            formation_positions.insert(i, pos);
+        }
+        formation_positions
+    }
+
+    /// Helper function to calculate the center position of a slots along the formation semicircle of a given radius
+    fn calculate_slot_position(
+        slot: usize,
+        side: RhythmFormationSide,
+        capacity: usize,
+        radius: f32,
+    ) -> Vec2 {
+        let unit_angle = std::f32::consts::PI / (capacity as f32);
+
+        let angle = match side {
+            RhythmFormationSide::Left => {
+                std::f32::consts::FRAC_PI_2 + unit_angle / 2.0 + (slot as f32) * unit_angle
+            }
+            RhythmFormationSide::Right => {
+                std::f32::consts::FRAC_PI_2 - unit_angle / 2.0 - (slot as f32) * unit_angle
+            }
+        };
+
+        let x = radius * angle.cos();
+        let y = radius * angle.sin();
+
+        vec2(x, y)
+    }
+
+    pub fn activate_element(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
+        if matches!(self.state, RhythmFormationState::Inactive) {
+            return;
+        }
+
+        let Some(slot) = update_params.current_slot else {
+            return;
+        };
+
+        let Some(element) = self.elements.get_mut(&slot) else {
+            eprintln!(
+                "RhythmFormation: Trying to activate an element that doesn't exist for slot {}",
+                slot
+            );
+            return;
+        };
+
+        element.activate(now);
+    }
+
+    pub fn update(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
+        self.activate_element(update_params, now);
+
+        self.elements.values_mut().for_each(|element| {
+            element.update_active(update_params, now);
+        })
+    }
+
+    /// Update animations when RhythmFormation's parent rhythm doesn't exist because of a clearing or
+    /// initialization operation in progress
+    pub fn update_transitions(&mut self, now: Instant) {
+        // Clear any elements marked for removal
+        let mut to_clear: Vec<usize> = Vec::with_capacity(self.elements.len());
+        self.elements.iter().for_each(|(i, element)| {
+            if matches!(element.activation, RhythmElementActivation::ToClear) {
+                to_clear.push(*i);
+            }
+        });
+        to_clear.iter().for_each(|i| {
+            self.elements.remove(i);
+        });
+
+        match self.state {
+            RhythmFormationState::Initializing { start_time }
+            | RhythmFormationState::Reinitializing { start_time } => {
+                let progress =
+                    ((now - start_time).as_secs_f32() / INIT_ANIMATION_DURATION_SECS).min(1.0);
+
+                self.elements
+                    .values_mut()
+                    .for_each(|element| element.update_movement(now));
+
+                if progress >= 1.0 {
+                    self.state = RhythmFormationState::Active { start_time: now };
+                }
+            }
+
+            RhythmFormationState::Clearing { start_time } => {
+                let progress =
+                    ((now - start_time).as_secs_f32() / CLEAR_ANIMATION_DURATION_SECS).min(1.0);
+
+                self.elements
+                    .values_mut()
+                    .for_each(|element| element.update_movement(now));
+
+                if progress >= 1.0 {
+                    self.state = RhythmFormationState::Inactive;
+                }
+            }
+
+            // Do nothing if formation is inactive.
+            // If formation is active, animations are updated in `update()`
+            _ => {}
+        }
+    }
+
+    pub fn draw(&self, draw: &Draw, show_debug_geometry: bool) {
+        // Draw connectors first so elements are layered on top
+        super::connector::draw_connectors(draw, &self.elements, self.capacity, show_debug_geometry);
+
+        for element in self.elements.values() {
+            element.draw(draw);
+        }
+    }
+}

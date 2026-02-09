@@ -2,7 +2,6 @@ use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, RhythmCommandBuilder},
     groups::{Rhythm, Voice, VoiceId},
     terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
-    view::rhythm::RhythmFormationType,
 };
 use std::time::Instant;
 
@@ -47,19 +46,9 @@ impl RhythmCommandHandler {
             rhythm.set_sequencer_data_rx(data_rx);
         }
 
-        let radius = if voice_id == VoiceId::Voice1 {
-            800.0
-        } else {
-            450.0
-        };
-
         // Create the RhythmFormation
-        ctx.rhythm_view_mut().add_formation(
-            voice_id,
-            RhythmFormationType::Circle { radius },
-            rhythm.get_params(),
-            now,
-        );
+        ctx.rhythm_view_mut()
+            .add_formation(voice_id, rhythm.get_params(), now);
 
         // Insert rhythm before applying parameters so validation can find it
         let voice = Voice::new_from_rhythm(rhythm);

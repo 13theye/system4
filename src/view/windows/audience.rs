@@ -162,9 +162,6 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
-        // Draw all rhythm views
-        model.rhythm_view.draw_all(&rendering.draw);
-
         // Unified text overlay (new system)
         let now = Instant::now();
         {
@@ -178,6 +175,9 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
 
             overlay.update_and_draw_all(&rendering.draw, now);
         }
+
+        // Draw all rhythm views
+        model.rhythm_view.draw_all(&rendering.draw, model.ui_state.show_debug_geometry);
 
         // Encode Nannou Draw (rhythm views, text overlay) to terminal texture
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");

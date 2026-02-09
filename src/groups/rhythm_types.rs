@@ -4,7 +4,7 @@ use prat::BeatSubdivision;
 use crate::terminals::commands::rhythm::RangeSize;
 
 /// Defines the velocity, length, and cutoffparameters of a single sequencer step. Each parameter is a number from 0.0 to 1.0.
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct RhythmSlotParams {
     pub velocity: f32,
     pub length: f32,

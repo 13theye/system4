@@ -126,13 +126,13 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         drone3.set_segment_length(v3_feedback);
     }
 
-    // Update Rhythm logical groups & views
+    // Update active Rhythm logical groups & views
     model
         .voice_manager
         .update_rhythms(model.clock.tempo(), &mut model.rhythm_view, now);
 
     // Update formations in transition states (including cleared/clearing ones)
-    model.rhythm_view.update_all_transitions(now);
+    model.rhythm_view.update_transitions(now);
 
     // This enables particles to flash with rhythm
     //let event = events.iter().any(|e| *e);

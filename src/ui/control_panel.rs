@@ -401,6 +401,8 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         if show_engine_debug_changed {
                                             model.render_state.set_render_engines_debug(model.engine_debug);
                                         }
+
+                                        ui.checkbox(&mut model.ui_state.show_debug_geometry, "Show additional geometry");
                                         
                                         ui.add_space(12.0);
                                     });
