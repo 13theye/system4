@@ -355,8 +355,7 @@ impl RhythmFormation {
 
         self.elements.values_mut().for_each(|element| {
             element.update_active(update_params, now);
-            element.update_movement(now);
-            element.update_sizing(now);
+            element.update_animations(now);
         })
     }
 
@@ -374,16 +373,24 @@ impl RhythmFormation {
             self.elements.remove(i);
         });
 
+        // Do nothing if formation is inactive.
+        // If formation is active, animations are updated in `update()`
+        if matches!(self.state, RhythmFormationState::Inactive)
+            || matches!(self.state, RhythmFormationState::Active { .. })
+        {
+            return;
+        }
+
+        // Update animations
+        self.elements.values_mut().for_each(|element| {
+            element.update_animations(now);
+        });
+
         match self.state {
             RhythmFormationState::Initializing { start_time }
             | RhythmFormationState::Reinitializing { start_time } => {
                 let progress =
                     ((now - start_time).as_secs_f32() / INIT_ANIMATION_DURATION).min(1.0);
-
-                self.elements.values_mut().for_each(|element| {
-                    element.update_movement(now);
-                    element.update_sizing(now);
-                });
 
                 if progress >= 1.0 {
                     self.state = RhythmFormationState::Active { start_time: now };
@@ -394,18 +401,10 @@ impl RhythmFormation {
                 let progress =
                     ((now - start_time).as_secs_f32() / CLEAR_ANIMATION_DURATION).min(1.0);
 
-                self.elements.values_mut().for_each(|element| {
-                    element.update_movement(now);
-                    element.update_sizing(now);
-                });
-
                 if progress >= 1.0 {
                     self.state = RhythmFormationState::Inactive;
                 }
             }
-
-            // Do nothing if formation is inactive.
-            // If formation is active, animations are updated in `update()`
             _ => {}
         }
     }

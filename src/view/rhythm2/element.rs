@@ -213,7 +213,12 @@ impl RhythmElement {
 
     /// Called by RhythmFormation irrespective of there being an active rhythm.
     /// This allows for elements to finish animations even if a rhythm is not playing.
-    pub fn update_movement(&mut self, now: Instant) {
+    pub fn update_animations(&mut self, now: Instant) {
+        self.update_movement(now);
+        self.update_sizing(now);
+    }
+
+    fn update_movement(&mut self, now: Instant) {
         match self.movement {
             RhythmElementMovement::Idle => {}
             RhythmElementMovement::Moving {
@@ -258,7 +263,7 @@ impl RhythmElement {
         }
     }
 
-    pub fn update_sizing(&mut self, now: Instant) {
+    fn update_sizing(&mut self, now: Instant) {
         if let RhythmElementSizing::Changing {
             start_radius,
             target_radius,
