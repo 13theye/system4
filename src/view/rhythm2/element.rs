@@ -22,13 +22,24 @@ pub enum RhythmElementMovement {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub enum RhythmElementSizing {
+    Idle,
+    Changing {
+        start_radius: f32,
+        target_radius: f32,
+        start_time: Instant,
+        duration: f32,
+    },
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum RhythmElementActivation {
     Idle,
     Active { start_time: Instant },
     ToClear,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct RhythmElementParams {
     pub current_position: Vec2,
     // The position where the element belongs in formation when not a wing
@@ -36,7 +47,11 @@ pub struct RhythmElementParams {
     // The position where the element is when velocity = 1.0
     pub max_position: Vec2,
     // The current radius of the element
-    pub radius: f32,
+    pub current_radius: f32,
+    /// The base radius of the element
+    pub min_radius: f32,
+    /// The maximum radius of the element if length - 1.0
+    pub max_radius: f32,
     // The rhythm parameters represented by this element
     pub slot: RhythmSlotParams,
     /// Default color
@@ -52,6 +67,7 @@ pub struct RhythmElement {
     pub is_wing: bool,
     pub params: RhythmElementParams,
     pub movement: RhythmElementMovement,
+    pub sizing: RhythmElementSizing,
     pub activation: RhythmElementActivation,
 }
 
@@ -61,7 +77,9 @@ impl Default for RhythmElementParams {
             current_position: vec2(0.0, 0.0),
             min_position: vec2(0.0, 0.0),
             max_position: vec2(0.0, 0.0),
-            radius: MIN_ELEMENT_RADIUS,
+            current_radius: 10.0,
+            min_radius: MIN_ELEMENT_RADIUS,
+            max_radius: MAX_ELEMENT_RADIUS,
             slot: RhythmSlotParams::default(),
             color: rgba(0.494, 0.698, 0.706, 1.0),
             gradient_color_1: rgba(0.847, 0.137, 0.161, 1.0),
@@ -96,6 +114,12 @@ impl RhythmElement {
                 start_time: now,
                 duration: movement_duration,
             },
+            sizing: RhythmElementSizing::Changing {
+                start_radius: params.current_radius,
+                target_radius: params.min_radius,
+                start_time: now,
+                duration: movement_duration,
+            },
             activation: RhythmElementActivation::Idle,
         }
     }
@@ -112,8 +136,6 @@ impl RhythmElement {
     /// Mark the element as a wing & set corresponding visual parameters & position
     pub fn set_is_wing(&mut self, movement_duration: f32, now: Instant) {
         self.is_wing = true;
-        self.params.radius = MIN_ELEMENT_RADIUS
-            + self.params.slot.length * (MAX_ELEMENT_RADIUS - MIN_ELEMENT_RADIUS);
 
         self.movement = RhythmElementMovement::Moving {
             start_pos: self.params.current_position,
@@ -122,16 +144,16 @@ impl RhythmElement {
             duration: movement_duration,
         };
 
-        println!(
-            "Moving from {} to {}",
-            self.params.current_position,
-            self.wing_position()
-        );
+        self.sizing = RhythmElementSizing::Changing {
+            start_radius: self.params.current_radius,
+            target_radius: self.wing_radius(),
+            start_time: now,
+            duration: movement_duration,
+        };
     }
 
     pub fn set_is_not_wing(&mut self, movement_duration: f32, now: Instant) {
         self.is_wing = false;
-        self.params.radius = MIN_ELEMENT_RADIUS;
 
         self.movement = RhythmElementMovement::Moving {
             start_pos: self.params.current_position,
@@ -139,12 +161,39 @@ impl RhythmElement {
             start_time: now,
             duration: movement_duration,
         };
+
+        self.sizing = RhythmElementSizing::Changing {
+            start_radius: self.params.current_radius,
+            target_radius: self.params.min_radius,
+            start_time: now,
+            duration: movement_duration,
+        }
+    }
+
+    pub fn set_clearing(&mut self, target_pos: Vec2, movement_duration: f32, now: Instant) {
+        self.movement = RhythmElementMovement::Clearing {
+            start_pos: self.params.current_position,
+            target_pos,
+            start_time: now,
+        };
+
+        self.sizing = RhythmElementSizing::Changing {
+            start_radius: self.params.current_radius,
+            target_radius: 1.0,
+            start_time: now,
+            duration: movement_duration,
+        }
     }
 
     pub fn wing_position(&self) -> Vec2 {
         self.params
             .min_position
             .lerp(self.params.max_position, self.params.slot.velocity)
+    }
+
+    pub fn wing_radius(&self) -> f32 {
+        (self.params.slot.length * (self.params.max_radius - self.params.min_radius))
+            + self.params.min_radius
     }
 
     /// Updates the element based on activation state. Called once per frame.
@@ -209,10 +258,33 @@ impl RhythmElement {
         }
     }
 
+    pub fn update_sizing(&mut self, now: Instant) {
+        if let RhythmElementSizing::Changing {
+            start_radius,
+            target_radius,
+            start_time,
+            duration,
+        } = self.sizing
+        {
+            let t = now.duration_since(start_time).as_secs_f32();
+
+            if t >= duration {
+                self.params.current_radius = target_radius;
+                self.sizing = RhythmElementSizing::Idle;
+            } else {
+                use nannou::ease::back::*;
+                let f = ease_out::<f32>;
+
+                self.params.current_radius =
+                    f(t, start_radius, target_radius - start_radius, duration);
+            }
+        }
+    }
+
     pub fn draw(&self, draw: &Draw) {
         draw.ellipse()
             .xy(self.params.current_position)
-            .radius(self.params.radius)
+            .radius(self.params.current_radius)
             .color(self.params.color);
     }
 }

@@ -202,11 +202,7 @@ impl RhythmFormation {
                     continue;
                 };
 
-                element.movement = RhythmElementMovement::Clearing {
-                    start_pos: element.params.current_position,
-                    target_pos: self.params.center,
-                    start_time: now,
-                };
+                element.set_clearing(self.params.center, CLEAR_ANIMATION_DURATION, now);
             }
         }
 
@@ -265,11 +261,7 @@ impl RhythmFormation {
         let target_pos = self.params.center;
 
         self.elements.values_mut().for_each(|element| {
-            element.movement = RhythmElementMovement::Clearing {
-                start_pos: element.params.current_position,
-                target_pos,
-                start_time: now,
-            }
+            element.set_clearing(target_pos, CLEAR_ANIMATION_DURATION, now);
         });
 
         self.state = RhythmFormationState::Clearing { start_time: now };
@@ -364,6 +356,7 @@ impl RhythmFormation {
         self.elements.values_mut().for_each(|element| {
             element.update_active(update_params, now);
             element.update_movement(now);
+            element.update_sizing(now);
         })
     }
 
@@ -387,9 +380,10 @@ impl RhythmFormation {
                 let progress =
                     ((now - start_time).as_secs_f32() / INIT_ANIMATION_DURATION).min(1.0);
 
-                self.elements
-                    .values_mut()
-                    .for_each(|element| element.update_movement(now));
+                self.elements.values_mut().for_each(|element| {
+                    element.update_movement(now);
+                    element.update_sizing(now);
+                });
 
                 if progress >= 1.0 {
                     self.state = RhythmFormationState::Active { start_time: now };
@@ -400,9 +394,10 @@ impl RhythmFormation {
                 let progress =
                     ((now - start_time).as_secs_f32() / CLEAR_ANIMATION_DURATION).min(1.0);
 
-                self.elements
-                    .values_mut()
-                    .for_each(|element| element.update_movement(now));
+                self.elements.values_mut().for_each(|element| {
+                    element.update_movement(now);
+                    element.update_sizing(now);
+                });
 
                 if progress >= 1.0 {
                     self.state = RhythmFormationState::Inactive;

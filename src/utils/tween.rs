@@ -136,7 +136,13 @@ pub fn interpolate_dimension(
 /// Helper function to use one of the easing functions with Vec2.
 /// - Pass in an easing function with type parameter bound to f32.
 /// - For example `ease_out::<f32>`
-pub fn ease_vec2<F: Fn(f32, f32, f32, f32) -> f32>(f: F, t: f32, start: Vec2, end: Vec2, d: f32) -> Vec2 {
+pub fn ease_vec2<F: Fn(f32, f32, f32, f32) -> f32>(
+    f: F,
+    t: f32,
+    start: Vec2,
+    end: Vec2,
+    d: f32,
+) -> Vec2 {
     let x = f(t, start.x, end.x - start.x, d);
     let y = f(t, start.y, end.y - start.y, d);
     vec2(x, y)

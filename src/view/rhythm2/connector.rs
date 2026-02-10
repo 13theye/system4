@@ -168,8 +168,8 @@ fn draw_connector(
 ) {
     let c1 = e1.params.current_position;
     let c2 = e2.params.current_position;
-    let r1 = e1.params.radius;
-    let r2 = e2.params.radius;
+    let r1 = e1.params.current_radius;
+    let r2 = e2.params.current_radius;
     let r_min = r1.min(r2);
     let r_max = r1.max(r2);
 
