@@ -34,7 +34,7 @@ const BEND_MARGIN: f32 = 0.175; // ~10 degrees
 const MIN_BEND_THETA: f32 = 0.35; // ~20 degrees
 
 // Debug visualization
-const SHOW_DEBUG_GEOMETRY: bool = true;
+const SHOW_DEBUG_GEOMETRY: bool = false;
 
 /// Bend information at a shared circle between two consecutive connectors.
 #[derive(Copy, Clone, Debug)]
@@ -248,6 +248,7 @@ fn draw_connector(
 }
 
 /// Compute Bezier curve points for one side of the connector.
+#[allow(clippy::too_many_arguments)]
 fn bezier_side_points(
     c1: Vec2,
     c2: Vec2,
@@ -285,25 +286,9 @@ fn bezier_side_points(
         tan2 = -tan2;
     }
 
-    // Detect sharp pinching: when tangent vectors point toward each other,
-    // the curves will form a point instead of a smooth C-shape.
-    // Negative dot product means they're facing each other.
-    let tan_dot = tan1.dot(tan2);
-
-    // If tangents converge sharply, extend the effective radius to push
-    // departure points outward, creating more room for smooth curves.
-    let radius_extension = if tan_dot < -0.3 {
-        // More negative = sharper convergence, need more extension
-        let sharpness = (-tan_dot - 0.3).min(0.7) / 0.7; // 0 to 1
-        let max_extension = (r1.min(r2) * 0.3).max(10.0);
-        sharpness * max_extension
-    } else {
-        0.0
-    };
-
-    // Tangent points: use extended radius to move points off circle surface
-    let p1 = c1 + (r1 + radius_extension) * rad_dir1;
-    let p2 = c2 + (r2 + radius_extension) * rad_dir2;
+    // Tangent points on circle surface
+    let p1 = c1 + r1 * rad_dir1;
+    let p2 = c2 + r2 * rad_dir2;
 
     // Control points — cap handle length so cp doesn't cross to the wrong
     // side of the center line (the line from c1 to c2 along `dir`).
@@ -359,7 +344,7 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 
 /// Draw debug visualization showing the Bezier construction.
 /// - Orange: Points where theta was reduced due to tight bends
-/// - Blue: Points where radius was extended to prevent sharp pinching
+#[allow(clippy::too_many_arguments)]
 fn draw_debug_info(
     draw: &Draw,
     c1: Vec2,
@@ -377,7 +362,6 @@ fn draw_debug_info(
 ) {
     let color_red = rgba(1.0, 0.0, 0.0, 0.8);
     let color_orange = rgba(1.0, 0.6, 0.0, 0.9);
-    let color_blue = rgba(0.3, 0.6, 1.0, 0.9);
     let color_green = rgba(0.0, 1.0, 0.0, 0.8);
     let color_yellow = rgba(1.0, 1.0, 0.0, 0.6);
     let color_cyan = rgba(0.0, 1.0, 1.0, 0.4);
@@ -407,27 +391,13 @@ fn draw_debug_info(
             tan2 = -tan2;
         }
 
-        // Check for radius extension
-        let tan_dot = tan1.dot(tan2);
-        let radius_extension = if tan_dot < -0.3 {
-            let sharpness = (-tan_dot - 0.3).min(0.7) / 0.7;
-            let max_extension = (r1.min(r2) * 0.3).max(10.0);
-            sharpness * max_extension
-        } else {
-            0.0
-        };
-
         // Original departure points (base theta, before bend adjustment)
         let p1_orig = c1 + r1 * (dir * theta.cos() + *side * theta.sin());
         let p2_orig = c2 + r2 * (-dir * theta.cos() + *side * theta.sin());
 
         // Departure points on circle surface (with bend-adjusted theta)
-        let p1_on_circle = c1 + r1 * rad_dir1;
-        let p2_on_circle = c2 + r2 * rad_dir2;
-
-        // Actual departure points (with radius extension)
-        let p1 = c1 + (r1 + radius_extension) * rad_dir1;
-        let p2 = c2 + (r2 + radius_extension) * rad_dir2;
+        let p1 = c1 + r1 * rad_dir1;
+        let p2 = c2 + r2 * rad_dir2;
 
         // Apply handle capping
         let chord = (p2 - p1).length();
@@ -464,7 +434,7 @@ fn draw_debug_info(
                 .stroke_color(color_orange);
             draw.line()
                 .start(p1_orig)
-                .end(p1_on_circle)
+                .end(p1)
                 .weight(2.0)
                 .color(color_orange);
         }
@@ -477,52 +447,19 @@ fn draw_debug_info(
                 .stroke_color(color_orange);
             draw.line()
                 .start(p2_orig)
-                .end(p2_on_circle)
+                .end(p2)
                 .weight(2.0)
                 .color(color_orange);
         }
 
-        // --- Radius extension indicators (blue) ---
-        if radius_extension > 0.1 {
-            // Show circle surface position
-            draw.ellipse()
-                .xy(p1_on_circle)
-                .radius(5.0)
-                .no_fill()
-                .stroke_weight(1.5)
-                .stroke_color(color_blue);
-            draw.ellipse()
-                .xy(p2_on_circle)
-                .radius(5.0)
-                .no_fill()
-                .stroke_weight(1.5)
-                .stroke_color(color_blue);
-
-            // Show extension line outward
-            draw.line()
-                .start(p1_on_circle)
-                .end(p1)
-                .weight(2.0)
-                .color(color_blue);
-            draw.line()
-                .start(p2_on_circle)
-                .end(p2)
-                .weight(2.0)
-                .color(color_blue);
-        }
-
         // --- Tangent departure points ---
-        // Color: red (normal), orange (bend-adjusted), blue (radius-extended)
-        let p1_color = if radius_extension > 0.1 {
-            color_blue
-        } else if p1_was_adjusted {
+        // Color: red (normal), orange (bend-adjusted)
+        let p1_color = if p1_was_adjusted {
             color_orange
         } else {
             color_red
         };
-        let p2_color = if radius_extension > 0.1 {
-            color_blue
-        } else if p2_was_adjusted {
+        let p2_color = if p2_was_adjusted {
             color_orange
         } else {
             color_red

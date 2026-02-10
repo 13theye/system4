@@ -1,4 +1,5 @@
 use nannou::prelude::*;
+use rand::rngs::ThreadRng;
 use std::{collections::HashMap, time::Instant};
 
 use super::{
@@ -42,8 +43,8 @@ impl Default for RhythmFormationParams {
     fn default() -> Self {
         Self {
             center: Vec2::new(0.0, 0.0),
-            min_radius: 400.0,
-            max_radius: 600.0,
+            min_radius: MIN_FORMATION_RADIUS,
+            max_radius: MAX_FORMATION_RADIUS,
         }
     }
 }
@@ -109,6 +110,8 @@ impl RhythmFormation {
 
         let initial_position = vec2(0.0, 0.0);
 
+        let mut rng = ThreadRng::default();
+
         // Iterate through the positions and create elements for each.
         formation_positions
             .iter()
@@ -120,15 +123,19 @@ impl RhythmFormation {
                     formation_params.max_radius,
                 );
                 let slot_params = rhythm_params.slot_params[*i];
+
+                let movement_duration = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+
                 let mut element = RhythmElement::new(
                     initial_position,
                     *formation_position,
                     wing_position,
+                    movement_duration,
                     slot_params,
                     now,
                 );
                 if rhythm_params.wings.contains(i) {
-                    element.set_is_wing(now);
+                    element.set_is_wing(movement_duration, now);
                 }
                 element_map.insert(*i, element);
             });
@@ -159,6 +166,8 @@ impl RhythmFormation {
         // Update capacity
         self.capacity = new_capacity;
 
+        let mut rng = ThreadRng::default();
+
         // Add new elements
         if new_capacity > old_capacity {
             let initial_position = vec2(0.0, 0.0);
@@ -174,12 +183,15 @@ impl RhythmFormation {
                     self.params.max_radius,
                 );
                 let slot_params = rhythm_params.slot_params[i];
+                let movement_duration: f32 = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+
                 self.elements.insert(
                     i,
                     RhythmElement::new(
                         initial_position,
                         *formation_position,
                         wing_position,
+                        movement_duration,
                         slot_params,
                         now,
                     ),
@@ -214,10 +226,13 @@ impl RhythmFormation {
             );
             element.params.formation_position = *new_position;
             element.params.wing_position = wing_position;
+            let movement_duration: f32 = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+
             element.movement = RhythmElementMovement::Moving {
                 start_pos: element.params.current_position,
                 target_pos: *new_position,
                 start_time: now,
+                duration: movement_duration,
             };
         }
 
@@ -228,9 +243,13 @@ impl RhythmFormation {
                 return;
             }
             if rhythm_params.wings.contains(i) {
-                element.set_is_wing(now);
+                let movement_duration: f32 = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+
+                element.set_is_wing(movement_duration, now);
             } else {
-                element.set_is_not_wing(now);
+                let movement_duration: f32 = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+
+                element.set_is_not_wing(movement_duration, now);
             }
         });
 
@@ -337,7 +356,7 @@ impl RhythmFormation {
             RhythmFormationState::Initializing { start_time }
             | RhythmFormationState::Reinitializing { start_time } => {
                 let progress =
-                    ((now - start_time).as_secs_f32() / INIT_ANIMATION_DURATION_SECS).min(1.0);
+                    ((now - start_time).as_secs_f32() / INIT_ANIMATION_DURATION).min(1.0);
 
                 self.elements
                     .values_mut()
@@ -350,7 +369,7 @@ impl RhythmFormation {
 
             RhythmFormationState::Clearing { start_time } => {
                 let progress =
-                    ((now - start_time).as_secs_f32() / CLEAR_ANIMATION_DURATION_SECS).min(1.0);
+                    ((now - start_time).as_secs_f32() / CLEAR_ANIMATION_DURATION).min(1.0);
 
                 self.elements
                     .values_mut()

@@ -1,11 +1,7 @@
 use nannou::prelude::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use crate::{
-    groups::{Rhythm, RhythmParams, RhythmSlotParams},
-    utils::tween,
-    view::rhythm::RhythmViewUpdateParams,
-};
+use crate::{groups::RhythmSlotParams, utils::tween, view::rhythm::RhythmViewUpdateParams};
 
 use super::animation::*;
 
@@ -16,6 +12,7 @@ pub enum RhythmElementMovement {
         start_pos: Vec2,
         target_pos: Vec2,
         start_time: Instant,
+        duration: f32,
     },
     Clearing {
         start_pos: Vec2,
@@ -66,7 +63,7 @@ impl Default for RhythmElementParams {
             wing_position: vec2(0.0, 0.0),
             radius: MIN_ELEMENT_RADIUS,
             slot: RhythmSlotParams::default(),
-            color: rgba(0.247, 0.349, 0.353, 1.0),
+            color: rgba(0.247, 0.349, 0.353, 0.5),
             gradient_color_1: rgba(0.847, 0.137, 0.161, 1.0),
             gradient_color_2: rgba(0.486, 0.706, 0.31, 1.0),
         }
@@ -78,6 +75,7 @@ impl RhythmElement {
         initial_position: Vec2,
         formation_position: Vec2,
         wing_position: Vec2,
+        movement_duration: f32,
         slot_params: RhythmSlotParams,
         now: Instant,
     ) -> Self {
@@ -96,6 +94,7 @@ impl RhythmElement {
                 start_pos: initial_position,
                 target_pos: formation_position,
                 start_time: now,
+                duration: movement_duration,
             },
             activation: RhythmElementActivation::Idle,
         }
@@ -111,7 +110,7 @@ impl RhythmElement {
     }
 
     /// Mark the element as a wing & set corresponding visual parameters & position
-    pub fn set_is_wing(&mut self, now: Instant) {
+    pub fn set_is_wing(&mut self, movement_duration: f32, now: Instant) {
         self.is_wing = true;
         self.params.radius = MIN_ELEMENT_RADIUS
             + self.params.slot.length * (MAX_ELEMENT_RADIUS - MIN_ELEMENT_RADIUS);
@@ -120,10 +119,11 @@ impl RhythmElement {
             start_pos: self.params.current_position,
             target_pos: self.params.wing_position,
             start_time: now,
+            duration: movement_duration,
         };
     }
 
-    pub fn set_is_not_wing(&mut self, now: Instant) {
+    pub fn set_is_not_wing(&mut self, movement_duration: f32, now: Instant) {
         self.is_wing = false;
         self.params.radius = MIN_ELEMENT_RADIUS;
 
@@ -131,6 +131,7 @@ impl RhythmElement {
             start_pos: self.params.current_position,
             target_pos: self.params.formation_position,
             start_time: now,
+            duration: movement_duration,
         };
     }
 
@@ -141,52 +142,13 @@ impl RhythmElement {
                 let animation_length =
                     (60.0 / update_params.tempo) as f32 * self.params.slot.length;
 
-                //self.update_wing_animation(start_time, max_position, animation_length, now);
+                self.update_wing_animation(start_time, animation_length, now);
             }
         }
     }
 
-    fn update_wing_animation(
-        &mut self,
-        start_time: Instant,
-        max_position: Vec2,
-        animation_length: f32,
-        now: Instant,
-    ) {
-        let t = now.duration_since(start_time).as_secs_f32();
-
-        if t >= animation_length {
-            self.params.current_position = self.params.formation_position;
-            self.activation = RhythmElementActivation::Idle;
-            return;
-        }
-
-        let in_duration = animation_length * ANIMATION_IN_FRACTION;
-
-        if t < in_duration {
-            // In phase: snap out from formation to max position
-            use nannou::ease::cubic::*;
-            let f = ease_out::<f32>;
-            self.params.current_position = tween::ease_vec2(
-                f,
-                t,
-                self.params.formation_position,
-                max_position,
-                in_duration,
-            );
-        } else {
-            // Out phase: ease back from max position to formation
-            use nannou::ease::elastic::*;
-            let f = ease_out::<f32>;
-            self.params.current_position = tween::ease_vec2(
-                f,
-                t - in_duration,
-                max_position,
-                self.params.formation_position,
-                animation_length - in_duration,
-            );
-        }
-    }
+    /// Creates a gradient animation that s\
+    fn update_wing_animation(&mut self, start_time: Instant, animation_length: f32, now: Instant) {}
 
     /// Called by RhythmFormation irrespective of there being an active rhythm.
     /// This allows for elements to finish animations even if a rhythm is not playing.
@@ -197,19 +159,19 @@ impl RhythmElement {
                 start_pos,
                 target_pos,
                 start_time,
+                duration,
             } => {
                 let t = now.duration_since(start_time).as_secs_f32();
 
-                if t >= INIT_ANIMATION_DURATION_SECS {
+                if t >= duration {
                     self.params.current_position = target_pos;
                     self.movement = RhythmElementMovement::Idle;
                 } else {
-                    // Use cubic ease-out for smooth deceleration
-                    use nannou::ease::cubic;
-                    let f = cubic::ease_out::<f32>;
+                    use nannou::ease::back::*;
+                    let f = ease_out::<f32>;
 
                     self.params.current_position =
-                        tween::ease_vec2(f, t, start_pos, target_pos, INIT_ANIMATION_DURATION_SECS);
+                        tween::ease_vec2(f, t, start_pos, target_pos, duration);
                 }
             }
             RhythmElementMovement::Clearing {
@@ -219,7 +181,7 @@ impl RhythmElement {
             } => {
                 let t = now.duration_since(start_time).as_secs_f32();
 
-                if t >= CLEAR_ANIMATION_DURATION_SECS {
+                if t >= CLEAR_ANIMATION_DURATION {
                     self.params.current_position = target_pos;
                     self.movement = RhythmElementMovement::Idle;
                     self.activation = RhythmElementActivation::ToClear;
@@ -228,13 +190,8 @@ impl RhythmElement {
                     use nannou::ease::cubic;
                     let f = cubic::ease_out::<f32>;
 
-                    self.params.current_position = tween::ease_vec2(
-                        f,
-                        t,
-                        start_pos,
-                        target_pos,
-                        CLEAR_ANIMATION_DURATION_SECS,
-                    );
+                    self.params.current_position =
+                        tween::ease_vec2(f, t, start_pos, target_pos, CLEAR_ANIMATION_DURATION);
                 }
             }
         }
