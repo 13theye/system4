@@ -102,7 +102,7 @@ impl RhythmFormation {
         let mut element_map: ElementMap = HashMap::new();
 
         // Calculate element positions
-        let formation_positions = Self::calculate_formation_positions(
+        let min_positions = Self::calculate_formation_positions(
             side,
             rhythm_params.capacity,
             formation_params.min_radius,
@@ -113,32 +113,30 @@ impl RhythmFormation {
         let mut rng = ThreadRng::default();
 
         // Iterate through the positions and create elements for each.
-        formation_positions
-            .iter()
-            .for_each(|(i, formation_position)| {
-                let wing_position = Self::calculate_slot_position(
-                    *i,
-                    side,
-                    rhythm_params.capacity,
-                    formation_params.max_radius,
-                );
-                let slot_params = rhythm_params.slot_params[*i];
+        min_positions.iter().for_each(|(i, min_position)| {
+            let slot_params = rhythm_params.slot_params[*i];
+            let max_position = Self::calculate_formation_position(
+                *i,
+                side,
+                rhythm_params.capacity,
+                formation_params.max_radius,
+            );
 
-                let movement_duration = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+            let movement_duration = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
 
-                let mut element = RhythmElement::new(
-                    initial_position,
-                    *formation_position,
-                    wing_position,
-                    movement_duration,
-                    slot_params,
-                    now,
-                );
-                if rhythm_params.wings.contains(i) {
-                    element.set_is_wing(movement_duration, now);
-                }
-                element_map.insert(*i, element);
-            });
+            let mut element = RhythmElement::new(
+                initial_position,
+                *min_position,
+                max_position,
+                movement_duration,
+                slot_params,
+                now,
+            );
+            if rhythm_params.wings.contains(i) {
+                element.set_is_wing(movement_duration, now);
+            }
+            element_map.insert(*i, element);
+        });
 
         element_map
     }
@@ -157,7 +155,7 @@ impl RhythmFormation {
         let (new_capacity, old_capacity) = (rhythm_params.capacity, self.capacity);
 
         // Calculate new target positions for the new capacity
-        let new_formation_positions = Self::calculate_formation_positions(
+        let new_min_positions = Self::calculate_formation_positions(
             self.side,
             rhythm_params.capacity,
             self.params.min_radius,
@@ -173,10 +171,10 @@ impl RhythmFormation {
             let initial_position = vec2(0.0, 0.0);
 
             for i in old_capacity..new_capacity {
-                let Some(formation_position) = new_formation_positions.get(&i) else {
+                let Some(min_position) = new_min_positions.get(&i) else {
                     continue;
                 };
-                let wing_position = Self::calculate_slot_position(
+                let max_position = Self::calculate_formation_position(
                     i,
                     self.side,
                     rhythm_params.capacity,
@@ -189,8 +187,8 @@ impl RhythmFormation {
                     i,
                     RhythmElement::new(
                         initial_position,
-                        *formation_position,
-                        wing_position,
+                        *min_position,
+                        max_position,
                         movement_duration,
                         slot_params,
                         now,
@@ -214,18 +212,23 @@ impl RhythmFormation {
 
         // Move all elements to the new positions and update formation_position and wing_position
         for (i, element) in self.elements.iter_mut() {
-            let Some(new_position) = new_formation_positions.get(i) else {
+            let Some(new_position) = new_min_positions.get(i) else {
                 // Elements that don't have a new position were marked for clearing above, and are skipped here.
                 continue;
             };
-            let wing_position = Self::calculate_slot_position(
+
+            // Update slot params
+            element.params.slot = rhythm_params.slot_params[*i];
+
+            let max_position = Self::calculate_formation_position(
                 *i,
                 self.side,
                 rhythm_params.capacity,
                 self.params.max_radius,
             );
-            element.params.formation_position = *new_position;
-            element.params.wing_position = wing_position;
+            element.params.min_position = *new_position;
+            element.params.max_position = max_position;
+
             let movement_duration: f32 = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
 
             element.movement = RhythmElementMovement::Moving {
@@ -272,6 +275,31 @@ impl RhythmFormation {
         self.state = RhythmFormationState::Clearing { start_time: now };
     }
 
+    /// Update RhythmElements' positions and sizes based on updated RhythmParams
+    /// This should be called when slot parameters (length, velocity, cutoff) are modified
+    pub fn update_element_params(&mut self, rhythm_params: &RhythmParams, now: Instant) {
+        let mut rng = ThreadRng::default();
+
+        for (i, element) in self.elements.iter_mut() {
+            // Skip elements beyond capacity
+            if *i >= rhythm_params.capacity {
+                continue;
+            }
+
+            // Update slot params from RhythmParams
+            if let Some(new_slot_params) = rhythm_params.slot_params.get(*i) {
+                element.params.slot = *new_slot_params;
+            }
+
+            if element.is_wing {
+                // Move to updated wing position
+                let movement_duration =
+                    adjusted_duration(WINGS_REINIT_ANIMATION_DURATION, &mut rng);
+                element.set_is_wing(movement_duration, now);
+            }
+        }
+    }
+
     /// Helper function to calculate all center positions of a rhythm along the formation semicircle of a given radius
     fn calculate_formation_positions(
         side: RhythmFormationSide,
@@ -280,14 +308,14 @@ impl RhythmFormation {
     ) -> HashMap<usize, Vec2> {
         let mut formation_positions = HashMap::new();
         for i in 0..capacity {
-            let pos = Self::calculate_slot_position(i, side, capacity, radius);
+            let pos = Self::calculate_formation_position(i, side, capacity, radius);
             formation_positions.insert(i, pos);
         }
         formation_positions
     }
 
-    /// Helper function to calculate the center position of a slots along the formation semicircle of a given radius
-    fn calculate_slot_position(
+    /// Helper function to calculate the center position of a slot along the formation semicircle of a given radius
+    fn calculate_formation_position(
         slot: usize,
         side: RhythmFormationSide,
         capacity: usize,
@@ -335,6 +363,7 @@ impl RhythmFormation {
 
         self.elements.values_mut().for_each(|element| {
             element.update_active(update_params, now);
+            element.update_movement(now);
         })
     }
 

@@ -32,9 +32,9 @@ pub enum RhythmElementActivation {
 pub struct RhythmElementParams {
     pub current_position: Vec2,
     // The position where the element belongs in formation when not a wing
-    pub formation_position: Vec2,
-    // The position where the element belongs in formation when a wing
-    pub wing_position: Vec2,
+    pub min_position: Vec2,
+    // The position where the element is when velocity = 1.0
+    pub max_position: Vec2,
     // The current radius of the element
     pub radius: f32,
     // The rhythm parameters represented by this element
@@ -59,8 +59,8 @@ impl Default for RhythmElementParams {
     fn default() -> Self {
         Self {
             current_position: vec2(0.0, 0.0),
-            formation_position: vec2(0.0, 0.0),
-            wing_position: vec2(0.0, 0.0),
+            min_position: vec2(0.0, 0.0),
+            max_position: vec2(0.0, 0.0),
             radius: MIN_ELEMENT_RADIUS,
             slot: RhythmSlotParams::default(),
             color: rgba(0.494, 0.698, 0.706, 1.0),
@@ -73,16 +73,16 @@ impl Default for RhythmElementParams {
 impl RhythmElement {
     pub fn new(
         initial_position: Vec2,
-        formation_position: Vec2,
-        wing_position: Vec2,
+        min_position: Vec2,
+        max_position: Vec2,
         movement_duration: f32,
         slot_params: RhythmSlotParams,
         now: Instant,
     ) -> Self {
         let params = RhythmElementParams {
             current_position: initial_position,
-            formation_position,
-            wing_position,
+            min_position,
+            max_position,
             slot: slot_params,
             ..Default::default()
         };
@@ -92,7 +92,7 @@ impl RhythmElement {
             params,
             movement: RhythmElementMovement::Moving {
                 start_pos: initial_position,
-                target_pos: formation_position,
+                target_pos: min_position,
                 start_time: now,
                 duration: movement_duration,
             },
@@ -117,10 +117,16 @@ impl RhythmElement {
 
         self.movement = RhythmElementMovement::Moving {
             start_pos: self.params.current_position,
-            target_pos: self.params.wing_position,
+            target_pos: self.wing_position(),
             start_time: now,
             duration: movement_duration,
         };
+
+        println!(
+            "Moving from {} to {}",
+            self.params.current_position,
+            self.wing_position()
+        );
     }
 
     pub fn set_is_not_wing(&mut self, movement_duration: f32, now: Instant) {
@@ -129,10 +135,16 @@ impl RhythmElement {
 
         self.movement = RhythmElementMovement::Moving {
             start_pos: self.params.current_position,
-            target_pos: self.params.formation_position,
+            target_pos: self.params.min_position,
             start_time: now,
             duration: movement_duration,
         };
+    }
+
+    pub fn wing_position(&self) -> Vec2 {
+        self.params
+            .min_position
+            .lerp(self.params.max_position, self.params.slot.velocity)
     }
 
     /// Updates the element based on activation state. Called once per frame.
@@ -147,7 +159,7 @@ impl RhythmElement {
         }
     }
 
-    /// Creates a gradient animation that s\
+    /// Creates a gradient animation
     fn update_wing_animation(&mut self, start_time: Instant, animation_length: f32, now: Instant) {}
 
     /// Called by RhythmFormation irrespective of there being an active rhythm.

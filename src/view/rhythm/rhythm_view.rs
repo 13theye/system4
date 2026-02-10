@@ -55,6 +55,18 @@ impl RhythmView {
         formation.clear_rhythm(now);
     }
 
+    pub fn update_formation_params(
+        &mut self,
+        voice_id: VoiceId,
+        rhythm_params: &RhythmParams,
+        now: Instant,
+    ) {
+        let Some(formation) = self.formations.get_mut(&voice_id) else {
+            return;
+        };
+        formation.update_element_params(rhythm_params, now);
+    }
+
     pub fn update_voice(
         &mut self,
         voice_id: &VoiceId,

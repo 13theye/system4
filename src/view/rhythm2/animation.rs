@@ -5,12 +5,12 @@
 
 use rand::{rngs::ThreadRng, Rng};
 
-// Number of seconds for the initialization animation
+// Initialization animation duration in secs
 pub(super) const INIT_ANIMATION_DURATION: f32 = 3.0;
-// Number of seconds for the clear animation
+// Clear animation duration in secs
 pub(super) const CLEAR_ANIMATION_DURATION: f32 = 0.8;
-// The fraction of the animation that is the ramp up
-pub(super) const ANIMATION_IN_FRAC: f32 = 0.3;
+// Wings reinit animation duration in secs
+pub(super) const WINGS_REINIT_ANIMATION_DURATION: f32 = 1.3;
 // The factor by which the animation speed can vary
 pub(super) const ANIMATION_VARIATION: f32 = 0.2;
 
