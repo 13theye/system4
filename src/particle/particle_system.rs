@@ -14,7 +14,6 @@ use crate::{
     forces::{field::ForceFields, wind_circle::WindCircle},
     groups::{Voice, VoiceId},
     particle::{to_segment_gpu, ParticleCore, ParticleFeedback},
-    utils::tween,
 };
 
 use super::constants::*;

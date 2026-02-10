@@ -1,7 +1,7 @@
 use nannou::prelude::*;
 use std::time::Instant;
 
-use crate::{groups::RhythmSlotParams, utils::tween, view::rhythm::RhythmViewUpdateParams};
+use crate::{groups::RhythmSlotParams, utils::tween};
 
 use super::animation::*;
 

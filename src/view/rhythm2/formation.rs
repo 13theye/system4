@@ -5,10 +5,10 @@ use std::{collections::HashMap, time::Instant};
 use super::{
     activation::ActivationElement,
     animation::*,
-    element::{RhythmElement, RhythmElementClearState, RhythmElementMovement},
+    element::{RhythmElement, RhythmElementMovement},
 };
 use crate::{
-    groups::{Rhythm, RhythmParams, VoiceId},
+    groups::{RhythmParams, VoiceId},
     view::rhythm::RhythmViewUpdateParams,
 };
 
