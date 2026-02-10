@@ -386,7 +386,7 @@ impl RhythmFormation {
         }
     }
 
-    pub fn draw(&self, draw: &Draw, show_debug_geometry: bool) {
+    pub fn draw_elements(&self, draw: &Draw, show_debug_geometry: bool) {
         // Draw connectors first so elements are layered on top
         super::connector::draw_connectors(draw, &self.elements, self.capacity, show_debug_geometry);
 

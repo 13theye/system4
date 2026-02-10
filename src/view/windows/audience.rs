@@ -162,6 +162,13 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
+        // Draw rhythm formations to rhythm_alpha texture
+        model
+            .rhythm_view
+            .draw_alpha_elements(&rendering.draw, model.ui_state.show_debug_geometry);
+
+        rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_alpha");
+
         // Unified text overlay (new system)
         let now = Instant::now();
         {
@@ -176,14 +183,17 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             overlay.update_and_draw_all(&rendering.draw, now);
         }
 
-        // Draw all rhythm views
-        model.rhythm_view.draw_all(&rendering.draw, model.ui_state.show_debug_geometry);
-
-        // Encode Nannou Draw (rhythm views, text overlay) to terminal texture
+        // Encode text overlay to terminal texture
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
 
-        // Final composite (straight alpha terminal over premultiplied post-processed)
-        // The composite shader handles straight→premultiplied conversion for terminal
+        // Composite rhythm formations onto particles (with alpha 0.5)
+        // particles → rhythm_voice1 (α=0.5) → rhythm_voice2 (α=0.5)
+        if let Err(e) = rendering.execute_named_pipeline("rhythm composite", device, &mut encoder) {
+            eprintln!("Error executing rhythm composite pipeline: {}", e);
+        }
+
+        // Final composite: add terminal on top (with full opacity)
+        // (particles + rhythms) → terminal (α=1.0)
         if let Err(e) = rendering.execute_named_pipeline("final composite", device, &mut encoder) {
             eprintln!("Error executing final composite pipeline: {}", e);
         }

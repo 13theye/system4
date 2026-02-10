@@ -224,7 +224,7 @@ fn draw_connector(
     let mut points: Vec<Vec2> = side_a.clone();
     points.extend(side_b.iter().rev());
 
-    // Draw the connector polygon
+    // Draw the connector polygon with full opacity - alpha will be applied during composite
     draw.polygon().points(points).color(e1.params.color);
 
     // Debug drawing

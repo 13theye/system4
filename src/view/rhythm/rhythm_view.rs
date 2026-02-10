@@ -73,9 +73,9 @@ impl RhythmView {
         }
     }
 
-    pub fn draw_all(&self, draw: &Draw, show_debug_geometry: bool) {
-        for formation in self.formations.values() {
-            formation.draw(draw, show_debug_geometry);
-        }
+    pub fn draw_alpha_elements(&self, draw: &Draw, show_debug_geometry: bool) {
+        self.formations.values().for_each(|formation| {
+            formation.draw_elements(draw, show_debug_geometry);
+        });
     }
 }

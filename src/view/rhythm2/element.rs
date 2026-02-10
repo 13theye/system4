@@ -63,7 +63,7 @@ impl Default for RhythmElementParams {
             wing_position: vec2(0.0, 0.0),
             radius: MIN_ELEMENT_RADIUS,
             slot: RhythmSlotParams::default(),
-            color: rgba(0.247, 0.349, 0.353, 0.5),
+            color: rgba(0.494, 0.698, 0.706, 1.0),
             gradient_color_1: rgba(0.847, 0.137, 0.161, 1.0),
             gradient_color_2: rgba(0.486, 0.706, 0.31, 1.0),
         }
