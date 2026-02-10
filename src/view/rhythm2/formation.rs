@@ -3,11 +3,12 @@ use rand::rngs::ThreadRng;
 use std::{collections::HashMap, time::Instant};
 
 use super::{
+    activation::ActivationElement,
     animation::*,
-    element::{RhythmElement, RhythmElementActivation, RhythmElementMovement},
+    element::{RhythmElement, RhythmElementClearState, RhythmElementMovement},
 };
 use crate::{
-    groups::{RhythmParams, VoiceId},
+    groups::{Rhythm, RhythmParams, VoiceId},
     view::rhythm::RhythmViewUpdateParams,
 };
 
@@ -54,6 +55,11 @@ impl Default for RhythmFormationParams {
 /// - Value is the `RhythmElement`
 pub type ElementMap = HashMap<usize, RhythmElement>;
 
+/// A `HashMap` of `RhythmElement`s where:
+/// - Key is the rhythm slot index.
+/// - Value is the `RhythmElementActivation`
+pub type ActivationMap = HashMap<usize, ActivationElement>;
+
 #[derive(Debug)]
 pub struct RhythmFormation {
     pub voice_id: VoiceId,
@@ -61,6 +67,7 @@ pub struct RhythmFormation {
     pub params: RhythmFormationParams,
     pub capacity: usize,
     pub elements: ElementMap,
+    pub activations: ActivationMap,
     pub state: RhythmFormationState,
 }
 
@@ -88,6 +95,7 @@ impl RhythmFormation {
             params,
             capacity: rhythm_params.capacity,
             elements,
+            activations: HashMap::new(),
             state: RhythmFormationState::Initializing { start_time: now },
         })
     }
@@ -330,33 +338,36 @@ impl RhythmFormation {
         vec2(x, y)
     }
 
-    pub fn activate_element(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
-        if matches!(self.state, RhythmFormationState::Inactive) {
-            return;
-        }
-
-        let Some(slot) = update_params.current_slot else {
-            return;
-        };
-
-        let Some(element) = self.elements.get_mut(&slot) else {
-            eprintln!(
-                "RhythmFormation: Trying to activate an element that doesn't exist for slot {}",
-                slot
-            );
-            return;
-        };
-
-        element.activate(now);
-    }
-
     pub fn update(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
-        self.activate_element(update_params, now);
-
-        self.elements.values_mut().for_each(|element| {
-            element.update_active(update_params, now);
+        // Update elements
+        self.elements.iter_mut().for_each(|(i, element)| {
             element.update_animations(now);
-        })
+
+            if matches!(self.state, RhythmFormationState::Inactive) {
+                return;
+            }
+
+            let Some(active_slot) = update_params.current_slot else {
+                return;
+            };
+
+            if *i == active_slot && element.is_wing {
+                let activation = ActivationElement::new(update_params.tempo, &element.params, now);
+                self.activations.insert(active_slot, activation);
+            }
+        });
+
+        // Update activations
+        let mut to_clear: Vec<usize> = Vec::with_capacity(self.activations.len());
+        self.activations.iter_mut().for_each(|(i, activation)| {
+            activation.update(now);
+            if activation.is_done() {
+                to_clear.push(*i);
+            }
+        });
+        to_clear.iter().for_each(|i| {
+            self.activations.remove(i);
+        });
     }
 
     /// Update animations when RhythmFormation's parent rhythm doesn't exist because of a clearing or
@@ -365,7 +376,7 @@ impl RhythmFormation {
         // Clear any elements marked for removal
         let mut to_clear: Vec<usize> = Vec::with_capacity(self.elements.len());
         self.elements.iter().for_each(|(i, element)| {
-            if matches!(element.activation, RhythmElementActivation::ToClear) {
+            if element.is_ready_to_clear() {
                 to_clear.push(*i);
             }
         });
@@ -416,5 +427,11 @@ impl RhythmFormation {
         for element in self.elements.values() {
             element.draw(draw);
         }
+    }
+
+    pub fn draw_activations(&self, draw: &Draw) {
+        self.activations.iter().for_each(|(i, activation)| {
+            activation.draw_big_circle(draw, &self.elements[i].params);
+        });
     }
 }

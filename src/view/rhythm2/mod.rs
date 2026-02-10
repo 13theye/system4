@@ -1,3 +1,4 @@
+mod activation;
 mod animation;
 mod connector;
 mod element;

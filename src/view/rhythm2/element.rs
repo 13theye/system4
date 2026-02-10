@@ -33,9 +33,8 @@ pub enum RhythmElementSizing {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum RhythmElementActivation {
-    Idle,
-    Active { start_time: Instant },
+pub enum RhythmElementClearState {
+    Active,
     ToClear,
 }
 
@@ -68,7 +67,7 @@ pub struct RhythmElement {
     pub params: RhythmElementParams,
     pub movement: RhythmElementMovement,
     pub sizing: RhythmElementSizing,
-    pub activation: RhythmElementActivation,
+    pub clear_state: RhythmElementClearState,
 }
 
 impl Default for RhythmElementParams {
@@ -81,8 +80,11 @@ impl Default for RhythmElementParams {
             min_radius: MIN_ELEMENT_RADIUS,
             max_radius: MAX_ELEMENT_RADIUS,
             slot: RhythmSlotParams::default(),
+            // Dark teal
             color: rgba(0.494, 0.698, 0.706, 1.0),
+            // Red
             gradient_color_1: rgba(0.847, 0.137, 0.161, 1.0),
+            // Light teal
             gradient_color_2: rgba(0.486, 0.706, 0.31, 1.0),
         }
     }
@@ -120,17 +122,8 @@ impl RhythmElement {
                 start_time: now,
                 duration: movement_duration,
             },
-            activation: RhythmElementActivation::Idle,
+            clear_state: RhythmElementClearState::Active,
         }
-    }
-
-    /// Called by an active `RhythmFormation` to update the `RhythmElement`
-    /// while a rhythm is playing.
-    pub fn activate(&mut self, now: Instant) {
-        if !self.is_wing {
-            return;
-        }
-        self.activation = RhythmElementActivation::Active { start_time: now };
     }
 
     /// Mark the element as a wing & set corresponding visual parameters & position
@@ -185,6 +178,10 @@ impl RhythmElement {
         }
     }
 
+    pub fn is_ready_to_clear(&self) -> bool {
+        matches!(self.clear_state, RhythmElementClearState::ToClear)
+    }
+
     pub fn wing_position(&self) -> Vec2 {
         self.params
             .min_position
@@ -195,21 +192,6 @@ impl RhythmElement {
         (self.params.slot.length * (self.params.max_radius - self.params.min_radius))
             + self.params.min_radius
     }
-
-    /// Updates the element based on activation state. Called once per frame.
-    pub fn update_active(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
-        if let RhythmElementActivation::Active { start_time } = self.activation {
-            if self.is_wing {
-                let animation_length =
-                    (60.0 / update_params.tempo) as f32 * self.params.slot.length;
-
-                self.update_wing_animation(start_time, animation_length, now);
-            }
-        }
-    }
-
-    /// Creates a gradient animation
-    fn update_wing_animation(&mut self, start_time: Instant, animation_length: f32, now: Instant) {}
 
     /// Called by RhythmFormation irrespective of there being an active rhythm.
     /// This allows for elements to finish animations even if a rhythm is not playing.
@@ -250,7 +232,7 @@ impl RhythmElement {
                 if t >= CLEAR_ANIMATION_DURATION {
                     self.params.current_position = target_pos;
                     self.movement = RhythmElementMovement::Idle;
-                    self.activation = RhythmElementActivation::ToClear;
+                    self.clear_state = RhythmElementClearState::ToClear;
                 } else {
                     // Use cubic ease-out for smooth deceleration
                     use nannou::ease::cubic;

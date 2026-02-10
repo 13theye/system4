@@ -90,4 +90,10 @@ impl RhythmView {
             formation.draw_elements(draw, show_debug_geometry);
         });
     }
+
+    pub fn draw_activations(&self, draw: &Draw) {
+        self.formations.values().for_each(|formation| {
+            formation.draw_activations(draw);
+        });
+    }
 }

@@ -169,6 +169,9 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
 
         rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_alpha");
 
+        model.rhythm_view.draw_activations(&rendering.draw);
+        rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_activations");
+
         // Unified text overlay (new system)
         let now = Instant::now();
         {
@@ -187,13 +190,19 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
 
         // Composite rhythm formations onto particles (with alpha 0.5)
-        // particles → rhythm_voice1 (α=0.5) → rhythm_voice2 (α=0.5)
+        // particles → rhythm_alpha (α=0.5)
         if let Err(e) = rendering.execute_named_pipeline("rhythm composite", device, &mut encoder) {
             eprintln!("Error executing rhythm composite pipeline: {}", e);
         }
 
+        // Add rhythm activations (should cover layers beneath, not blend)
+        // rhythm_composited → rhythm_activations
+        if let Err(e) = rendering.execute_named_pipeline("add activations", device, &mut encoder) {
+            eprintln!("Error executing add activations pipeline: {}", e);
+        }
+
         // Final composite: add terminal on top (with full opacity)
-        // (particles + rhythms) → terminal (α=1.0)
+        // rhythm_with_activations → terminal (α=1.0)
         if let Err(e) = rendering.execute_named_pipeline("final composite", device, &mut encoder) {
             eprintln!("Error executing final composite pipeline: {}", e);
         }

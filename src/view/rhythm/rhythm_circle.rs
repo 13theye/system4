@@ -341,6 +341,8 @@ impl RhythmElement for RhythmRect {
             )
         };
 
+        let elapsed = (now - self.last_active_instant).as_secs_f32();
+
         self.color = tween::interpolate_color(
             start_color,
             end_color,
@@ -349,8 +351,7 @@ impl RhythmElement for RhythmRect {
             DWELL_PERCENT,
             RAMP_CURVE_EXPONENT,
             FADE_CURVE_EXPONENT,
-            now,
-            self.last_active_instant,
+            elapsed,
         );
 
         // Get slot parameters for scaling
@@ -382,8 +383,7 @@ impl RhythmElement for RhythmRect {
             DWELL_PERCENT,
             RAMP_CURVE_EXPONENT,
             FADE_CURVE_EXPONENT,
-            now,
-            self.last_active_instant,
+            elapsed,
         );
 
         let height = tween::interpolate_dimension(
@@ -394,8 +394,7 @@ impl RhythmElement for RhythmRect {
             DWELL_PERCENT,
             RAMP_CURVE_EXPONENT,
             FADE_CURVE_EXPONENT,
-            now,
-            self.last_active_instant,
+            elapsed,
         );
 
         self.dims = Vec2::new(width, height);

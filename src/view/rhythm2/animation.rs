@@ -14,6 +14,9 @@ pub(super) const WINGS_REINIT_ANIMATION_DURATION: f32 = 1.3;
 // The factor by which the animation speed can vary
 pub(super) const ANIMATION_VARIATION: f32 = 0.2;
 
+// The percentage of a Activation rotation that a color change lasts
+pub(super) const COLOR_CHANGE_FRACTION: f32 = 0.2;
+
 // The minimum and maximum element radii in pixels
 pub(super) const MIN_ELEMENT_RADIUS: f32 = 50.0;
 pub(super) const MAX_ELEMENT_RADIUS: f32 = 120.0;

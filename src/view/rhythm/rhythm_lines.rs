@@ -94,6 +94,8 @@ impl RhythmFormation for RhythmLinesFormation {
             let wing_duration = ((update_params.subdivision.multiplier() / 2.0)
                 * (60.0 / update_params.tempo)) as f32;
 
+            let elapsed = (now - rect.last_update_instant).as_secs_f32();
+
             rect.color = tween::interpolate_color(
                 rgb(LINE_DEFAULT_R, LINE_DEFAULT_G, LINE_DEFAULT_B),
                 rgb(LINE_HIGH_R, LINE_HIGH_G, LINE_HIGH_B),
@@ -102,8 +104,7 @@ impl RhythmFormation for RhythmLinesFormation {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                now,
-                rect.last_update_instant,
+                elapsed,
             );
 
             // Get slot parameters for scaling
@@ -133,8 +134,7 @@ impl RhythmFormation for RhythmLinesFormation {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                now,
-                rect.last_update_instant,
+                elapsed,
             );
 
             let height = tween::interpolate_dimension(
@@ -145,8 +145,7 @@ impl RhythmFormation for RhythmLinesFormation {
                 DWELL_PERCENT,
                 RAMP_CURVE_EXPONENT,
                 FADE_CURVE_EXPONENT,
-                now,
-                rect.last_update_instant,
+                elapsed,
             );
 
             rect.dims = Vec2::new(width, height);

@@ -162,10 +162,11 @@ impl RenderState {
 
         // Rhythm formation textures (straight alpha)
         rendering.create_named_texture(device, "rhythm_alpha", hi_config);
-        rendering.create_named_texture(device, "rhythm_solid", hi_config);
+        rendering.create_named_texture(device, "rhythm_activations", hi_config);
 
-        // Intermediate texture for rhythm composite result
+        // Intermediate textures for rhythm composite results
         rendering.create_named_texture(device, "rhythm_composited", hi_config);
+        rendering.create_named_texture(device, "rhythm_with_activations", hi_config);
 
         // Particle textures - straight alpha from particle/segment shaders and Nannou Draw masks
         // Both particles and masks render to the same texture using standard alpha blending
@@ -267,12 +268,23 @@ impl RenderState {
             rendering.add_multi_pipeline("rhythm composite", effect);
         }
 
-        // Final composite overlay - add rhythm_solid & terminal on top with full opacity
-        // Layer: rhythm_composited (particles + rhythms with alpha) → rhythm_solid -> terminal (α=1.0)
-        // Input: rhythm_composited (premultiplied), rhythm_solid (straight alpha),terminal (straight alpha)
+        // Step 1: Composite rhythm_activations OVER rhythm_composited
+        // rhythm_activations should cover the layers beneath with full opacity
+        if let Ok(effect) = PipelineBuilder::new()
+            .name("Add rhythm activations")
+            .input_textures(&["rhythm_composited", "rhythm_activations"])
+            .output_texture("rhythm_with_activations")
+            .simple_over_composite(hi_config, 1.0) // Full opacity for activations
+            .build(device)
+        {
+            rendering.add_multi_pipeline("add activations", effect);
+        }
+
+        // Step 2: Composite terminal OVER the result
+        // Terminal should be drawn over everything with full opacity
         if let Ok(effect) = PipelineBuilder::new()
             .name("Final overlay composite")
-            .input_textures(&["rhythm_composited", "terminal"])
+            .input_textures(&["rhythm_with_activations", "terminal"])
             .simple_over_composite(hi_config, 1.0) // Terminal at full opacity
             .build(device)
         {
