@@ -81,11 +81,11 @@ impl Default for RhythmElementParams {
             max_radius: MAX_ELEMENT_RADIUS,
             slot: RhythmSlotParams::default(),
             // Dark teal
-            color: rgba(0.494, 0.698, 0.706, 1.0),
+            color: rgba(0.247, 0.349, 0.353, 1.0),
             // Red
             gradient_color_1: rgba(0.847, 0.137, 0.161, 1.0),
             // Light teal
-            gradient_color_2: rgba(0.486, 0.706, 0.31, 1.0),
+            gradient_color_2: rgba(0.486, 0.706, 0.702, 1.0),
         }
     }
 }

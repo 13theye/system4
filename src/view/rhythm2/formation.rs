@@ -352,7 +352,8 @@ impl RhythmFormation {
             };
 
             if *i == active_slot && element.is_wing {
-                let activation = ActivationElement::new(update_params.tempo, &element.params, now);
+                let activation =
+                    ActivationElement::new(update_params.tempo, &element.params, *i, now);
                 self.activations.insert(active_slot, activation);
             }
         });
@@ -431,7 +432,7 @@ impl RhythmFormation {
 
     pub fn draw_activations(&self, draw: &Draw) {
         self.activations.iter().for_each(|(i, activation)| {
-            activation.draw_big_circle(draw, &self.elements[i].params);
+            activation.draw(draw, &self.elements[i].params);
         });
     }
 }

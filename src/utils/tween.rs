@@ -19,6 +19,16 @@ where
     start * (1.0 - progress) + end * progress
 }
 
+/// Linear interpolation for color
+/// - `Progress` must be between 0.0 and 1.0
+pub fn lerp_rgba(start: Rgba, end: Rgba, progress: f32) -> Rgba {
+    let r = lerp(start.red, end.red, progress);
+    let g = lerp(start.green, end.green, progress);
+    let b = lerp(start.blue, end.blue, progress);
+    let a = lerp(start.alpha, end.alpha, progress);
+    rgba(r, g, b, a)
+}
+
 /// Helper function to use one of the easing functions with Vec2.
 /// - Pass in an easing function with type parameter bound to f32.
 /// - For example `ease_out::<f32>`
