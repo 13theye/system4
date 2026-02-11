@@ -432,7 +432,10 @@ impl RhythmFormation {
 
     pub fn draw_activations(&self, draw: &Draw) {
         self.activations.iter().for_each(|(i, activation)| {
-            activation.draw(draw, &self.elements[i].params);
+            let Some(element) = self.elements.get(i) else {
+                return;
+            };
+            activation.draw(draw, &element.params);
         });
     }
 }
