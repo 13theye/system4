@@ -15,11 +15,16 @@ pub(super) const WINGS_REINIT_ANIMATION_DURATION: f32 = 1.3;
 pub(super) const ANIMATION_VARIATION: f32 = 0.2;
 
 // The percentage of a Activation rotation that a color change lasts
-pub(super) const COLOR_CHANGE_FRACTION: f32 = 0.5;
+pub(super) const COLOR_CHANGE_FRACTION: f32 = 1.0;
+
+pub(super) const COLOR_GRADIENT_STEPS: usize = 40;
+// How much to stretch the gradient ellipse: >1.0 = more elliptical
+pub(super) const COLOR_GRADIENT_ELLIPSE_RATIO: f32 = 1.2;
+pub(super) const COLOR_DWELL: f32 = 0.6;
 
 // The minimum and maximum element radii in pixels
 pub(super) const MIN_ELEMENT_RADIUS: f32 = 50.0;
-pub(super) const MAX_ELEMENT_RADIUS: f32 = 120.0;
+pub(super) const MAX_ELEMENT_RADIUS: f32 = 100.0;
 
 // The minimum and maximum formation radii in pixels
 pub(super) const MIN_FORMATION_RADIUS: f32 = 450.0;
