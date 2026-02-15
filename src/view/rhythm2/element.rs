@@ -5,9 +5,14 @@ use crate::{groups::RhythmSlotParams, utils::tween};
 
 use super::animation::*;
 
+/// Animation state describing the movement of the RhythmElement.
+/// This should be set via `RhythmElement.set_movement()`
 #[derive(Copy, Clone, Debug)]
 pub enum RhythmElementMovement {
     Idle,
+    Liquid {
+        motion: LiquidMotion,
+    },
     Moving {
         start_pos: Vec2,
         target_pos: Vec2,
@@ -21,6 +26,7 @@ pub enum RhythmElementMovement {
     },
 }
 
+/// Animation state describing the change in size of the RhythmElement
 #[derive(Copy, Clone, Debug)]
 pub enum RhythmElementSizing {
     Idle,
@@ -32,15 +38,19 @@ pub enum RhythmElementSizing {
     },
 }
 
+/// A flag indicating if a `RhythmElement` is ready to be cleared.
 #[derive(Copy, Clone, Debug)]
 pub enum RhythmElementClearState {
     Active,
     ToClear,
 }
 
+/// The parameters of a `RhythmElement`
 #[derive(Debug, Copy, Clone)]
 pub struct RhythmElementParams {
     pub current_position: Vec2,
+    // Any modifier of the "official" position is tracked here
+    pub position_offset: Vec2,
     // The position where the element belongs in formation when not a wing
     pub min_position: Vec2,
     // The position where the element is when velocity = 1.0
@@ -61,6 +71,7 @@ pub struct RhythmElementParams {
     pub gradient_color_2: Rgba,
 }
 
+/// A structure representing a rhythmic note
 #[derive(Debug)]
 pub struct RhythmElement {
     pub is_wing: bool,
@@ -74,6 +85,7 @@ impl Default for RhythmElementParams {
     fn default() -> Self {
         Self {
             current_position: vec2(0.0, 0.0),
+            position_offset: vec2(0.0, 0.0),
             min_position: vec2(0.0, 0.0),
             max_position: vec2(0.0, 0.0),
             current_radius: 10.0,
@@ -87,6 +99,13 @@ impl Default for RhythmElementParams {
             // Light teal
             gradient_color_2: rgba(0.486, 0.706, 0.702, 1.0),
         }
+    }
+}
+
+impl RhythmElementParams {
+    /// Calculate the current position of the Element, accounting for position offset.
+    pub fn get_position(&self) -> Vec2 {
+        self.current_position + self.position_offset
     }
 }
 
@@ -130,12 +149,12 @@ impl RhythmElement {
     pub fn set_is_wing(&mut self, movement_duration: f32, now: Instant) {
         self.is_wing = true;
 
-        self.movement = RhythmElementMovement::Moving {
-            start_pos: self.params.current_position,
+        self.set_movement(RhythmElementMovement::Moving {
+            start_pos: self.params.get_position(), // Use actual visual position
             target_pos: self.wing_position(),
             start_time: now,
             duration: movement_duration,
-        };
+        });
 
         self.sizing = RhythmElementSizing::Changing {
             start_radius: self.params.current_radius,
@@ -148,12 +167,12 @@ impl RhythmElement {
     pub fn set_is_not_wing(&mut self, movement_duration: f32, now: Instant) {
         self.is_wing = false;
 
-        self.movement = RhythmElementMovement::Moving {
-            start_pos: self.params.current_position,
+        self.set_movement(RhythmElementMovement::Moving {
+            start_pos: self.params.get_position(), // Use actual visual position
             target_pos: self.params.min_position,
             start_time: now,
             duration: movement_duration,
-        };
+        });
 
         self.sizing = RhythmElementSizing::Changing {
             start_radius: self.params.current_radius,
@@ -164,11 +183,11 @@ impl RhythmElement {
     }
 
     pub fn set_clearing(&mut self, target_pos: Vec2, movement_duration: f32, now: Instant) {
-        self.movement = RhythmElementMovement::Clearing {
-            start_pos: self.params.current_position,
+        self.set_movement(RhythmElementMovement::Clearing {
+            start_pos: self.params.get_position(), // Use actual visual position
             target_pos,
             start_time: now,
-        };
+        });
 
         self.sizing = RhythmElementSizing::Changing {
             start_radius: self.params.current_radius,
@@ -203,6 +222,17 @@ impl RhythmElement {
     fn update_movement(&mut self, now: Instant) {
         match self.movement {
             RhythmElementMovement::Idle => {}
+            RhythmElementMovement::Liquid { motion } => {
+                let (offset, is_complete) = motion.current_offset(now);
+                self.params.position_offset = offset;
+
+                if is_complete {
+                    // Renew the motion for continuous wandering
+                    if let RhythmElementMovement::Liquid { motion } = &mut self.movement {
+                        motion.renew(now);
+                    }
+                }
+            }
             RhythmElementMovement::Moving {
                 start_pos,
                 target_pos,
@@ -213,7 +243,9 @@ impl RhythmElement {
 
                 if t >= duration {
                     self.params.current_position = target_pos;
-                    self.movement = RhythmElementMovement::Idle;
+                    self.set_movement(RhythmElementMovement::Liquid {
+                        motion: LiquidMotion::new(now),
+                    });
                 } else {
                     use nannou::ease::back::*;
                     let f = ease_out::<f32>;
@@ -231,7 +263,7 @@ impl RhythmElement {
 
                 if t >= CLEAR_ANIMATION_DURATION {
                     self.params.current_position = target_pos;
-                    self.movement = RhythmElementMovement::Idle;
+                    self.set_movement(RhythmElementMovement::Idle);
                     self.clear_state = RhythmElementClearState::ToClear;
                 } else {
                     // Use cubic ease-out for smooth deceleration
@@ -243,6 +275,11 @@ impl RhythmElement {
                 }
             }
         }
+    }
+
+    fn set_movement(&mut self, movement: RhythmElementMovement) {
+        self.movement = movement;
+        self.params.position_offset = vec2(0.0, 0.0); // Reset offset
     }
 
     fn update_sizing(&mut self, now: Instant) {
@@ -270,7 +307,7 @@ impl RhythmElement {
 
     pub fn draw(&self, draw: &Draw) {
         draw.ellipse()
-            .xy(self.params.current_position)
+            .xy(self.params.get_position())
             .radius(self.params.current_radius)
             .color(self.params.color);
     }

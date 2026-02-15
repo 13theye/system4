@@ -109,8 +109,8 @@ pub fn draw_connectors(
     let dirs: Vec<Vec2> = indices
         .windows(2)
         .map(|pair| {
-            let c1 = elements[&pair[0]].params.current_position;
-            let c2 = elements[&pair[1]].params.current_position;
+            let c1 = elements[&pair[0]].params.get_position();
+            let c2 = elements[&pair[1]].params.get_position();
             let d = c2 - c1;
             let len = d.length();
             if len < 1e-6 {
@@ -166,8 +166,8 @@ fn draw_connector(
     bend_c2: Option<BendInfo>,
     show_debug_geometry: bool,
 ) {
-    let c1 = e1.params.current_position;
-    let c2 = e2.params.current_position;
+    let c1 = e1.params.get_position();
+    let c2 = e2.params.get_position();
     let r1 = e1.params.current_radius;
     let r2 = e2.params.current_radius;
     let r_min = r1.min(r2);

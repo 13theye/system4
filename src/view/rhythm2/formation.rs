@@ -60,6 +60,7 @@ pub type ElementMap = HashMap<usize, RhythmElement>;
 /// - Value is the `RhythmElementActivation`
 pub type ActivationMap = HashMap<usize, ActivationElement>;
 
+/// A structure representing a Rhythm, comprised of `RhythmElement`s and `ActivationElement`s
 #[derive(Debug)]
 pub struct RhythmFormation {
     pub voice_id: VoiceId,

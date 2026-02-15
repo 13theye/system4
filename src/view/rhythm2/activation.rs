@@ -186,7 +186,7 @@ impl ActivationElement {
         let x_offset = orbit_radius * self.angle.cos();
         let y_offset = orbit_radius * self.angle.sin();
 
-        params.current_position + vec2(x_offset, y_offset)
+        params.get_position() + vec2(x_offset, y_offset)
     }
 
     /// Calculate the inner circle radius
@@ -208,7 +208,7 @@ impl ActivationElement {
     /// Draw the static outer circle as a background
     fn draw_outer_base(&self, draw: &Draw, params: &RhythmElementParams) {
         draw.ellipse()
-            .xy(params.current_position)
+            .xy(params.get_position())
             .radius(params.current_radius)
             .color(self.outer_color);
     }
@@ -221,7 +221,7 @@ impl ActivationElement {
         let outer_radius = params.current_radius;
 
         // Direction from inner center toward outer center (for collinear positioning)
-        let direction = (params.current_position - inner_pos).normalize();
+        let direction = (params.get_position() - inner_pos).normalize();
 
         // The gradient extends from the inner circle to fill the outer circle area
         let max_gradient_radius = outer_radius * 0.9;
