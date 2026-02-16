@@ -367,8 +367,13 @@ impl RhythmFormation {
             };
 
             if *i == active_slot && element.is_wing {
-                let activation =
-                    ActivationElement::new(update_params.tempo, &element.params, *i, now);
+                let activation = ActivationElement::new(
+                    update_params.tempo,
+                    self.side,
+                    &element.params,
+                    *i,
+                    now,
+                );
                 self.activations.insert(active_slot, activation);
             }
         });

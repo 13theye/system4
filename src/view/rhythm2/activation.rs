@@ -5,7 +5,7 @@
 use nannou::prelude::*;
 use std::time::Instant;
 
-use super::{animation::*, element::RhythmElementParams};
+use super::{animation::*, element::RhythmElementParams, formation::RhythmFormationSide};
 use crate::utils::{color, tween};
 
 #[derive(Copy, Clone, Debug)]
@@ -60,6 +60,7 @@ pub struct ActivationElement {
 impl ActivationElement {
     pub fn new(
         tempo: f64,
+        formation_side: RhythmFormationSide,
         element_params: &RhythmElementParams,
         index: usize,
         now: Instant,
@@ -68,15 +69,30 @@ impl ActivationElement {
 
         let start_angle = 0.0;
 
-        //let start_color = element_params.color.color;
+        // Darken color by 50% to approximate 0.5 alpha-blended color.
+        // This is necessary because of the texture blending step in nnpipe
         let start_color = adjust_color(element_params.color, 0.5);
 
         // Determine rotation direction based on index
-        // Even index: counterclockwise, Odd index: clockwise
-        let direction = if index.is_multiple_of(2) {
-            RotationDirection::Counterclockwise
-        } else {
-            RotationDirection::Clockwise
+        // For left formation:
+        // Even index: Clockwise, Odd index: Counterclockwise
+        // For right formation:
+        // Even index: Counterclockwise, Odd index: Clockwise
+        let direction = match formation_side {
+            RhythmFormationSide::Left => {
+                if index.is_multiple_of(2) {
+                    RotationDirection::Clockwise
+                } else {
+                    RotationDirection::Counterclockwise
+                }
+            }
+            RhythmFormationSide::Right => {
+                if index.is_multiple_of(2) {
+                    RotationDirection::Counterclockwise
+                } else {
+                    RotationDirection::Clockwise
+                }
+            }
         };
 
         // Convert gradient_colors to HSV, scale value by cutoff, then convert back to
@@ -116,6 +132,7 @@ impl ActivationElement {
         matches!(self.movement, ActivationMovement::Done)
     }
 
+    /// Update color and movement. The main update entry point called by the `RhythmFormation`
     pub fn update(&mut self, now: Instant) {
         self.update_color(now);
         self.update_movement(now);
@@ -153,7 +170,7 @@ impl ActivationElement {
         }
     }
 
-    pub fn update_movement(&mut self, now: Instant) {
+    fn update_movement(&mut self, now: Instant) {
         if let ActivationMovement::Rotating {
             start_angle,
             start_time,
