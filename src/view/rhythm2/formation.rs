@@ -123,7 +123,13 @@ impl RhythmFormation {
 
         // Iterate through the positions and create elements for each.
         min_positions.iter().for_each(|(i, min_position)| {
-            let slot_params = rhythm_params.slot_params[*i];
+            let slot_params = if let Some(&p) = rhythm_params.slot_params.get(*i) {
+                p
+            } else {
+                // if for some reason slot params are missing, fallback to default
+                crate::groups::RhythmSlotParams::default()
+            };
+
             let max_position = Self::calculate_formation_position(
                 *i,
                 side,
@@ -189,7 +195,10 @@ impl RhythmFormation {
                     rhythm_params.capacity,
                     self.params.max_radius,
                 );
-                let slot_params = rhythm_params.slot_params[i];
+                let Some(&slot_params) = rhythm_params.slot_params.get(i) else {
+                    continue;
+                };
+
                 let movement_duration: f32 = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
 
                 self.elements.insert(
@@ -223,7 +232,12 @@ impl RhythmFormation {
             };
 
             // Update slot params
-            element.params.slot = rhythm_params.slot_params[*i];
+            if let Some(p) = rhythm_params.slot_params.get(*i) {
+                element.params.slot = *p;
+            } else {
+                // if for some reason the slot params are missing, fallback to default
+                element.params.slot = crate::groups::RhythmSlotParams::default();
+            }
 
             let max_position = Self::calculate_formation_position(
                 *i,
