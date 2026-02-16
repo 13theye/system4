@@ -1,4 +1,4 @@
-//! src/view/rhythm2/activation.rs
+//! src/view/rhythm/activation.rs
 //!
 //! Handles activation of RhythmElements
 

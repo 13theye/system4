@@ -1,4 +1,4 @@
-//! src/view/rhythm2/animation.rs
+//! src/view/rhythm/animation.rs
 //!
 //! Animation logic for the `RhythmElement`
 //!

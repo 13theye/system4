@@ -1,4 +1,4 @@
-//! src/view/rhythm2/connector.rs
+//! src/view/rhythm/connector.rs
 //!
 //! Bezier-based connector drawing for rhythm2 formations.
 //! Connectors are drawn between adjacent elements using cubic Bezier curves

@@ -6,11 +6,9 @@ use super::{
     activation::ActivationElement,
     animation::*,
     element::{RhythmElement, RhythmElementMovement},
+    rhythm_view::RhythmViewUpdateParams,
 };
-use crate::{
-    groups::{RhythmParams, VoiceId},
-    view::rhythm::RhythmViewUpdateParams,
-};
+use crate::groups::{RhythmParams, VoiceId};
 
 /// The state of the `RhythmFormation`
 #[derive(Copy, Clone, Debug)]

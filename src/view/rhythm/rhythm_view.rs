@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use crate::{
     groups::{RhythmParams, VoiceId},
-    view::rhythm2::RhythmFormation,
+    view::rhythm::RhythmFormation,
 };
 
 #[derive(Debug, Clone, Copy)]
