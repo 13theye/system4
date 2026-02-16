@@ -157,8 +157,16 @@ impl RenderState {
         // Create named textures for the pipeline
         // All rendering textures use straight alpha - the composite shader handles conversion
 
-        // Terminal texture for UI overlay (rhythm views, text)
+        // Terminal texture for UI overlay (text)
         rendering.create_named_texture(device, "terminal", hi_config);
+
+        // Rhythm formation textures (straight alpha)
+        rendering.create_named_texture(device, "rhythm_alpha", hi_config);
+        rendering.create_named_texture(device, "rhythm_activations", hi_config);
+
+        // Intermediate textures for rhythm composite results
+        rendering.create_named_texture(device, "rhythm_composited", hi_config);
+        rendering.create_named_texture(device, "rhythm_with_activations", hi_config);
 
         // Particle textures - straight alpha from particle/segment shaders and Nannou Draw masks
         // Both particles and masks render to the same texture using standard alpha blending
@@ -245,13 +253,39 @@ impl RenderState {
             rendering.add_multi_pipeline("effects", effect);
         }
 
-        // Final composite overlay
-        // Input: post-processed (premultiplied), terminal (straight alpha)
-        // The composite shader handles the straight→premultiplied conversion for terminal
+        // Composite rhythm formations with alpha
+        // Layer: post-processed (particles) → rhythm_voice1 (α=0.5) → rhythm_voice2 (α=0.5)
+        // Input: post-processed (premultiplied), rhythm_voice1/2 (straight alpha, full opacity)
+        // Output: rhythm_composited (intermediate texture)
+        // The composite shader applies intensity=0.5 to rhythm textures for correct alpha
+        if let Ok(effect) = PipelineBuilder::new()
+            .name("Rhythm Composite")
+            .input_textures(&["post-processed", "rhythm_alpha"])
+            .output_texture("rhythm_composited") // Store result in intermediate texture
+            .simple_over_composite(hi_config, 0.5) // Apply 0.5 alpha to rhythm layers
+            .build(device)
+        {
+            rendering.add_multi_pipeline("rhythm composite", effect);
+        }
+
+        // Step 1: Composite rhythm_activations OVER rhythm_composited
+        // rhythm_activations should cover the layers beneath with full opacity
+        if let Ok(effect) = PipelineBuilder::new()
+            .name("Add rhythm activations")
+            .input_textures(&["rhythm_composited", "rhythm_activations"])
+            .output_texture("rhythm_with_activations")
+            .simple_over_composite(hi_config, 1.0) // Full opacity for activations
+            .build(device)
+        {
+            rendering.add_multi_pipeline("add activations", effect);
+        }
+
+        // Step 2: Composite terminal OVER the result
+        // Terminal should be drawn over everything with full opacity
         if let Ok(effect) = PipelineBuilder::new()
             .name("Final overlay composite")
-            .input_textures(&["post-processed", "terminal"])
-            .simple_over_composite(hi_config, 1.0)
+            .input_textures(&["rhythm_with_activations", "terminal"])
+            .simple_over_composite(hi_config, 1.0) // Terminal at full opacity
             .build(device)
         {
             rendering.add_multi_pipeline("final composite", effect);

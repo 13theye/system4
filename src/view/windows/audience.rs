@@ -162,8 +162,15 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
-        // Draw all rhythm views
-        model.rhythm_view.draw_all(&rendering.draw);
+        // Draw rhythm formations to rhythm_alpha texture
+        model
+            .rhythm_view
+            .draw_alpha_elements(&rendering.draw, model.ui_state.show_debug_geometry);
+
+        rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_alpha");
+
+        model.rhythm_view.draw_activations(&rendering.draw);
+        rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_activations");
 
         // Unified text overlay (new system)
         let now = Instant::now();
@@ -179,11 +186,23 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             overlay.update_and_draw_all(&rendering.draw, now);
         }
 
-        // Encode Nannou Draw (rhythm views, text overlay) to terminal texture
+        // Encode text overlay to terminal texture
         rendering.encode_draw_commands_into(device, &mut encoder, "terminal");
 
-        // Final composite (straight alpha terminal over premultiplied post-processed)
-        // The composite shader handles straight→premultiplied conversion for terminal
+        // Composite rhythm formations onto particles (with alpha 0.5)
+        // particles → rhythm_alpha (α=0.5)
+        if let Err(e) = rendering.execute_named_pipeline("rhythm composite", device, &mut encoder) {
+            eprintln!("Error executing rhythm composite pipeline: {}", e);
+        }
+
+        // Add rhythm activations (should cover layers beneath, not blend)
+        // rhythm_composited → rhythm_activations
+        if let Err(e) = rendering.execute_named_pipeline("add activations", device, &mut encoder) {
+            eprintln!("Error executing add activations pipeline: {}", e);
+        }
+
+        // Final composite: add terminal on top (with full opacity)
+        // rhythm_with_activations → terminal (α=1.0)
         if let Err(e) = rendering.execute_named_pipeline("final composite", device, &mut encoder) {
             eprintln!("Error executing final composite pipeline: {}", e);
         }

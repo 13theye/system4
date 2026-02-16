@@ -65,7 +65,8 @@ pub struct Drone {
 
 impl Drone {
     pub fn new_with_voice_id(voice_id: VoiceId) -> Option<Self> {
-        let mask = init_mask(voice_id)?;
+        //let mask = init_mask(voice_id)?;
+        let mask = fullscreen_mask(voice_id)?;
 
         Some(Self {
             voice_id,
@@ -383,5 +384,11 @@ fn init_mask(voice_id: VoiceId) -> Option<Mask> {
     };
 
     let size = vec2(900.0, 1300.0);
+    Some(Mask::init(voice_id, origin, size))
+}
+
+fn fullscreen_mask(voice_id: VoiceId) -> Option<Mask> {
+    let origin = vec2(0.0, 0.0);
+    let size = vec2(3840.0, 2160.0);
     Some(Mask::init(voice_id, origin, size))
 }

@@ -263,21 +263,21 @@ impl CommandEngine {
                 modification,
             } => {
                 self.rhythm_handler
-                    .modify_length(ctx, voice_id, modification);
+                    .modify_length(ctx, voice_id, modification, now);
             }
             RhythmModifyVelocity {
                 voice_id,
                 modification,
             } => {
                 self.rhythm_handler
-                    .modify_velocity(ctx, voice_id, modification);
+                    .modify_velocity(ctx, voice_id, modification, now);
             }
             RhythmModifyCutoff {
                 voice_id,
                 modification,
             } => {
                 self.rhythm_handler
-                    .modify_cutoff(ctx, voice_id, modification);
+                    .modify_cutoff(ctx, voice_id, modification, now);
             }
 
             // Mask Animation

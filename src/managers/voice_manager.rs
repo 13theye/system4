@@ -230,12 +230,12 @@ impl VoiceManager {
             };
 
             let (current_slot, current_wing) = rhythm.update();
-            let params = rhythm.get_params();
+            let rhythm_params = rhythm.get_params();
 
             // Push a flag if we are on an active slot of the sequence
             // This is part of the prototype for particle-based events for rhythms
             if let Some(current_wing) = current_wing {
-                if params.wings.contains(&current_wing) {
+                if rhythm_params.wings.contains(&current_wing) {
                     events.push(true);
                 }
             }
@@ -247,7 +247,7 @@ impl VoiceManager {
                 subdivision: rhythm.get_subdivision().to_owned(),
             };
 
-            rhythm_view.update_voice(voice_id, params, &update_params, now);
+            rhythm_view.update_voice(voice_id, &update_params, now);
         }
 
         events
@@ -289,7 +289,6 @@ impl VoiceManager {
         rng: &mut rand::rngs::ThreadRng,
     ) {
         use crate::terminals::commands::rhythm::RhythmConfig;
-        use crate::view::rhythm::RhythmFormationType;
 
         let Some(results) = self.ai_rhythm_manager.poll_ai() else {
             return;
@@ -316,19 +315,7 @@ impl VoiceManager {
                     rhythm.set_sequencer_data_rx(data_rx);
                 }
 
-                // Create a default formation for this voice.
-                let radius = if voice_id == VoiceId::Voice1 {
-                    800.0
-                } else {
-                    450.0
-                };
-
-                rhythm_view.add_formation(
-                    voice_id,
-                    RhythmFormationType::Circle { radius },
-                    rhythm.get_params(),
-                    now,
-                );
+                rhythm_view.add_formation(voice_id, rhythm.get_params(), now);
 
                 self.insert_voice(voice_id, Voice::new_from_rhythm(rhythm));
             }

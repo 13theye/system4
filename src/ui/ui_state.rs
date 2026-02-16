@@ -21,6 +21,7 @@ pub struct UiState {
     // Debug visualization flags
     pub show_bounds: bool,
     pub show_forces: bool,
+    pub show_debug_geometry: bool,
 
     // Per-voice command inputs
     pub command_inputs: HashMap<VoiceId, CommandInput>,
@@ -44,6 +45,7 @@ impl UiState {
             fps,
             show_bounds: false,
             show_forces: false,
+            show_debug_geometry: false,
             command_inputs: HashMap::from([
                 (VoiceId::Voice0, CommandInput::new()),
                 (VoiceId::Voice1, CommandInput::new()),

@@ -134,6 +134,7 @@ impl From<RhythmObject> for RhythmParams {
     fn from(object: RhythmObject) -> Self {
         use std::collections::HashMap;
 
+        /*
         let subdivision = match object.subdivision {
             SubdivisionObject::Quarter => BeatSubdivision::Quarter,
             SubdivisionObject::Eighth => BeatSubdivision::Eighth,
@@ -142,6 +143,10 @@ impl From<RhythmObject> for RhythmParams {
             // Default to eighth
             SubdivisionObject::Invalid => BeatSubdivision::Eighth,
         };
+        */
+
+        // Override AI response to always use eighth notes
+        let subdivision = BeatSubdivision::Eighth;
 
         // Start from defaults so we inherit sensible subdivision and ranges,
         // then override capacity and fill slot/wings data from the sequence.

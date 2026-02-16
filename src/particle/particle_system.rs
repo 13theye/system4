@@ -14,7 +14,6 @@ use crate::{
     forces::{field::ForceFields, wind_circle::WindCircle},
     groups::{Voice, VoiceId},
     particle::{to_segment_gpu, ParticleCore, ParticleFeedback},
-    utils::tween,
 };
 
 use super::constants::*;
@@ -215,20 +214,7 @@ impl ParticleSystem {
             // Retrieve rgba parameter state for this Drone
             let color_limit = drone.params.color_limit;
             let alpha_limit = drone.params.alpha_limit;
-
-            // Interpolate color (same for all particles)
-            // This is where voice-wide color affects are applied, if any.
-            let color = tween::interpolate_color(
-                color_limit,
-                rgb(PARTICLE_HIGH_R, PARTICLE_HIGH_G, PARTICLE_HIGH_B),
-                FADE_DURATION,
-                RAMP_UP_PERCENT,
-                DWELL_PERCENT,
-                RAMP_CURVE_EXPONENT,
-                FADE_CURVE_EXPONENT,
-                now,
-                self.last_update,
-            );
+            let color = color_limit;
 
             // Pre-compute mass variance using bulk RNG fill for better performance
             // Values are indexed by the same value as cores' position in its vector

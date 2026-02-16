@@ -235,9 +235,18 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
 
                                                                 let display = input.display().to_string();
 
-                                                                // Clear editor after a successful execution.
+                                                                // Clear editor and overlay after a successful execution.
                                                                 if executed.is_some() {
                                                                     input.clear();
+                                                                    // Immediately clear the overlay as well
+                                                                    model
+                                                                        .ui_state
+                                                                        .text_overlay
+                                                                        .borrow_mut()
+                                                                        .clear_live_slot(
+                                                                            TextPaneId::Voice(voice),
+                                                                            TextSlot::CommandInput,
+                                                                        );
                                                                 }
 
                                                                 (response.changed(), display, executed)
@@ -272,7 +281,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                 }
                                                             }
 
-                                                            // If we executed a command, queue it and clear the live slot.
+                                                            // If we executed a command, queue it and clear the command input display.
                                                             if let Some(command) = executed_cmd {
                                                                 terminal_commands_to_process.push(command);
                                                                 model
@@ -401,6 +410,8 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         if show_engine_debug_changed {
                                             model.render_state.set_render_engines_debug(model.engine_debug);
                                         }
+
+                                        ui.checkbox(&mut model.ui_state.show_debug_geometry, "Show additional geometry");
                                         
                                         ui.add_space(12.0);
                                     });

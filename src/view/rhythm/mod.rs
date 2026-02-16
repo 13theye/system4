@@ -1,9 +1,9 @@
-pub mod rhythm_circle;
-pub mod rhythm_lines;
-pub mod rhythm_traits;
+mod activation;
+mod animation;
+mod connector;
+mod element;
+pub mod formation;
 pub mod rhythm_view;
 
-pub use rhythm_circle::RhythmCircleFormation;
-pub use rhythm_lines::RhythmLinesFormation;
-pub use rhythm_traits::{RhythmElement, RhythmFormation, RhythmFormationState};
-pub use rhythm_view::{RhythmFormationType, RhythmView, RhythmViewUpdateParams};
+pub use formation::{RhythmFormation, RhythmFormationSide};
+pub use rhythm_view::{RhythmView, RhythmViewUpdateParams};

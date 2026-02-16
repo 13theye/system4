@@ -2,7 +2,6 @@ use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, RhythmCommandBuilder},
     groups::{Rhythm, Voice, VoiceId},
     terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
-    view::rhythm::RhythmFormationType,
 };
 use std::time::Instant;
 
@@ -47,19 +46,9 @@ impl RhythmCommandHandler {
             rhythm.set_sequencer_data_rx(data_rx);
         }
 
-        let radius = if voice_id == VoiceId::Voice1 {
-            800.0
-        } else {
-            450.0
-        };
-
         // Create the RhythmFormation
-        ctx.rhythm_view_mut().add_formation(
-            voice_id,
-            RhythmFormationType::Circle { radius },
-            rhythm.get_params(),
-            now,
-        );
+        ctx.rhythm_view_mut()
+            .add_formation(voice_id, rhythm.get_params(), now);
 
         // Insert rhythm before applying parameters so validation can find it
         let voice = Voice::new_from_rhythm(rhythm);
@@ -338,9 +327,17 @@ impl RhythmCommandHandler {
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         modification: RhythmParamModification,
+        now: Instant,
     ) {
         ctx.rhythm_modify_all_slots_length(voice_id, modification);
         ctx.update_rhythm_sequencer(voice_id);
+
+        // Update RhythmElements' positions and sizes
+        let params = ctx.get_rhythm(voice_id).map(|r| r.get_params().clone());
+        if let Some(params) = params {
+            ctx.rhythm_view_mut()
+                .update_formation_params(voice_id, &params, now);
+        }
     }
 
     pub fn modify_velocity(
@@ -348,9 +345,17 @@ impl RhythmCommandHandler {
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         modification: RhythmParamModification,
+        now: Instant,
     ) {
         ctx.rhythm_modify_all_slots_velocity(voice_id, modification);
         ctx.update_rhythm_sequencer(voice_id);
+
+        // Update RhythmElements' positions and sizes
+        let params = ctx.get_rhythm(voice_id).map(|r| r.get_params().clone());
+        if let Some(params) = params {
+            ctx.rhythm_view_mut()
+                .update_formation_params(voice_id, &params, now);
+        }
     }
 
     pub fn modify_cutoff(
@@ -358,8 +363,16 @@ impl RhythmCommandHandler {
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         modification: RhythmParamModification,
+        now: Instant,
     ) {
         ctx.rhythm_modify_all_slots_cutoff(voice_id, modification);
         ctx.update_rhythm_sequencer(voice_id);
+
+        // Update RhythmElements' positions and sizes
+        let params = ctx.get_rhythm(voice_id).map(|r| r.get_params().clone());
+        if let Some(params) = params {
+            ctx.rhythm_view_mut()
+                .update_formation_params(voice_id, &params, now);
+        }
     }
 }

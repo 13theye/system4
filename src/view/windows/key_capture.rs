@@ -52,6 +52,7 @@ pub fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::ev
                          */
                     }
 
+                    /*
                     VirtualKeyCode::M => {
                         let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
                             voice_id: VoiceId::Voice0,
@@ -95,7 +96,7 @@ pub fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::ev
 
                         model.queue_command(Command::new(command, CommandSource::Terminal));
                     }
-
+                     */
                     _ => {}
                 }
             }
