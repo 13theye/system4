@@ -211,20 +211,35 @@ impl TextOverlay {
 
         let freshly_wrapped: Vec<TextLine> = line_breaker::break_block(&block, now, max_chars);
 
+        // Lines belonging to the "feeling" JSON object should remain bright.
+        // Find the exact range of wrapped lines that contain the object.
+        let feeling_range = freshly_wrapped
+            .iter()
+            .position(|line| line.text.contains("\"feeling\":"))
+            .map(|start| feeling_line_range(&freshly_wrapped, start));
+
         let old_lines = std::mem::take(&mut self.last_ai_status_lines);
         let stabilized: Vec<TextLine> = freshly_wrapped
             .into_iter()
             .enumerate()
             .map(|(i, line)| {
-                let preserved_ts = old_lines
-                    .get(i)
-                    .filter(|old| {
-                        old.text == line.text && old.style == line.style && old.fade == line.fade
-                    })
-                    .map(|old| old.timestamp)
-                    .unwrap_or(now);
+                let is_feeling = feeling_range.is_some_and(|(s, e)| i >= s && i <= e);
 
-                TextLine::new(line.text, line.style, line.fade, preserved_ts)
+                if is_feeling {
+                    TextLine::new(line.text, line.style, TextFadeMode::NoFade, now)
+                } else {
+                    let preserved_ts = old_lines
+                        .get(i)
+                        .filter(|old| {
+                            old.text == line.text
+                                && old.style == line.style
+                                && old.fade == line.fade
+                        })
+                        .map(|old| old.timestamp)
+                        .unwrap_or(now);
+
+                    TextLine::new(line.text, line.style, line.fade, preserved_ts)
+                }
             })
             .collect();
 
@@ -249,4 +264,121 @@ impl TextOverlay {
             view.draw(draw);
         }
     }
+}
+
+/// Return the (start, end) line indices (inclusive) that contain the string
+/// *values* inside the `"feeling"."text"` JSON array, excluding lines that
+/// hold only the `"text":` key, the opening `[`, or the closing `]`.
+///
+/// Specifically, `start` is the line of the first `"` that opens a string
+/// element, and `end` is the line of the last `"` that closes one. For
+/// compact JSON where brackets and content share a line, both collapse to
+/// that same line. For pretty-printed JSON each haiku line gets its own line
+/// and the bracket lines are correctly excluded.
+///
+/// If the array is never fully closed (still streaming), all remaining lines
+/// are included.
+fn feeling_line_range(lines: &[TextLine], start_idx: usize) -> (usize, usize) {
+    let Some(start_line) = lines.get(start_idx) else {
+        return (start_idx, start_idx);
+    };
+
+    // Begin scanning just after the "feeling": key.
+    const FEELING_KEY: &str = "\"feeling\":";
+    let feeling_offset = start_line
+        .text
+        .find(FEELING_KEY)
+        .map(|p| p + FEELING_KEY.len())
+        .unwrap_or(0);
+
+    // Phase 1: find the "text": key within the feeling object.
+    const TEXT_KEY: &str = "\"text\":";
+    let text_key_pos = lines
+        .iter()
+        .enumerate()
+        .skip(start_idx)
+        .find_map(|(i, line)| {
+            let search_in = if i == start_idx {
+                &line.text[feeling_offset.min(line.text.len())..]
+            } else {
+                &line.text
+            };
+            let base = if i == start_idx { feeling_offset } else { 0 };
+            search_in
+                .find(TEXT_KEY)
+                .map(|off| (i, base + off + TEXT_KEY.len()))
+        });
+
+    let Some((text_line_idx, text_offset)) = text_key_pos else {
+        return (start_idx, start_idx);
+    };
+
+    // Phase 2: scan from after "text": to find the content of the array.
+    // We want only the lines containing the actual string elements, not the
+    // lines with the surrounding [ ] or the "text": key itself. Track:
+    //   content_start_line — line of the first " that opens a string element
+    //   content_end_line   — line of the last  " that closes a string element
+    // Return that tighter range when ] closes the array.
+    let mut depth: i32 = 0;
+    let mut array_opened = false;
+    let mut in_string = false;
+    let mut escape_next = false;
+    let mut content_start_line: Option<usize> = None;
+    let mut content_end_line = text_line_idx;
+
+    for (line_idx, line) in lines.iter().enumerate().skip(text_line_idx) {
+        let slice = if line_idx == text_line_idx {
+            &line.text[text_offset.min(line.text.len())..]
+        } else {
+            &line.text
+        };
+
+        for ch in slice.chars() {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+            if in_string {
+                match ch {
+                    '\\' => escape_next = true,
+                    '"' => {
+                        in_string = false;
+                        content_end_line = line_idx;
+                    }
+                    _ => {}
+                }
+            } else {
+                match ch {
+                    '"' => {
+                        in_string = true;
+                        if array_opened && content_start_line.is_none() {
+                            content_start_line = Some(line_idx);
+                        }
+                    }
+                    '[' => {
+                        if !array_opened {
+                            array_opened = true;
+                        }
+                        depth += 1;
+                    }
+                    ']' => {
+                        depth -= 1;
+                        if depth <= 0 {
+                            return (
+                                content_start_line.unwrap_or(text_line_idx),
+                                content_end_line,
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    // Array not yet closed (still streaming): include all remaining lines.
+    (
+        content_start_line.unwrap_or(text_line_idx),
+        lines.len().saturating_sub(1),
+    )
 }
