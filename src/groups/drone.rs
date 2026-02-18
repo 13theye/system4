@@ -5,7 +5,7 @@ use crate::{
     groups::VoiceId,
     particle::emitter::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
-    view::mask::Mask,
+    view::mask::{presets, Mask},
 };
 use nannou::prelude::*;
 use std::{collections::HashMap, time::Duration};
@@ -65,8 +65,11 @@ pub struct Drone {
 
 impl Drone {
     pub fn new_with_voice_id(voice_id: VoiceId) -> Option<Self> {
-        //let mask = init_mask(voice_id)?;
-        let mask = fullscreen_mask(voice_id)?;
+        let mask_preset = presets::MaskPreset::Small(voice_id);
+        let mask_size = presets::mask_size(&mask_preset)?;
+        let mask_origin = presets::mask_origin(&mask_preset)?;
+
+        let mask = Mask::init(voice_id, mask_origin, mask_size);
 
         Some(Self {
             voice_id,
@@ -373,22 +376,4 @@ impl Drone {
     pub fn animate_mask(&mut self, new_origin: Vec2, new_size: Vec2, duration: Duration) {
         self.mask.animate_to(new_origin, new_size, duration);
     }
-}
-
-/// Convenience function to initialize a Mask for the given Voice
-fn init_mask(voice_id: VoiceId) -> Option<Mask> {
-    let origin = match voice_id {
-        VoiceId::Voice0 => vec2(-950.0, 0.0),
-        VoiceId::Voice3 => vec2(950.0, 0.0),
-        _ => return None,
-    };
-
-    let size = vec2(900.0, 1300.0);
-    Some(Mask::init(voice_id, origin, size))
-}
-
-fn fullscreen_mask(voice_id: VoiceId) -> Option<Mask> {
-    let origin = vec2(0.0, 0.0);
-    let size = vec2(3840.0, 2160.0);
-    Some(Mask::init(voice_id, origin, size))
 }

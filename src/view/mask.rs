@@ -8,6 +8,9 @@ use crate::{groups::VoiceId, utils::tween};
 use nannou::prelude::*;
 use std::time::{Duration, Instant};
 
+pub mod presets;
+pub use presets::MaskPreset;
+
 /// A `Mask` is a view mask that can be used with the ParticleSystem
 /// Particles within the Mask are rendered. Particles outside of the mask are invisible
 /// but continue to be simulated.

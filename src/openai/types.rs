@@ -27,7 +27,7 @@ pub struct RhythmObject {
 
 /// Serializable beat subdivision enum.
 /// Describes the beat subdivision that advances the sequence.
-/// Allowable values: "quarter", "eighth", "sixteenth", "triplet"
+/// Always use "Eighth".
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SubdivisionObject {
