@@ -84,6 +84,30 @@ impl OscSender {
             .ok();
     }
 
+    pub fn send_ai_requested(&self, voice_id: i32) {
+        let addr = "/sys4/AIRequested".to_string();
+        let args = vec![osc::Type::Int(voice_id)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
+    pub fn send_ai_typing(&self, voice_id: i32) {
+        let addr = "/sys4/AITyping".to_string();
+        let args = vec![osc::Type::Int(voice_id)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
+    pub fn send_ai_finished(&self, voice_id: i32) {
+        let addr = "/sys4/AIFinished".to_string();
+        let args = vec![osc::Type::Int(voice_id)];
+        self.sender
+            .send((addr, args), (self.target_addr.as_str(), self.target_port))
+            .ok();
+    }
+
     pub fn get_config(&self) -> OscSendConfig {
         OscSendConfig {
             target_addr: self.target_addr.clone(),

@@ -1,6 +1,6 @@
 use crate::{
     groups::{RhythmParams, VoiceId},
-    managers::{AIRhythm, AiRhythmResult},
+    managers::{AIRhythm, AiRhythmResult, AiStreamEvent},
     settings::OpenAIServiceConfig,
 };
 
@@ -30,7 +30,7 @@ impl AIRhythmManager {
     }
 
     /// Poll the AI service for completed responses
-    pub fn poll_ai(&mut self) -> Option<Vec<AiRhythmResult>> {
+    pub fn poll_ai(&mut self) -> (Option<Vec<AiRhythmResult>>, Option<Vec<AiStreamEvent>>) {
         self.ai_rhythm.poll_stream()
     }
 

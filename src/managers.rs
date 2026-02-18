@@ -8,4 +8,4 @@ pub mod voice_manager;
 pub use voice_manager::VoiceManager;
 
 pub mod ai_rhythm;
-pub use ai_rhythm::{AIRhythm, AiRhythmResult};
+pub use ai_rhythm::{AIRhythm, AiRhythmResult, AiStreamEvent};

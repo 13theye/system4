@@ -4,7 +4,7 @@
 
 use crate::{
     groups::{Drone, Rhythm, Voice, VoiceId},
-    managers::{AIRhythmManager, DroneManager},
+    managers::{AIRhythmManager, AiStreamEvent, DroneManager},
     rendering::GpuSegmentBuffer,
     sequencer::SequencerService,
     settings::Settings,
@@ -287,11 +287,13 @@ impl VoiceManager {
         sequencer_service: &mut SequencerService,
         rhythm_view: &mut RhythmView,
         rng: &mut rand::rngs::ThreadRng,
-    ) {
+    ) -> Option<Vec<AiStreamEvent>> {
         use crate::terminals::commands::rhythm::RhythmConfig;
 
-        let Some(results) = self.ai_rhythm_manager.poll_ai() else {
-            return;
+        let (results, events) = self.ai_rhythm_manager.poll_ai();
+
+        let Some(results) = results else {
+            return events;
         };
 
         for result in results {
@@ -326,7 +328,7 @@ impl VoiceManager {
                     "VoiceManager: failed to retrieve rhythm for voice {}",
                     voice_id
                 );
-                return;
+                return events;
             };
 
             // Extract parameters from the AI result
@@ -347,5 +349,7 @@ impl VoiceManager {
             // sequence-aligned without restarting Voice1.
             sequencer_service.sync_start_to_voice(voice_id, VoiceId::Voice1);
         }
+
+        events
     }
 }

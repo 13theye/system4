@@ -204,6 +204,9 @@ impl Model {
                 );
                 self.voice_manager
                     .request_ai_rhythm_from(crate::groups::VoiceId::Voice1);
+
+                // Send notification via OSC
+                self.osc_send.send_ai_requested(voice_id);
             }
         }
     }

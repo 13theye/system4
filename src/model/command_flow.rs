@@ -41,6 +41,9 @@ impl Model {
             && !self.voice_manager.is_ai_request_pending()
         {
             self.voice_manager.request_ai_rhythm_from(VoiceId::Voice1);
+
+            // Send notification via OSC
+            self.osc_send.send_ai_requested(VoiceId::Voice2.to_i32());
         }
     }
 }

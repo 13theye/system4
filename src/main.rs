@@ -110,12 +110,27 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     model.process_command_queue(now);
 
     // Poll AI rhythm responses (if any) and apply them to rhythms
-    model.voice_manager.update_ai(
+    let ai_stream_events = model.voice_manager.update_ai(
         now,
         &mut model.sequencer_service,
         &mut model.rhythm_view,
         &mut model.rng,
     );
+
+    // Process AI stream events and fire OSC signals if matching
+    if let Some(ai_stream_events) = ai_stream_events {
+        use system4::managers::AiStreamEvent;
+
+        ai_stream_events.iter().for_each(|e| {
+            if let AiStreamEvent::StreamStarted(id) = e {
+                model.osc_send.send_ai_typing(id.to_i32());
+            }
+
+            if let AiStreamEvent::StreamFinished(id) = e {
+                model.osc_send.send_ai_finished(id.to_i32());
+            }
+        });
+    }
 
     // Read feedback slider values and update drones before updating particle system
     let (v0_feedback, v3_feedback) = read_feedback_ui_sliders(model);

@@ -21,6 +21,13 @@ pub struct AiRhythmResult {
     pub params: RhythmParams,
 }
 
+/// An event emitted by the AI service during a streamed response.
+#[derive(Debug, Clone, Copy)]
+pub enum AiStreamEvent {
+    StreamStarted(VoiceId),
+    StreamFinished(VoiceId),
+}
+
 pub struct AIRhythm {
     /// OpenAI REST API handler
     ai_service: OpenAIService,
@@ -29,6 +36,8 @@ pub struct AIRhythm {
     pending_ai_voice: Option<VoiceId>,
     /// Accumulated reasoning text from the current streamed response, if any.
     reasoning_text: Option<String>,
+    /// A flag that indicates if we are currently processing an already-begun response stream
+    stream_started: bool,
 }
 
 impl AIRhythm {
@@ -39,6 +48,7 @@ impl AIRhythm {
             ai_service,
             pending_ai_voice: None,
             reasoning_text: None,
+            stream_started: false,
         }
     }
 
@@ -58,6 +68,7 @@ impl AIRhythm {
         // Reset any previous reasoning text and mark a new request as pending
         self.reasoning_text = None;
         self.pending_ai_voice = Some(target_voice);
+        self.stream_started = false;
 
         if let Err(e) = self.ai_service.stream(object_str) {
             println!("AIRhythm: failed to send OpenAI request: {}", e);
@@ -102,8 +113,9 @@ impl AIRhythm {
     ///
     /// This also updates `reasoning_text` incrementally from
     /// `ResponseReasoningTextDelta` / `ResponseReasoningTextDone` events.
-    pub fn poll_stream(&mut self) -> Option<Vec<AiRhythmResult>> {
+    pub fn poll_stream(&mut self) -> (Option<Vec<AiRhythmResult>>, Option<Vec<AiStreamEvent>>) {
         let mut results = Vec::new();
+        let mut events = Vec::new();
 
         while let Some(event) = self.poll_openai_stream() {
             // If there is no pending target voice, we ignore all remaining
@@ -118,6 +130,15 @@ impl AIRhythm {
                 StreamEvent::ResponseOutputTextDelta(e) => {
                     let buffer = self.reasoning_text.get_or_insert_with(String::new);
                     buffer.push_str(&e.delta);
+
+                    let Some(pending_ai_voice) = self.pending_ai_voice else {
+                        continue;
+                    };
+
+                    if !self.stream_started {
+                        self.stream_started = true;
+                        events.push(AiStreamEvent::StreamStarted(pending_ai_voice));
+                    }
                 }
                 StreamEvent::ResponseOutputTextDone(e) => {
                     self.reasoning_text = Some(e.text);
@@ -137,6 +158,7 @@ impl AIRhythm {
 
                     let mut completed_results = self.handle_completed_response(response, voice_id);
                     results.append(&mut completed_results);
+                    events.push(AiStreamEvent::StreamFinished(voice_id));
                 }
 
                 // Error / failure / incomplete events
@@ -174,11 +196,19 @@ impl AIRhythm {
             }
         }
 
-        if results.is_empty() {
+        let r = if results.is_empty() {
             None
         } else {
             Some(results)
-        }
+        };
+
+        let e = if events.is_empty() {
+            None
+        } else {
+            Some(events)
+        };
+
+        (r, e)
     }
 
     /// Poll the underlying OpenAIService for completed responses (non-stream)
