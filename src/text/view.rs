@@ -246,6 +246,8 @@ impl TextPaneView {
     }
 
     fn update_color(&mut self, now: Instant) {
+        use crate::utils::tween;
+
         for slot in &mut self.slots {
             let Some(state) = slot.as_mut() else {
                 continue;
@@ -269,7 +271,7 @@ impl TextPaneView {
             state.color = if t >= 1.0 {
                 state.regular_color
             } else {
-                color_lerp(state.bright_color, state.regular_color, t)
+                tween::lerp_hue_rgba(state.bright_color, state.regular_color, t)
             };
         }
     }
@@ -290,25 +292,4 @@ impl TextPaneView {
             TextStyle::Ai => (self.params.theme.ai_bright, self.params.theme.ai_regular),
         }
     }
-}
-
-fn color_lerp(start: Rgba, end: Rgba, t: f32) -> Rgba {
-    let start_hsla = Hsla::from(start);
-    let end_hsla = Hsla::from(end);
-
-    let mut hue_diff = end_hsla.hue.to_degrees() - start_hsla.hue.to_degrees();
-    if hue_diff.abs() > 180.0 {
-        hue_diff -= 360.0 * hue_diff.signum();
-    }
-
-    let hue = start_hsla.hue.to_degrees() + hue_diff * t;
-
-    let lerped_hsla = Hsla::new(
-        hue,
-        start_hsla.saturation + (end_hsla.saturation - start_hsla.saturation) * t,
-        start_hsla.lightness + (end_hsla.lightness - start_hsla.lightness) * t,
-        start_hsla.alpha + (end_hsla.alpha - start_hsla.alpha) * t,
-    );
-
-    Rgba::from(lerped_hsla)
 }

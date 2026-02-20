@@ -184,6 +184,15 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             );
 
             overlay.update_and_draw_all(&rendering.draw, now);
+
+            // Draw the central dividing line
+            rendering
+                .draw
+                .line()
+                .start(vec2(0.0, rendering.output_texture.height() as f32 / 2.0))
+                .end(vec2(0.0, rendering.output_texture.height() as f32 / -2.0))
+                .color(rgba(1.0, 1.0, 1.0, 1.0))
+                .stroke_weight(2.0);
         }
 
         // Encode text overlay to terminal texture

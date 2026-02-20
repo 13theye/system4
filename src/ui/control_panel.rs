@@ -474,8 +474,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                         command_queue.push(Command::new(command, CommandSource::UI));
                                                     }
                                                 }); // voice 3 mask buttons
-                                                
-                                            });
+                                            }); // mask buttons column
 
                                             ui.separator();
 

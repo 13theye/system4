@@ -29,6 +29,30 @@ pub fn lerp_rgba(start: Rgba, end: Rgba, progress: f32) -> Rgba {
     rgba(r, g, b, a)
 }
 
+/// Constant-hue linear interpolation for color
+/// - internally converts to HSLA and maintains hue while interpolating saturation and lightness
+/// - `Progress` must be between 0.0 and 1.0
+pub fn lerp_hue_rgba(start: Rgba, end: Rgba, progress: f32) -> Rgba {
+    let start_hsla = Hsla::from(start);
+    let end_hsla = Hsla::from(end);
+
+    let mut hue_diff = end_hsla.hue.to_degrees() - start_hsla.hue.to_degrees();
+    if hue_diff.abs() > 180.0 {
+        hue_diff -= 360.0 * hue_diff.signum();
+    }
+
+    let hue = start_hsla.hue.to_degrees() + hue_diff * progress;
+
+    let lerped_hsla = Hsla::new(
+        hue,
+        start_hsla.saturation + (end_hsla.saturation - start_hsla.saturation) * progress,
+        start_hsla.lightness + (end_hsla.lightness - start_hsla.lightness) * progress,
+        start_hsla.alpha + (end_hsla.alpha - start_hsla.alpha) * progress,
+    );
+
+    Rgba::from(lerped_hsla)
+}
+
 /// Helper function to use one of the easing functions with Vec2.
 /// - Pass in an easing function with type parameter bound to f32.
 /// - For example `ease_out::<f32>`
