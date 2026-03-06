@@ -190,7 +190,7 @@ impl ExecutionContext for Model {
     }
 
     // Wind field access
-    fn wind_field(&mut self) -> &mut crate::forces::wind_field::WindField {
+    fn wind_field(&mut self) -> &mut crate::forces::wind::WindField {
         &mut self.particle_system.force_fields.wind_field
     }
 

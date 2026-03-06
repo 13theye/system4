@@ -3,11 +3,9 @@
 //! Force field for field-based forces
 use nannou::prelude::*;
 
-use crate::{
-    forces::wind::{wind_field, WindCircle, WindField},
-    groups::VoiceId,
-    particle::ParticleCore,
-};
+use crate::{groups::VoiceId, particle::ParticleCore};
+
+use super::wind::{wind_field, CircleFormation, WindField};
 
 /// The ForceField tracks the forces that are acting on the particles.
 /// It provides a coordinate space to align forces to screen locations.
@@ -37,7 +35,7 @@ impl ForceFields {
     pub fn apply_unified_forces_to_particle(
         &self,
         particle: &mut ParticleCore,
-        circles: &[&WindCircle],
+        circles: &[&dyn CircleFormation],
         mass_variation_factor: f32,
         noise: f64,
     ) {
@@ -55,7 +53,7 @@ impl ForceFields {
     pub fn apply_forces_to_particle(
         &self,
         particle: &mut ParticleCore,
-        circles: &[&WindCircle],
+        circles: &[&dyn CircleFormation],
         mass_variation_factor: f32,
         noise: f64,
         current_voice: &VoiceId,

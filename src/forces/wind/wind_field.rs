@@ -2,7 +2,7 @@ use nannou::noise::{NoiseFn, Perlin};
 use nannou::prelude::*;
 
 use crate::{
-    forces::wind::{Wind, WindCircle},
+    forces::wind::{CircleFormation, Wind},
     groups::VoiceId,
     particle::ParticleCore,
 };
@@ -11,7 +11,7 @@ use crate::{
 /// Updates the particle based on these forces.
 pub fn apply_combined_winds_to_particle(
     particle: &mut ParticleCore,
-    circles: &[&WindCircle],
+    circles: &[&dyn CircleFormation],
     mass_variation_factor: f32,
     noise: f64,
 ) {
@@ -24,7 +24,11 @@ pub fn apply_combined_winds_to_particle(
 
 /// Get combined `Wind` at a position in ParticleSystem coordinates
 /// Returns `None` if position is out of bounds or if there is no wind at that position
-pub fn combined_wind_at_pos(circles: &[&WindCircle], position: Vec2, noise: f64) -> Option<Wind> {
+pub fn combined_wind_at_pos(
+    circles: &[&dyn CircleFormation],
+    position: Vec2,
+    noise: f64,
+) -> Option<Wind> {
     let total_velocity = circles
         .iter()
         .filter_map(|circle| circle.wind_for_position(position, noise))
@@ -43,7 +47,7 @@ pub fn combined_wind_at_pos(circles: &[&WindCircle], position: Vec2, noise: f64)
 
 pub fn apply_voice_wind_to_particle(
     particle: &mut ParticleCore,
-    circles: &[&WindCircle],
+    circles: &[&dyn CircleFormation],
     mass_variation_factor: f32,
     noise: f64,
     current_voice: &VoiceId,
@@ -60,14 +64,14 @@ pub fn apply_voice_wind_to_particle(
 /// `Winds` from the current voice
 /// Returns `None` if position is out of bounds or if there is no wind at that position
 pub fn voice_wind_at_pos(
-    circles: &[&WindCircle],
+    circles: &[&dyn CircleFormation],
     position: Vec2,
     noise: f64,
     current_voice: &VoiceId,
 ) -> Option<Wind> {
     let total_velocity = circles
         .iter()
-        .filter(|circle| circle.parent_voice == *current_voice)
+        .filter(|circle| circle.parent_voice() == *current_voice)
         .filter_map(|circle| circle.wind_for_position(position, noise))
         .map(|wind| wind.velocity)
         .reduce(|a, b| a + b)?;
@@ -110,7 +114,7 @@ impl WindField {
     /// Draw the WindField with force vectors and origin
     pub fn draw(
         &self,
-        circles: &[&WindCircle],
+        circles: &[&dyn CircleFormation],
         draw: &Draw,
         scale_x: f32,
         scale_y: f32,
@@ -124,7 +128,7 @@ impl WindField {
     /// Draw all the Wind vectors
     fn draw_vectors(
         &self,
-        circles: &[&WindCircle],
+        circles: &[&dyn CircleFormation],
         draw: &Draw,
         scale_x: f32,
         scale_y: f32,

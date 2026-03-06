@@ -50,14 +50,14 @@ impl DroneManager {
 
     // Validation
     pub fn validate_circle_exists_for_drone(&self, drone: Drone, circle_id: usize) -> bool {
-        drone.wind_circles.contains_key(&circle_id)
+        drone.wind_circle_formations.contains_key(&circle_id)
     }
 
     // Composite operations that need coordinated access to wind field
     /// Remove a specific circle from a voice's wind circles
     /// This requires coordinated access to both the wind field and the voice
     pub fn remove_circle_from_drone(&self, drone: &mut Drone, circle_id: usize) -> bool {
-        if drone.wind_circles.get_mut(&circle_id).is_some() {
+        if drone.wind_circle_formations.get_mut(&circle_id).is_some() {
             drone.remove_wind_circle(circle_id);
             true
         } else {

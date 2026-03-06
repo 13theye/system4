@@ -2,7 +2,7 @@
 //
 // Read-only (or read-mostly) accessors used by UI/rendering.
 
-use crate::{forces::wind_circle::WindCircleParams, groups::VoiceId, model::Model};
+use crate::{forces::wind::wind_circle::WindCircleParams, groups::VoiceId, model::Model};
 
 impl Model {
     /// Get all wind circle IDs for a voice.
@@ -10,7 +10,7 @@ impl Model {
         let Some(drone) = self.voice_manager.get_drone(voice) else {
             return Vec::with_capacity(0);
         };
-        let mut ids: Vec<usize> = drone.wind_circles.keys().copied().collect();
+        let mut ids: Vec<usize> = drone.wind_circle_formations.keys().copied().collect();
         ids.sort();
         ids
     }
@@ -18,7 +18,7 @@ impl Model {
     /// Get the params of a circle.
     pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
         let voice = self.voice_manager.get_drone(voice)?;
-        voice.wind_circles.get(&id).map(|circle| circle.params())
+        voice.wind_circle_formations.get(&id).map(|circle| circle.params())
     }
 
     /// Get the alpha limit of a Voice ("brightness").
@@ -37,7 +37,7 @@ impl Model {
         };
 
         voice
-            .wind_circles
+            .wind_circle_formations
             .get(&id)
             .map(|circle| circle.params().gravity)
             .unwrap_or(0.0)
@@ -50,7 +50,7 @@ impl Model {
         };
 
         voice
-            .wind_circles
+            .wind_circle_formations
             .get(&id)
             .map(|circle| circle.params().noise)
             .unwrap_or(0.0)

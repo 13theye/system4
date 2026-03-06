@@ -1,6 +1,6 @@
 use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, DroneCommandBuilder},
-    forces::wind_circle::WindCircle,
+    forces::wind::wind_circle::WindCircle,
     groups::VoiceId,
     terminals::commands::drone::DroneConfig,
 };
@@ -39,7 +39,7 @@ impl CircleCommandHandler {
 
         // Create the new WindCircle
         let voice = ctx.get_drone_mut(voice_id).unwrap();
-        let circle_id = voice.issue_wind_circle_idx();
+        let circle_id = voice.issue_wind_circle_formation_idx();
 
         let center = nannou::prelude::vec2(center_x, center_y);
         let circle = WindCircle::new(
@@ -250,7 +250,7 @@ impl CircleCommandHandler {
         let Some(voice) = ctx.get_drone(voice) else {
             return Vec::new();
         };
-        let mut ids: Vec<usize> = voice.wind_circles.keys().copied().collect();
+        let mut ids: Vec<usize> = voice.wind_circle_formations.keys().copied().collect();
         ids.sort();
         ids
     }

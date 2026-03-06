@@ -1,7 +1,7 @@
 // Parameter extraction for UI rendering
 // These structs hold pre-extracted parameter values to avoid borrow checker conflicts
 
-use crate::forces::wind_circle::WindCircleParams;
+use crate::forces::wind::wind_circle::WindCircleParams;
 use crate::groups::{DroneParams, VoiceId};
 use crate::model::Model;
 
