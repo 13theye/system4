@@ -58,7 +58,7 @@ impl DroneManager {
     /// This requires coordinated access to both the wind field and the voice
     pub fn remove_circle_from_drone(&self, drone: &mut Drone, circle_id: usize) -> bool {
         if drone.wind_circle_formations.get_mut(&circle_id).is_some() {
-            drone.remove_wind_circle(circle_id);
+            drone.remove_circle_formation(circle_id);
             true
         } else {
             false
@@ -68,6 +68,6 @@ impl DroneManager {
     /// Remove all circles from a voice's wind circles
     /// This requires coordinated access to both the wind field and the voice
     pub fn remove_all_circles_from_drone(&self, drone: &mut Drone) {
-        drone.remove_all_circles();
+        drone.remove_all_circle_formations();
     }
 }

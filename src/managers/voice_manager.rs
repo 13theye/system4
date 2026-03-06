@@ -81,7 +81,7 @@ impl VoiceManager {
     /// Check that a particular `WindCircle` exists for a `VoiceId`
     pub fn voice_has_wind_circle(&self, voice_id: VoiceId, circle_id: usize) -> bool {
         self.get_drone(voice_id)
-            .is_some_and(|drone| drone.has_wind_circle(circle_id))
+            .is_some_and(|drone| drone.has_circle_formation(circle_id))
     }
 
     /// Remove a `WindCircle` from a `VoiceId`
@@ -89,7 +89,7 @@ impl VoiceManager {
         let Some(drone) = self.get_mut_drone(voice_id) else {
             return false;
         };
-        drone.remove_wind_circle(circle_id);
+        drone.remove_circle_formation(circle_id);
         true
     }
 
@@ -99,7 +99,7 @@ impl VoiceManager {
             return;
         };
 
-        drone.remove_all_circles();
+        drone.remove_all_circle_formations();
     }
 
     /// Return a reference to the DroneManager's segment buffer for a `VoiceId`

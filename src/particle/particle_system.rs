@@ -729,7 +729,7 @@ impl ParticleSystem {
         scale_x: f32,
         scale_y: f32,
     ) {
-        // Collect all WindCircles across all voices
+        // Collect all CircleFormations across all voices
         let formations: Vec<&dyn CircleFormation> = voices
             .values()
             .filter_map(|v| v.as_drone())
@@ -753,10 +753,10 @@ impl ParticleSystem {
         // Draw all voices' emitters
         self.draw_emitters(voices, draw, scale_x, scale_y);
 
-        // Draw the circles themselves
-        formations.iter().for_each(|circle| {
-            circle.draw_center(draw, scale_x, scale_y);
-            circle.draw(draw, scale_x, scale_y);
+        // Draw the formations themselves
+        formations.iter().for_each(|formation| {
+            formation.draw_center(draw, scale_x, scale_y);
+            formation.draw(draw, scale_x, scale_y);
         });
     }
 

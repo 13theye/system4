@@ -135,7 +135,7 @@ impl Drone {
         );
 
         // Add the wind circle to the forces FIRST
-        self.add_wind_circle(circle);
+        self.add_circle_formation(Box::new(circle));
 
         // Create particle emitters (now that bounds can be calculated correctly)
         self.emitter_bounds = self.calculate_bounds();
@@ -263,24 +263,24 @@ impl Drone {
     /********** Wind Circle methods ********************* */
 
     /// Returns `true` if a WindCircle exists for the given `circle_id`
-    pub fn has_wind_circle(&self, circle_id: usize) -> bool {
+    pub fn has_circle_formation(&self, circle_id: usize) -> bool {
         self.wind_circle_formations.contains_key(&circle_id)
     }
 
     /// Add a WindCircle to this Voice
-    pub fn add_wind_circle(&mut self, circle: WindCircle) {
+    pub fn add_circle_formation(&mut self, formation: Box<dyn CircleFormation>) {
         self.wind_circle_formations
-            .insert(circle.id(), Box::new(circle));
+            .insert(formation.id(), formation);
         self.recalculate_emitters();
     }
 
     /// Remove a WindCircle from this voice
-    pub fn remove_wind_circle(&mut self, id: usize) {
+    pub fn remove_circle_formation(&mut self, id: usize) {
         self.wind_circle_formations.remove(&id);
         self.recalculate_emitters();
     }
 
-    pub fn remove_all_circles(&mut self) {
+    pub fn remove_all_circle_formations(&mut self) {
         self.wind_circle_formations.clear();
         self.recalculate_emitters();
     }

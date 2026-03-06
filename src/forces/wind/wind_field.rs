@@ -11,11 +11,12 @@ use crate::{
 /// Updates the particle based on these forces.
 pub fn apply_combined_winds_to_particle(
     particle: &mut ParticleCore,
-    circles: &[&dyn CircleFormation],
+    circle_formations: &[&dyn CircleFormation],
     mass_variation_factor: f32,
     noise: f64,
 ) {
-    let Some(combined_wind) = combined_wind_at_pos(circles, particle.position, noise) else {
+    let Some(combined_wind) = combined_wind_at_pos(circle_formations, particle.position, noise)
+    else {
         return; // No wind = no force applied
     };
 
@@ -25,13 +26,13 @@ pub fn apply_combined_winds_to_particle(
 /// Get combined `Wind` at a position in ParticleSystem coordinates
 /// Returns `None` if position is out of bounds or if there is no wind at that position
 pub fn combined_wind_at_pos(
-    circles: &[&dyn CircleFormation],
+    circle_formations: &[&dyn CircleFormation],
     position: Vec2,
     noise: f64,
 ) -> Option<Wind> {
-    let total_velocity = circles
+    let total_velocity = circle_formations
         .iter()
-        .filter_map(|circle| circle.wind_for_position(position, noise))
+        .filter_map(|cf| cf.wind_for_position(position, noise))
         .map(|wind| wind.velocity)
         .reduce(|a, b| a + b)?;
 
@@ -47,12 +48,13 @@ pub fn combined_wind_at_pos(
 
 pub fn apply_voice_wind_to_particle(
     particle: &mut ParticleCore,
-    circles: &[&dyn CircleFormation],
+    circle_formations: &[&dyn CircleFormation],
     mass_variation_factor: f32,
     noise: f64,
     current_voice: &VoiceId,
 ) {
-    let Some(combined_wind) = voice_wind_at_pos(circles, particle.position, noise, current_voice)
+    let Some(combined_wind) =
+        voice_wind_at_pos(circle_formations, particle.position, noise, current_voice)
     else {
         return; // No wind = no force applied
     };
@@ -64,15 +66,15 @@ pub fn apply_voice_wind_to_particle(
 /// `Winds` from the current voice
 /// Returns `None` if position is out of bounds or if there is no wind at that position
 pub fn voice_wind_at_pos(
-    circles: &[&dyn CircleFormation],
+    circle_formations: &[&dyn CircleFormation],
     position: Vec2,
     noise: f64,
     current_voice: &VoiceId,
 ) -> Option<Wind> {
-    let total_velocity = circles
+    let total_velocity = circle_formations
         .iter()
-        .filter(|circle| circle.parent_voice() == *current_voice)
-        .filter_map(|circle| circle.wind_for_position(position, noise))
+        .filter(|cf| cf.parent_voice() == *current_voice)
+        .filter_map(|cf| cf.wind_for_position(position, noise))
         .map(|wind| wind.velocity)
         .reduce(|a, b| a + b)?;
 
@@ -114,7 +116,7 @@ impl WindField {
     /// Draw the WindField with force vectors and origin
     pub fn draw(
         &self,
-        circles: &[&dyn CircleFormation],
+        circle_formations: &[&dyn CircleFormation],
         draw: &Draw,
         scale_x: f32,
         scale_y: f32,
@@ -122,13 +124,20 @@ impl WindField {
         should_combine: bool,
     ) {
         self.draw_origin(draw, scale_x, scale_y);
-        self.draw_vectors(circles, draw, scale_x, scale_y, perlin_gen, should_combine);
+        self.draw_vectors(
+            circle_formations,
+            draw,
+            scale_x,
+            scale_y,
+            perlin_gen,
+            should_combine,
+        );
     }
 
     /// Draw all the Wind vectors
     fn draw_vectors(
         &self,
-        circles: &[&dyn CircleFormation],
+        circle_formations: &[&dyn CircleFormation],
         draw: &Draw,
         scale_x: f32,
         scale_y: f32,
@@ -171,7 +180,9 @@ impl WindField {
 
                 if should_combine {
                     // Calculate wind at cell origin
-                    if let Some(wind) = combined_wind_at_pos(circles, cell_origin, noise_factor) {
+                    if let Some(wind) =
+                        combined_wind_at_pos(circle_formations, cell_origin, noise_factor)
+                    {
                         self.draw_wind_vector(
                             wind,
                             cell_origin,
@@ -184,9 +195,12 @@ impl WindField {
                 } else {
                     // Calculate and draw wind vectors for each voice
                     for voice_id in VoiceId::all_drones() {
-                        if let Some(wind) =
-                            voice_wind_at_pos(circles, cell_origin, noise_factor, &voice_id)
-                        {
+                        if let Some(wind) = voice_wind_at_pos(
+                            circle_formations,
+                            cell_origin,
+                            noise_factor,
+                            &voice_id,
+                        ) {
                             self.draw_wind_vector(
                                 wind,
                                 cell_origin,

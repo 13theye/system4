@@ -54,7 +54,7 @@ impl CircleCommandHandler {
         );
 
         // Add the circle to the voice
-        voice.add_wind_circle(circle.clone());
+        voice.add_circle_formation(Box::new(circle));
 
         // Queue parameter update commands for processing after this command completes
         let parameter_commands = DroneCommandBuilder::generate_circle_parameter_commands(
