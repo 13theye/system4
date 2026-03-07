@@ -178,10 +178,8 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             let mut overlay = model.ui_state.text_overlay.borrow_mut();
 
             // Always route AI status text into Voice2's history (not live text).
-            overlay.push_ai_status_history_if_changed(
-                model.voice_manager.current_ai_status_text(),
-                now,
-            );
+            let (ai_status_text, do_fade) = model.voice_manager.current_ai_status_text();
+            overlay.push_ai_status_history_if_changed(ai_status_text, do_fade, now);
 
             overlay.update_and_draw_all(&rendering.draw, now);
 

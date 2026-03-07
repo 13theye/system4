@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// capacity: the number of slots in the sequence.
 /// subdivision: the beat subdivision used to advance this sequence.
 /// sequence: the sequence object.
-/// feeling: a haiku describing the thinking behind the sequence.
+/// feeling: a sijo describing the thinking behind the sequence.
 pub struct RhythmObject {
     pub thought_process: String,
     pub capacity: usize,
@@ -86,7 +86,7 @@ impl SequenceObject {
     }
 }
 
-/// The haiku describing the thinking behind the sequence.
+/// The sijo describing the thinking behind the sequence.
 /// Each line of the poem is a string.
 #[derive(Default, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct FeelingObject {

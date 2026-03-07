@@ -255,7 +255,7 @@ impl VoiceManager {
 
     /****************** AIRhythm methods ******************** */
 
-    pub fn current_ai_status_text(&self) -> Option<&str> {
+    pub fn current_ai_status_text(&self) -> (Option<&str>, bool) {
         self.ai_rhythm_manager.current_ai_status_text()
     }
 
