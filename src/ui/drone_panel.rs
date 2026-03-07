@@ -123,7 +123,7 @@ pub fn render_drone_voice_panel(
             ui.add_space(10.0);
             ui.separator();
             ui.add_space(5.0);
-            ui.label("Wind Circles:");
+            ui.label("Formations:");
 
             if !params.circles.is_empty() {
                 // Horizontal scroll area for multiple circles
@@ -132,11 +132,11 @@ pub fn render_drone_voice_panel(
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            for (circle_id, circle_params) in &params.circles {
+                            for (circle_id, label, circle_params) in &params.circles {
                                 // Each circle gets its own vertical column
                                 ui.vertical(|ui| {
                                     ui.set_width(140.0);
-                                    ui.label(format!("Circle {}", circle_id));
+                                    ui.label(format!("{} {}", label, circle_id));
                                     ui.add_space(5.0);
 
                                     // Outer Radius slider

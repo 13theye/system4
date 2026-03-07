@@ -34,6 +34,7 @@ pub fn make_drone_command(
         center_x: None,
         center_y: None,
         additional_parameters: std::collections::HashMap::new(),
+        formation_type: crate::command_engine::commands::FormationType::WindCircle,
     };
 
     config.to_create_command(source)

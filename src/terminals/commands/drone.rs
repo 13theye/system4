@@ -3,6 +3,7 @@
 // Drone command builder and configuration
 
 use super::TerminalCommandBuilder;
+use crate::command_engine::commands::FormationType;
 use crate::command_engine::DroneCommandBuilder;
 use crate::command_engine::{Command, CommandInner, CommandSource, CompositeCommand};
 use crate::groups::VoiceId;
@@ -25,6 +26,7 @@ pub struct DroneBuilder {
     pub center_x: Option<f32>,
     pub center_y: Option<f32>,
     pub parameters: HashMap<String, ParameterValue>,
+    pub formation_type: FormationType,
 }
 
 impl TerminalCommandBuilder for DroneBuilder {
@@ -45,6 +47,7 @@ impl TerminalCommandBuilder for DroneBuilder {
             center_x: None,
             center_y: None,
             parameters: HashMap::new(),
+            formation_type: FormationType::WindCircle,
         }
     }
 
@@ -196,6 +199,7 @@ impl TerminalCommandBuilder for DroneBuilder {
             center_y: self.center_y, // None = unchanged, Some = set to value
 
             additional_parameters: self.parameters,
+            formation_type: self.formation_type,
         }
     }
 }
@@ -217,6 +221,7 @@ pub struct DroneConfig {
     pub noise: Option<f32>,
 
     pub additional_parameters: HashMap<String, ParameterValue>,
+    pub formation_type: FormationType,
 }
 
 impl DroneConfig {
@@ -248,6 +253,7 @@ impl DroneConfig {
             center_x: Some(default_center_x),
             center_y: Some(default_center_y),
             additional_parameters: HashMap::new(),
+            formation_type: FormationType::WindCircle,
         }
     }
 
@@ -269,6 +275,7 @@ impl DroneConfig {
             center_x: self.center_x.or(defaults.center_x),
             center_y: self.center_y.or(defaults.center_y),
             additional_parameters: self.additional_parameters,
+            formation_type: self.formation_type,
         }
     }
 

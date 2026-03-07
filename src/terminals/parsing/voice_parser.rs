@@ -5,11 +5,14 @@ use super::{
     parameter::{categorize_parameter, ParameterCategory, ParameterValue, VoiceType},
     utils::ParsingUtils,
 };
-use crate::terminals::{
-    commands::{
-        drone::DroneBuilder, rhythm::RhythmBuilder, TerminalCommand, TerminalCommandBuilder,
+use crate::{
+    command_engine::commands::FormationType,
+    terminals::{
+        commands::{
+            drone::DroneBuilder, rhythm::RhythmBuilder, TerminalCommand, TerminalCommandBuilder,
+        },
+        tokens::Token,
     },
-    tokens::Token,
 };
 
 pub struct VoiceParser;
@@ -34,7 +37,8 @@ impl VoiceParser {
             "makeRhythm" => Self::parse_make_rhythm_from_voice(tokens, position, voice_id),
             "addWings" => Self::parse_wing_command(tokens, position, voice_id, true),
             "removeWings" => Self::parse_wing_command(tokens, position, voice_id, false),
-            "newCircle" => Self::parse_new_circle_from_voice(tokens, position, voice_id),
+            "newCircle" => Self::parse_new_formation_from_voice(tokens, position, voice_id, FormationType::WindCircle),
+            "doubleCircle" => Self::parse_new_formation_from_voice(tokens, position, voice_id, FormationType::DoubleCircle),
             "removeCircle" => Self::parse_remove_circle_from_voice(tokens, position, voice_id),
             "clear" => Self::parse_clear_from_voice(tokens, position, voice_id),
             "generate" => Self::parse_generate_rhythm_from_voice(tokens, position, voice_id),
@@ -88,6 +92,10 @@ impl VoiceParser {
                 ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
                 ParsingUtils::parse_optional_semicolon(tokens, position)?;
                 break;
+            } else if method_name == "alt" {
+                ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
+                ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
+                builder.formation_type = FormationType::DoubleCircle;
             } else {
                 // Treat all other methods as drone parameters
                 let parameter = ParsingUtils::parse_parameter_call(tokens, position)?;
@@ -161,21 +169,22 @@ impl VoiceParser {
         }
     }
 
-    fn parse_new_circle_from_voice(
+    fn parse_new_formation_from_voice(
         tokens: &[Token],
         position: &mut usize,
         voice_id: i32,
+        formation_type: FormationType,
     ) -> Result<TerminalCommand, ParseError> {
-        // Parse: voice(voice_id).newCircle().parameters()
         ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
         ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
 
         let mut builder = DroneBuilder::new();
         builder.set_parameter("voice", ParameterValue::Number(voice_id as f32))?;
 
-        Ok(TerminalCommand::NewCircle {
+        Ok(TerminalCommand::NewFormation {
             voice_id,
             config: builder.build(),
+            formation_type,
         })
     }
 
@@ -276,6 +285,10 @@ impl VoiceParser {
                 ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
                 saw_make_drone = true;
                 // Continue parsing so that parameters after makeDrone() are also applied
+            } else if method_name == "alt" {
+                ParsingUtils::expect_token(tokens, position, &Token::LeftParen)?;
+                ParsingUtils::expect_token(tokens, position, &Token::RightParen)?;
+                drone_builder.formation_type = FormationType::DoubleCircle;
             } else {
                 // Parse additional parameter
                 let parameter = ParsingUtils::parse_parameter_call(tokens, position)?;

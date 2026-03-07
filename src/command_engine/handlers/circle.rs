@@ -1,6 +1,6 @@
 use crate::{
-    command_engine::{commands::CommandSource, context::ExecutionContext, DroneCommandBuilder},
-    forces::wind::wind_circle::WindCircle,
+    command_engine::{commands::CommandSource, commands::FormationType, context::ExecutionContext, DroneCommandBuilder},
+    forces::wind::{double_circle::DoubleCircle, wind_circle::WindCircle, CircleFormation},
     groups::VoiceId,
     terminals::commands::drone::DroneConfig,
 };
@@ -13,22 +13,21 @@ impl CircleCommandHandler {
         Self
     }
 
-    pub fn add_circle(
+    pub fn add_formation(
         &self,
         ctx: &mut dyn ExecutionContext,
         voice_id: VoiceId,
         circle_config: DroneConfig,
+        formation_type: FormationType,
         source: CommandSource,
     ) {
         if !ctx.has_drone(voice_id) {
-            println!("Error: Voice {:?} not found (NewCircle)", voice_id);
+            println!("Error: Voice {:?} not found (NewFormation)", voice_id);
             return;
         }
 
-        // Merge config with defaults
         let resolved_config = circle_config.merge_with_defaults();
 
-        // Extract circle parameters (voice-level params are ignored for new circles)
         let gravity = resolved_config.gravity.unwrap();
         let force = resolved_config.force.unwrap();
         let outer_radius = resolved_config.outer_radius.unwrap();
@@ -37,33 +36,27 @@ impl CircleCommandHandler {
         let center_y = resolved_config.center_y.unwrap();
         let noise = resolved_config.noise.unwrap();
 
-        // Create the new WindCircle
         let voice = ctx.get_drone_mut(voice_id).unwrap();
         let circle_id = voice.issue_wind_circle_formation_idx();
-
         let center = nannou::prelude::vec2(center_x, center_y);
-        let circle = WindCircle::new(
-            circle_id,
-            voice_id,
-            center,
-            outer_radius,
-            inner_radius,
-            force,
-            gravity,
-            noise,
-        );
 
-        // Add the circle to the voice
-        voice.add_circle_formation(Box::new(circle));
+        let formation: Box<dyn CircleFormation> = match formation_type {
+            FormationType::WindCircle => Box::new(WindCircle::new(
+                circle_id, voice_id, center, outer_radius, inner_radius, force, gravity, noise,
+            )),
+            FormationType::DoubleCircle => Box::new(DoubleCircle::new(
+                circle_id, voice_id, center, outer_radius, inner_radius, force, gravity, noise,
+            )),
+        };
 
-        // Queue parameter update commands for processing after this command completes
+        voice.add_circle_formation(formation);
+
         let parameter_commands = DroneCommandBuilder::generate_circle_parameter_commands(
             &resolved_config,
             voice_id,
             circle_id,
             source,
         );
-
         for param_cmd in parameter_commands {
             ctx.queue_command(param_cmd);
         }

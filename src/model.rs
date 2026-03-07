@@ -332,7 +332,7 @@ fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
             CompositeCommand::CreateRhythm { config } => Some(config.voice),
             CompositeCommand::ModifyDrone { voice_id, .. }
             | CompositeCommand::ModifyRhythm { voice_id, .. }
-            | CompositeCommand::NewCircle { voice_id, .. }
+            | CompositeCommand::NewFormation { voice_id, .. }
             | CompositeCommand::Clear { voice_id } => Some(*voice_id),
         },
     }

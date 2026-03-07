@@ -6,6 +6,7 @@ pub mod drone;
 pub mod rhythm;
 
 use super::parsing::{ParameterValue, ParseError};
+use crate::command_engine::commands::FormationType;
 use std::fmt;
 
 /// All possible commands that can be parsed
@@ -40,9 +41,10 @@ pub enum TerminalCommand {
     ListCircles {
         voice_id: i32,
     },
-    NewCircle {
+    NewFormation {
         voice_id: i32,
         config: drone::DroneConfig,
+        formation_type: FormationType,
     },
     RemoveCircle {
         voice_id: i32,
@@ -93,8 +95,12 @@ impl fmt::Display for TerminalCommand {
             TerminalCommand::ListCircles { voice_id } => {
                 write!(f, "ListCircles for voice {}", voice_id)
             }
-            TerminalCommand::NewCircle { voice_id, config } => {
-                writeln!(f, "NewCircle for voice {}:", voice_id)?;
+            TerminalCommand::NewFormation {
+                voice_id,
+                config,
+                formation_type,
+            } => {
+                writeln!(f, "New{:?} for voice {}:", formation_type, voice_id)?;
                 write!(f, "{}", config)
             }
             TerminalCommand::RemoveCircle {

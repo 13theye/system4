@@ -1,7 +1,8 @@
 // src/groups/voice.rs
 
 use crate::{
-    forces::wind::{wind_circle::WindCircle, CircleFormation},
+    command_engine::commands::FormationType,
+    forces::wind::{double_circle::DoubleCircle, wind_circle::WindCircle, CircleFormation},
     groups::VoiceId,
     particle::emitter::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
@@ -120,22 +121,20 @@ impl Drone {
 
         self.params.default_spawn_rate = default_spawn_rate;
 
-        // WindCircle creation
+        // Formation creation
         let center = vec2(center_x, center_y);
         let circle_id = self.issue_wind_circle_formation_idx();
-        let circle = WindCircle::new(
-            circle_id,
-            self.voice_id,
-            center,
-            outer_radius,
-            inner_radius,
-            force,
-            gravity,
-            noise,
-        );
+        let formation: Box<dyn CircleFormation> = match resolved_config.formation_type {
+            FormationType::WindCircle => Box::new(WindCircle::new(
+                circle_id, self.voice_id, center, outer_radius, inner_radius, force, gravity, noise,
+            )),
+            FormationType::DoubleCircle => Box::new(DoubleCircle::new(
+                circle_id, self.voice_id, center, outer_radius, inner_radius, force, gravity, noise,
+            )),
+        };
 
-        // Add the wind circle to the forces FIRST
-        self.add_circle_formation(Box::new(circle));
+        // Add the formation to the forces FIRST
+        self.add_circle_formation(formation);
 
         // Create particle emitters (now that bounds can be calculated correctly)
         self.emitter_bounds = self.calculate_bounds();

@@ -5,8 +5,8 @@
 use crate::{forces::wind::wind_circle::WindCircleParams, groups::VoiceId, model::Model};
 
 impl Model {
-    /// Get all wind circle IDs for a voice.
-    pub fn get_wind_circle_ids(&self, voice: VoiceId) -> Vec<usize> {
+    /// Get all formation IDs for a voice.
+    pub fn get_formation_ids(&self, voice: VoiceId) -> Vec<usize> {
         let Some(drone) = self.voice_manager.get_drone(voice) else {
             return Vec::with_capacity(0);
         };
@@ -15,10 +15,22 @@ impl Model {
         ids
     }
 
-    /// Get the params of a circle.
-    pub fn get_wind_circle_params(&self, voice: VoiceId, id: usize) -> Option<&WindCircleParams> {
+    /// Get the params of a formation.
+    pub fn get_formation_params(&self, voice: VoiceId, id: usize) -> Option<WindCircleParams> {
         let voice = self.voice_manager.get_drone(voice)?;
-        voice.wind_circle_formations.get(&id).map(|circle| circle.params())
+        voice
+            .wind_circle_formations
+            .get(&id)
+            .map(|circle| circle.params())
+    }
+
+    /// Get the label of a formation.
+    pub fn get_formation_label(&self, voice: VoiceId, id: usize) -> Option<&'static str> {
+        let voice = self.voice_manager.get_drone(voice)?;
+        voice
+            .wind_circle_formations
+            .get(&id)
+            .map(|circle| circle.label())
     }
 
     /// Get the alpha limit of a Voice ("brightness").

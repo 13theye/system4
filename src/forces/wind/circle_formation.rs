@@ -18,8 +18,11 @@ pub trait CircleFormation: Sync + Send {
     /// Returns the VoiceId of the WindCircleFormation
     fn parent_voice(&self) -> VoiceId;
 
-    /// Get a ref to a single set of WindCircleParams that describe the formation
-    fn params(&self) -> &WindCircleParams;
+    /// Returns a human-readable label identifying the formation type
+    fn label(&self) -> &'static str;
+
+    /// Get a single set of WindCircleParams that describe the formation
+    fn params(&self) -> WindCircleParams;
 
     /// Set the center of the WindFormation
     fn set_center(&mut self, center: Vec2);

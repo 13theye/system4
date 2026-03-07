@@ -109,12 +109,13 @@ impl CommandEngine {
                     self.rhythm_handler
                         .modify_rhythm(ctx, voice_id, config, command.source, now);
                 }
-                CompositeCommand::NewCircle {
+                CompositeCommand::NewFormation {
                     voice_id,
                     circle_config,
+                    formation_type,
                 } => {
                     self.circle_handler
-                        .add_circle(ctx, voice_id, circle_config, command.source);
+                        .add_formation(ctx, voice_id, circle_config, formation_type, command.source);
                 }
                 CompositeCommand::Clear { voice_id } => {
                     if ctx.has_drone(voice_id) {

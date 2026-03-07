@@ -97,9 +97,13 @@ impl CircleFormation for WindCircle {
         Rect::from_x_y_w_h(center.x, center.y, outer_radius * 2.0, outer_radius * 2.0)
     }
 
+    fn label(&self) -> &'static str {
+        "WindCircle"
+    }
+
     /******************* Methods to change circle properties *******************/
-    fn params(&self) -> &WindCircleParams {
-        &self.params
+    fn params(&self) -> WindCircleParams {
+        self.params
     }
 
     /// Set the center of the WindCircle
@@ -200,7 +204,7 @@ impl CircleFormation for WindCircle {
 /// - Force: The strength of the wind applied within the circle
 /// - Gravity: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
 /// - Noise: Amount of random angle variation (0.0-1.0, where 1.0 = �90� deviation)
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct WindCircleParams {
     /// center of the circle in the ParticleSystem space
     pub center: Vec2,
