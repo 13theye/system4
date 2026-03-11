@@ -181,7 +181,9 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             let (ai_status_text, do_fade) = model.voice_manager.current_ai_status_text();
             overlay.push_ai_status_history_if_changed(ai_status_text, do_fade, now);
 
-            overlay.update_and_draw_all(&rendering.draw, now);
+            if !model.ui_state.hide_terminal_text {
+                overlay.update_and_draw_all(&rendering.draw, now);
+            }
 
             // Draw the central dividing line
             rendering

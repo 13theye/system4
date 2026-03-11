@@ -12,7 +12,7 @@ use crate::utils::tween;
 // Initialization animation duration in secs
 pub(super) const INIT_ANIMATION_DURATION: f32 = 3.0;
 // Clear animation duration in secs
-pub(super) const CLEAR_ANIMATION_DURATION: f32 = 0.8;
+pub(super) const CLEAR_ANIMATION_DURATION: f32 = 2.4;
 // Wings reinit animation duration in secs
 pub(super) const WINGS_REINIT_ANIMATION_DURATION: f32 = 1.3;
 // The factor by which the animation speed can vary
