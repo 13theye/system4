@@ -169,6 +169,7 @@ impl ParticleSystem {
         now: Instant,
         perlin_seed: u32,
         engine_debug: bool,
+        wall_split: Option<f32>,
     ) {
         self.frame_state.frame_start = Instant::now();
 
@@ -288,6 +289,21 @@ impl ParticleSystem {
                     // Apply forces to the particle position.
                     // Apply particle-level color change.
                     core.update(color, alpha_limit, framerate_factor);
+
+                    // Hard bounce off center line wall.
+                    // Detect x = 0 crossing, check if y is in the drawn wall region, then reflect vx.
+                    if let Some(split) = wall_split {
+                        let prev_x = core.position.x - core.velocity.x * framerate_factor;
+                        let curr_x = core.position.x;
+                        if prev_x * curr_x < 0.0 {
+                            let half_h = bounds_rect.h() / 2.0;
+                            let gap_half = split * half_h;
+                            if core.position.y.abs() >= gap_half {
+                                core.velocity.x = -core.velocity.x;
+                                core.position.x = -core.position.x;
+                            }
+                        }
+                    }
 
                     // Calculate the "vibration" position offset
                     let position_offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0

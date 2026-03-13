@@ -158,7 +158,13 @@ pub fn draw_connectors(
 }
 
 /// Draw only the debug geometry (no connector polygons) for all connectors.
-pub fn draw_connectors_debug(debug_draw: &Draw, elements: &ElementMap, capacity: usize, scale_x: f32, scale_y: f32) {
+pub fn draw_connectors_debug(
+    debug_draw: &Draw,
+    elements: &ElementMap,
+    capacity: usize,
+    scale_x: f32,
+    scale_y: f32,
+) {
     let mut indices: Vec<usize> = elements
         .keys()
         .copied()
@@ -179,7 +185,11 @@ pub fn draw_connectors_debug(debug_draw: &Draw, elements: &ElementMap, capacity:
             let c2 = elements[&pair[1]].params.get_position();
             let d = c2 - c1;
             let len = d.length();
-            if len < 1e-6 { Vec2::ZERO } else { d / len }
+            if len < 1e-6 {
+                Vec2::ZERO
+            } else {
+                d / len
+            }
         })
         .collect();
 
@@ -192,7 +202,10 @@ pub fn draw_connectors_debug(debug_draw: &Draw, elements: &ElementMap, capacity:
             let prev_dir = dirs[i - 1];
             let curr_dir = dirs[i];
             let dot = prev_dir.dot(curr_dir).clamp(-1.0, 1.0);
-            Some(BendInfo { angle: dot.acos(), cross: prev_dir.x * curr_dir.y - prev_dir.y * curr_dir.x })
+            Some(BendInfo {
+                angle: dot.acos(),
+                cross: prev_dir.x * curr_dir.y - prev_dir.y * curr_dir.x,
+            })
         } else {
             None
         };
@@ -201,17 +214,31 @@ pub fn draw_connectors_debug(debug_draw: &Draw, elements: &ElementMap, capacity:
             let curr_dir = dirs[i];
             let next_dir = dirs[i + 1];
             let dot = curr_dir.dot(next_dir).clamp(-1.0, 1.0);
-            Some(BendInfo { angle: dot.acos(), cross: curr_dir.x * next_dir.y - curr_dir.y * next_dir.x })
+            Some(BendInfo {
+                angle: dot.acos(),
+                cross: curr_dir.x * next_dir.y - curr_dir.y * next_dir.x,
+            })
         } else {
             None
         };
 
         // Pass debug_draw as the main draw (unused for polygon), debug geometry goes to debug_draw
-        draw_connector(debug_draw, e1, e2, bend_c1, bend_c2, Some(debug_draw), false, scale_x, scale_y);
+        draw_connector(
+            debug_draw,
+            e1,
+            e2,
+            bend_c1,
+            bend_c2,
+            Some(debug_draw),
+            false,
+            scale_x,
+            scale_y,
+        );
     }
 }
 
 /// Draw a single Bezier-based connector between two adjacent elements.
+#[allow(clippy::too_many_arguments)]
 fn draw_connector(
     draw: &Draw,
     e1: &RhythmElement,
@@ -288,7 +315,11 @@ fn draw_connector(
     }
 
     // Debug drawing
-    if let Some(dbg) = debug_draw.or(if SHOW_DEBUG_GEOMETRY { Some(draw) } else { None }) {
+    if let Some(dbg) = debug_draw.or(if SHOW_DEBUG_GEOMETRY {
+        Some(draw)
+    } else {
+        None
+    }) {
         draw_debug_info(
             dbg,
             c1,

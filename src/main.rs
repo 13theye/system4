@@ -163,6 +163,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         now,
         app.duration.since_start.as_millis() as u32,
         model.engine_debug,
+        model.center_line.split_progress(),
     );
 
     // Update masks animations

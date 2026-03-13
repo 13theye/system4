@@ -108,6 +108,36 @@ impl CenterLine {
         }
     }
 
+    /// Returns the current split progress for wall collision purposes.
+    ///
+    /// - `None` → line is `Hidden`, no wall exists
+    /// - `Some(0.0)` → fully visible, full wall
+    /// - `Some(1.0)` → fully split off-screen
+    pub fn split_progress(&self) -> Option<f32> {
+        match self.state {
+            CenterLineState::Hidden => None,
+            CenterLineState::Visible => Some(0.0),
+            CenterLineState::Hiding {
+                start_time,
+                start_progress,
+            } => Some(current_hide_progress(
+                start_time,
+                start_progress,
+                self.animation_duration,
+                Instant::now(),
+            )),
+            CenterLineState::Showing {
+                start_time,
+                start_progress,
+            } => Some(current_show_progress(
+                start_time,
+                start_progress,
+                self.animation_duration,
+                Instant::now(),
+            )),
+        }
+    }
+
     /// Draw the line (or its animated halves) into `draw`.
     ///
     /// `height` is the full height of the render texture in pixels (centered
