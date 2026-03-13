@@ -35,14 +35,16 @@ enum CenterLineState {
     },
 }
 
-impl CenterLine {
-    pub fn new() -> Self {
+impl Default for CenterLine {
+    fn default() -> Self {
         Self {
             animation_duration: Duration::from_secs_f32(DEFAULT_ANIMATION_DURATION_SECS),
             state: CenterLineState::Visible,
         }
     }
+}
 
+impl CenterLine {
     /// Begin the hide animation from the current position.
     pub fn trigger_hide(&mut self) {
         let now = Instant::now();

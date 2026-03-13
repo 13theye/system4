@@ -34,7 +34,9 @@ fn model(app: &App) -> Model {
 
     // Create RhythmView
     let rhythm_view = RhythmView::new();
-    let center_line = CenterLine::new();
+
+    // Create CenterLine
+    let center_line = CenterLine::default();
 
     let window_ids = init::windows::create_windows(app, &settings);
 
