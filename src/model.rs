@@ -21,8 +21,9 @@ use crate::{
     terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
     utils::IdGenerator,
-    view::rhythm::RhythmView,
+    view::{center_line::CenterLine, rhythm::RhythmView},
 };
+
 
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
@@ -31,6 +32,7 @@ pub struct Model {
     // Visual systems
     pub particle_system: ParticleSystem,
     pub rhythm_view: RhythmView,
+    pub center_line: CenterLine,
 
     // State managers
     pub voice_manager: VoiceManager,

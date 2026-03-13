@@ -38,6 +38,9 @@ pub struct UiState {
 
     /// When enabled, the terminal text overlay is not rendered in the audience window.
     pub hide_terminal_text: bool,
+
+    /// Tracks the checkbox state for the centerline hide toggle.
+    pub hide_centerline: bool,
 }
 
 impl UiState {
@@ -59,6 +62,7 @@ impl UiState {
             active_tab: UIActiveTab::Terminal,
             auto_ai_from_voice1: false,
             hide_terminal_text: false,
+            hide_centerline: false,
         }
     }
 

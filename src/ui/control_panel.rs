@@ -537,6 +537,31 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         ui.heading("Display");
                                         ui.add_space(8.0);
                                         ui.checkbox(&mut model.ui_state.hide_terminal_text, "Hide Terminal Text");
+
+                                        ui.add_space(4.0);
+
+                                        let centerline_changed = ui
+                                            .checkbox(&mut model.ui_state.hide_centerline, "Hide Centerline")
+                                            .changed();
+
+                                        if centerline_changed {
+                                            if model.ui_state.hide_centerline {
+                                                model.center_line.trigger_hide();
+                                            } else {
+                                                model.center_line.trigger_show();
+                                            }
+                                        }
+
+                                        ui.add_space(4.0);
+
+                                        {
+                                            let mut secs = model.center_line.animation_duration.as_secs_f32();
+                                            ui.horizontal(|ui| {
+                                                ui.label("Centerline anim (s):");
+                                                ui.add(egui::Slider::new(&mut secs, 0.1..=10.0).step_by(0.1));
+                                            });
+                                            model.center_line.animation_duration = Duration::from_secs_f32(secs);
+                                        }
                                     });
                                 }
 

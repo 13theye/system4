@@ -66,7 +66,7 @@ pub struct Drone {
 
 impl Drone {
     pub fn new_with_voice_id(voice_id: VoiceId) -> Option<Self> {
-        let mask_preset = presets::MaskPreset::Small(voice_id);
+        let mask_preset = presets::MaskPreset::Halfscreen(voice_id);
         let mask_size = presets::mask_size(&mask_preset)?;
         let mask_origin = presets::mask_origin(&mask_preset)?;
 
@@ -126,10 +126,24 @@ impl Drone {
         let circle_id = self.issue_wind_circle_formation_idx();
         let formation: Box<dyn CircleFormation> = match resolved_config.formation_type {
             FormationType::WindCircle => Box::new(WindCircle::new(
-                circle_id, self.voice_id, center, outer_radius, inner_radius, force, gravity, noise,
+                circle_id,
+                self.voice_id,
+                center,
+                outer_radius,
+                inner_radius,
+                force,
+                gravity,
+                noise,
             )),
             FormationType::DoubleCircle => Box::new(DoubleCircle::new(
-                circle_id, self.voice_id, center, outer_radius, inner_radius, force, gravity, noise,
+                circle_id,
+                self.voice_id,
+                center,
+                outer_radius,
+                inner_radius,
+                force,
+                gravity,
+                noise,
             )),
         };
 
