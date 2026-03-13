@@ -162,10 +162,10 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
-        // Draw rhythm formations to rhythm_alpha texture
+        // Draw rhythm formations to rhythm_alpha texture (no debug geometry here)
         model
             .rhythm_view
-            .draw_alpha_elements(&rendering.draw, model.ui_state.show_debug_geometry);
+            .draw_alpha_elements(&rendering.draw, None);
 
         rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_alpha");
 
@@ -190,6 +190,11 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
                 &rendering.draw,
                 rendering.output_texture.height() as f32,
             );
+        }
+
+        // Draw debug geometry into the top composite layer
+        if model.ui_state.show_debug_geometry {
+            model.rhythm_view.draw_debug_geometry(&rendering.draw, 1.0, 1.0);
         }
 
         // Encode text overlay to terminal texture

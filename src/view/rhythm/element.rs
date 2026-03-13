@@ -110,10 +110,13 @@ impl RhythmElementParams {
 }
 
 impl RhythmElement {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         initial_position: Vec2,
         min_position: Vec2,
         max_position: Vec2,
+        min_radius: f32,
+        max_radius: f32,
         movement_duration: f32,
         slot_params: RhythmSlotParams,
         now: Instant,
@@ -122,6 +125,8 @@ impl RhythmElement {
             current_position: initial_position,
             min_position,
             max_position,
+            min_radius,
+            max_radius,
             slot: slot_params,
             ..Default::default()
         };

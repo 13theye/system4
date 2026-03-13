@@ -25,12 +25,12 @@ pub(super) const COLOR_GRADIENT_ELLIPSE_RATIO: f32 = 1.2;
 pub(super) const COLOR_DWELL: f32 = 0.6;
 
 // The minimum and maximum element radii in pixels
-pub(super) const MIN_ELEMENT_RADIUS: f32 = 50.0;
-pub(super) const MAX_ELEMENT_RADIUS: f32 = 100.0;
+pub const MIN_ELEMENT_RADIUS: f32 = 50.0;
+pub const MAX_ELEMENT_RADIUS: f32 = 100.0;
 
 // The minimum and maximum formation radii in pixels
-pub(super) const MIN_FORMATION_RADIUS: f32 = 450.0;
-pub(super) const MAX_FORMATION_RADIUS: f32 = 750.0;
+pub const MIN_FORMATION_RADIUS: f32 = 450.0;
+pub const MAX_FORMATION_RADIUS: f32 = 750.0;
 
 pub(super) const LIQUID_BASE_DISTANCE: f32 = 20.0;
 pub(super) const LIQUID_DISTANCE_VARIATION: f32 = 0.2;

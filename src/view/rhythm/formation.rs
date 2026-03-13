@@ -5,7 +5,7 @@ use std::{collections::HashMap, time::Instant};
 use super::{
     activation::ActivationElement,
     animation::*,
-    element::{RhythmElement, RhythmElementMovement},
+    element::{RhythmElement, RhythmElementMovement, RhythmElementSizing},
     rhythm_view::RhythmViewUpdateParams,
 };
 use crate::groups::{RhythmParams, VoiceId};
@@ -64,6 +64,8 @@ pub struct RhythmFormation {
     pub voice_id: VoiceId,
     pub side: RhythmFormationSide,
     pub params: RhythmFormationParams,
+    pub min_element_radius: f32,
+    pub max_element_radius: f32,
     pub capacity: usize,
     pub elements: ElementMap,
     pub activations: ActivationMap,
@@ -75,6 +77,10 @@ impl RhythmFormation {
     pub fn init_rhythm(
         voice_id: VoiceId,
         rhythm_params: &RhythmParams,
+        min_formation_radius: f32,
+        max_formation_radius: f32,
+        min_element_radius: f32,
+        max_element_radius: f32,
         now: Instant,
     ) -> Option<Self> {
         let Some(side) = Self::get_side(voice_id) else {
@@ -85,13 +91,19 @@ impl RhythmFormation {
             return None;
         };
 
-        let params = RhythmFormationParams::default();
-        let elements = Self::init_elements(side, rhythm_params, &params, now);
+        let params = RhythmFormationParams {
+            center: Vec2::new(0.0, 0.0),
+            min_radius: min_formation_radius,
+            max_radius: max_formation_radius,
+        };
+        let elements = Self::init_elements(side, rhythm_params, &params, min_element_radius, max_element_radius, now);
 
         Some(Self {
             voice_id,
             side,
             params,
+            min_element_radius,
+            max_element_radius,
             capacity: rhythm_params.capacity,
             elements,
             activations: HashMap::new(),
@@ -104,6 +116,8 @@ impl RhythmFormation {
         side: RhythmFormationSide,
         rhythm_params: &RhythmParams,
         formation_params: &RhythmFormationParams,
+        min_element_radius: f32,
+        max_element_radius: f32,
         now: Instant,
     ) -> ElementMap {
         let mut element_map: ElementMap = HashMap::new();
@@ -141,6 +155,8 @@ impl RhythmFormation {
                 initial_position,
                 *min_position,
                 max_position,
+                min_element_radius,
+                max_element_radius,
                 movement_duration,
                 slot_params,
                 now,
@@ -205,6 +221,8 @@ impl RhythmFormation {
                         initial_position,
                         *min_position,
                         max_position,
+                        self.min_element_radius,
+                        self.max_element_radius,
                         movement_duration,
                         slot_params,
                         now,
@@ -351,6 +369,71 @@ impl RhythmFormation {
         vec2(x, y)
     }
 
+    /// Update the formation radii and animate all elements to their new positions.
+    pub fn reposition_elements(&mut self, min_radius: f32, max_radius: f32, now: Instant) {
+        self.params.min_radius = min_radius;
+        self.params.max_radius = max_radius;
+
+        let new_min_positions =
+            Self::calculate_formation_positions(self.side, self.capacity, min_radius);
+
+        let mut rng = ThreadRng::default();
+
+        for (i, element) in self.elements.iter_mut() {
+            if *i >= self.capacity {
+                continue;
+            }
+            let Some(new_min_pos) = new_min_positions.get(i) else {
+                continue;
+            };
+            let new_max_pos =
+                Self::calculate_formation_position(*i, self.side, self.capacity, max_radius);
+
+            element.params.min_position = *new_min_pos;
+            element.params.max_position = new_max_pos;
+
+            let target = if element.is_wing {
+                element.wing_position()
+            } else {
+                *new_min_pos
+            };
+
+            let movement_duration = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+            element.movement = RhythmElementMovement::Moving {
+                start_pos: element.params.current_position,
+                target_pos: target,
+                start_time: now,
+                duration: movement_duration,
+            };
+            element.params.position_offset = vec2(0.0, 0.0);
+        }
+    }
+
+    /// Update element min/max radii and animate sizing for all elements.
+    pub fn update_element_radii(&mut self, min_radius: f32, max_radius: f32, now: Instant) {
+        self.min_element_radius = min_radius;
+        self.max_element_radius = max_radius;
+        let mut rng = ThreadRng::default();
+        for element in self.elements.values_mut() {
+            element.params.min_radius = min_radius;
+            element.params.max_radius = max_radius;
+
+            let target_radius = if element.is_wing {
+                element.wing_radius()
+            } else {
+                min_radius
+            };
+
+            let duration = adjusted_duration(INIT_ANIMATION_DURATION, &mut rng);
+            element.sizing = RhythmElementSizing::Changing {
+                start_radius: element.params.current_radius,
+                target_radius,
+                start_time: now,
+                duration,
+            };
+        }
+    }
+
     pub fn update(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
         // Update elements
         self.elements.iter_mut().for_each(|(i, element)| {
@@ -439,13 +522,17 @@ impl RhythmFormation {
         }
     }
 
-    pub fn draw_elements(&self, draw: &Draw, show_debug_geometry: bool) {
+    pub fn draw_elements(&self, draw: &Draw, debug_draw: Option<&Draw>) {
         // Draw connectors first so elements are layered on top
-        super::connector::draw_connectors(draw, &self.elements, self.capacity, show_debug_geometry);
+        super::connector::draw_connectors(draw, &self.elements, self.capacity, debug_draw);
 
         for element in self.elements.values() {
             element.draw(draw);
         }
+    }
+
+    pub fn draw_debug_geometry(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+        super::connector::draw_connectors_debug(draw, &self.elements, self.capacity, scale_x, scale_y);
     }
 
     pub fn draw_activations(&self, draw: &Draw) {

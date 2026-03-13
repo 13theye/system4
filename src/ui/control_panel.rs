@@ -406,6 +406,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                 }
 
                                 UIActiveTab::View => {
+                                    ui.horizontal_top(|ui| {
                                     ui.vertical(|ui| {
                                         ui.heading("Mask Controls");
                                         ui.add_space(8.0);
@@ -562,7 +563,67 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             });
                                             model.center_line.animation_duration = Duration::from_secs_f32(secs);
                                         }
-                                    });
+                                    }); // end first column
+
+                                    ui.separator();
+
+                                    ui.vertical(|ui| {
+                                        ui.heading("Rhythm Vis");
+                                        ui.add_space(8.0);
+
+                                        ui.label("Formation Radius");
+                                        ui.add_space(4.0);
+
+                                        let form_min_changed = ui.horizontal(|ui| {
+                                            ui.label("min:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.min_formation_radius,
+                                                1.0..=2000.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        let form_max_changed = ui.horizontal(|ui| {
+                                            ui.label("max:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.max_formation_radius,
+                                                1.0..=2000.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        if form_min_changed || form_max_changed {
+                                            let min = model.rhythm_view.min_formation_radius;
+                                            let max = model.rhythm_view.max_formation_radius;
+                                            model.rhythm_view.update_formation_radii(min, max, Instant::now());
+                                        }
+
+                                        ui.add_space(8.0);
+                                        ui.label("Element Radius");
+                                        ui.add_space(4.0);
+
+                                        let elem_min_changed = ui.horizontal(|ui| {
+                                            ui.label("min:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.min_element_radius,
+                                                1.0..=500.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        let elem_max_changed = ui.horizontal(|ui| {
+                                            ui.label("max:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.max_element_radius,
+                                                1.0..=500.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        if elem_min_changed || elem_max_changed {
+                                            let min = model.rhythm_view.min_element_radius;
+                                            let max = model.rhythm_view.max_element_radius;
+                                            model.rhythm_view.update_element_radii(min, max, Instant::now());
+                                        }
+                                    }); // end Rhythm Vis column
+
+                                    }); // end horizontal_top
                                 }
 
                                 // Debug UI panel
