@@ -247,7 +247,7 @@ impl DroneConfig {
             force: Some(0.0),
             feedback: Some(0.0),
             outer_radius: Some(800.0),
-            inner_radius: Some(200.0),
+            inner_radius: Some(400.0),
             noise: Some(0.0),
             vibration: Some(0.0),
             center_x: Some(default_center_x),

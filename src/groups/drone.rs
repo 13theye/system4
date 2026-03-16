@@ -66,7 +66,7 @@ pub struct Drone {
 
 impl Drone {
     pub fn new_with_voice_id(voice_id: VoiceId) -> Option<Self> {
-        let mask_preset = presets::MaskPreset::Halfscreen(voice_id);
+        let mask_preset = presets::MaskPreset::Fullscreen(voice_id);
         let mask_size = presets::mask_size(&mask_preset)?;
         let mask_origin = presets::mask_origin(&mask_preset)?;
 
