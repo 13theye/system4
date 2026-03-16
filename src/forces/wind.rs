@@ -7,10 +7,14 @@ use nannou::prelude::*;
 use crate::particle::ParticleCore;
 
 // Re-export main Wind types
-pub use crate::forces::{
-    wind_circle::WindCircle,
-    wind_field::{self, WindField},
-};
+pub mod circle_formation;
+pub mod double_circle;
+pub mod wind_circle;
+pub mod wind_field;
+
+pub use circle_formation::CircleFormation;
+pub use wind_circle::WindCircle;
+pub use wind_field::WindField;
 
 /// Original Wind struct has been simplified as a simple Vec2 encoding both strengh and direction.
 #[derive(Debug, Default, Clone)]

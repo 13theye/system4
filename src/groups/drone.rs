@@ -1,7 +1,8 @@
 // src/groups/voice.rs
 
 use crate::{
-    forces::wind::WindCircle,
+    command_engine::commands::FormationType,
+    forces::wind::{double_circle::DoubleCircle, wind_circle::WindCircle, CircleFormation},
     groups::VoiceId,
     particle::emitter::{EmitDirection, Emitter, LinearEmitter},
     terminals::commands::drone::DroneConfig,
@@ -56,8 +57,8 @@ pub struct Drone {
     pub emitter_bounds: Rect,
 
     pub emitters: Vec<Box<dyn Emitter>>,
-    pub wind_circles: HashMap<usize, WindCircle>,
-    current_wind_circle_idx: usize,
+    pub wind_circle_formations: HashMap<usize, Box<dyn CircleFormation>>,
+    current_wind_circle_formation_idx: usize,
 
     // Mask
     pub mask: Mask,
@@ -65,7 +66,7 @@ pub struct Drone {
 
 impl Drone {
     pub fn new_with_voice_id(voice_id: VoiceId) -> Option<Self> {
-        let mask_preset = presets::MaskPreset::Small(voice_id);
+        let mask_preset = presets::MaskPreset::Fullscreen(voice_id);
         let mask_size = presets::mask_size(&mask_preset)?;
         let mask_origin = presets::mask_origin(&mask_preset)?;
 
@@ -77,8 +78,8 @@ impl Drone {
             params: DroneParams::default(),
             emitter_bounds: Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0),
             emitters: Vec::new(),
-            wind_circles: HashMap::new(),
-            current_wind_circle_idx: 0,
+            wind_circle_formations: HashMap::new(),
+            current_wind_circle_formation_idx: 0,
             mask,
         })
     }
@@ -88,14 +89,14 @@ impl Drone {
         self
     }
 
-    pub fn issue_wind_circle_idx(&mut self) -> usize {
-        if let Some(i) =
-            (0..self.current_wind_circle_idx).find(|&i| !self.wind_circles.contains_key(&i))
+    pub fn issue_wind_circle_formation_idx(&mut self) -> usize {
+        if let Some(i) = (0..self.current_wind_circle_formation_idx)
+            .find(|&i| !self.wind_circle_formations.contains_key(&i))
         {
             i
         } else {
-            let idx = self.current_wind_circle_idx;
-            self.current_wind_circle_idx += 1;
+            let idx = self.current_wind_circle_formation_idx;
+            self.current_wind_circle_formation_idx += 1;
             idx
         }
     }
@@ -120,22 +121,34 @@ impl Drone {
 
         self.params.default_spawn_rate = default_spawn_rate;
 
-        // WindCircle creation
+        // Formation creation
         let center = vec2(center_x, center_y);
-        let circle_id = self.issue_wind_circle_idx();
-        let circle = WindCircle::new(
-            circle_id,
-            self.voice_id,
-            center,
-            outer_radius,
-            inner_radius,
-            force,
-            gravity,
-            noise,
-        );
+        let circle_id = self.issue_wind_circle_formation_idx();
+        let formation: Box<dyn CircleFormation> = match resolved_config.formation_type {
+            FormationType::WindCircle => Box::new(WindCircle::new(
+                circle_id,
+                self.voice_id,
+                center,
+                outer_radius,
+                inner_radius,
+                force,
+                gravity,
+                noise,
+            )),
+            FormationType::DoubleCircle => Box::new(DoubleCircle::new(
+                circle_id,
+                self.voice_id,
+                center,
+                outer_radius,
+                inner_radius,
+                force,
+                gravity,
+                noise,
+            )),
+        };
 
-        // Add the wind circle to the forces FIRST
-        self.add_wind_circle(circle);
+        // Add the formation to the forces FIRST
+        self.add_circle_formation(formation);
 
         // Create particle emitters (now that bounds can be calculated correctly)
         self.emitter_bounds = self.calculate_bounds();
@@ -149,7 +162,7 @@ impl Drone {
     }
 
     fn calculate_bounds(&self) -> Rect {
-        if self.wind_circles.is_empty() {
+        if self.wind_circle_formations.is_empty() {
             return Rect::from_x_y_w_h(0.0, 0.0, 0.0, 0.0);
         }
 
@@ -158,7 +171,7 @@ impl Drone {
         let mut min_y = f32::INFINITY;
         let mut max_y = f32::NEG_INFINITY;
 
-        for circle in self.wind_circles.values() {
+        for circle in self.wind_circle_formations.values() {
             let circle_rect = circle.rect();
 
             min_x = min_x.min(circle_rect.left());
@@ -263,31 +276,32 @@ impl Drone {
     /********** Wind Circle methods ********************* */
 
     /// Returns `true` if a WindCircle exists for the given `circle_id`
-    pub fn has_wind_circle(&self, circle_id: usize) -> bool {
-        self.wind_circles.contains_key(&circle_id)
+    pub fn has_circle_formation(&self, circle_id: usize) -> bool {
+        self.wind_circle_formations.contains_key(&circle_id)
     }
 
     /// Add a WindCircle to this Voice
-    pub fn add_wind_circle(&mut self, circle: WindCircle) {
-        self.wind_circles.insert(circle.id, circle);
+    pub fn add_circle_formation(&mut self, formation: Box<dyn CircleFormation>) {
+        self.wind_circle_formations
+            .insert(formation.id(), formation);
         self.recalculate_emitters();
     }
 
     /// Remove a WindCircle from this voice
-    pub fn remove_wind_circle(&mut self, id: usize) {
-        self.wind_circles.remove(&id);
+    pub fn remove_circle_formation(&mut self, id: usize) {
+        self.wind_circle_formations.remove(&id);
         self.recalculate_emitters();
     }
 
-    pub fn remove_all_circles(&mut self) {
-        self.wind_circles.clear();
+    pub fn remove_all_circle_formations(&mut self) {
+        self.wind_circle_formations.clear();
         self.recalculate_emitters();
     }
 
     /// Set the outer radius of a WindCircle
     pub fn set_circle_outer_radius(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_outer_radius(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_outer_radius(value);
             self.recalculate_emitters();
         } else {
             println!(
@@ -299,8 +313,8 @@ impl Drone {
 
     /// Set the inner radius of a WindCircle
     pub fn set_circle_inner_radius(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_inner_radius(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_inner_radius(value);
             self.recalculate_emitters();
         } else {
             println!(
@@ -311,8 +325,8 @@ impl Drone {
     }
 
     pub fn set_circle_center_x(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_center_x(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_center_x(value);
             self.recalculate_emitters();
         } else {
             println!(
@@ -323,8 +337,8 @@ impl Drone {
     }
 
     pub fn set_circle_center_y(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_center_y(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_center_y(value);
             self.recalculate_emitters();
         } else {
             println!(
@@ -336,8 +350,8 @@ impl Drone {
 
     /// Set the gravity of a WindCircle
     pub fn set_circle_gravity(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_gravity(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_gravity(value);
         } else {
             println!(
                 "Voice {} set gravity: Wind circle not found for id: {}",
@@ -348,8 +362,8 @@ impl Drone {
 
     /// Set the force of a WindCircle
     pub fn set_circle_force(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_force(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_force(value);
         } else {
             println!(
                 "Voice {} set force: Wind circle not found for id: {}",
@@ -360,8 +374,8 @@ impl Drone {
 
     /// Set the outer radius of a WindCircle
     pub fn set_circle_noise(&mut self, id: usize, value: f32) {
-        if let Some(circle) = self.wind_circles.get_mut(&id) {
-            circle.params_mut().set_noise(value);
+        if let Some(circle) = self.wind_circle_formations.get_mut(&id) {
+            circle.set_noise(value);
         } else {
             println!(
                 "Voice {} set noise: Wind circle not found for id: {}",

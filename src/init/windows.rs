@@ -13,7 +13,7 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
     // Create windows
     let audience = app
         .new_window()
-        .title("Tacit Group: System_4 0.1.0")
+        .title("Tacit Group: System_4 v0.2.0")
         .size(
             settings.audience_window.width,
             settings.audience_window.height,
@@ -25,7 +25,7 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
 
     let performer = app
         .new_window()
-        .title("System_4 Performance Monitor v0.1.0")
+        .title("System_4 Performance Monitor")
         .size(
             settings.performer_window.width,
             settings.performer_window.height,
@@ -37,7 +37,7 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
 
     let control = app
         .new_window()
-        .title("System_4 Performer Control v0.1.0")
+        .title("System_4 Performer Control")
         .size(
             settings.control_window.width,
             settings.control_window.height,

@@ -72,16 +72,24 @@ impl Model {
                 println!("Queueing ListCircles command for voice: {:?}", voice_id);
                 self.queue_command(voice_command);
             }
-            TerminalCommand::NewCircle { voice_id, config } => {
+            TerminalCommand::NewFormation {
+                voice_id,
+                config,
+                formation_type,
+            } => {
                 let voice_enum = VoiceId::from_i32(voice_id);
                 let voice_command = Command::new(
-                    CommandInner::Composite(CompositeCommand::NewCircle {
+                    CommandInner::Composite(CompositeCommand::NewFormation {
                         voice_id: voice_enum,
                         circle_config: config,
+                        formation_type,
                     }),
                     CommandSource::Terminal,
                 );
-                println!("Queueing NewCircle command for voice: {:?}", voice_id);
+                println!(
+                    "Queueing New{:?} command for voice: {:?}",
+                    formation_type, voice_id
+                );
                 self.queue_command(voice_command);
             }
             TerminalCommand::RemoveCircle {

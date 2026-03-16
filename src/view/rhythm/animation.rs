@@ -12,7 +12,7 @@ use crate::utils::tween;
 // Initialization animation duration in secs
 pub(super) const INIT_ANIMATION_DURATION: f32 = 3.0;
 // Clear animation duration in secs
-pub(super) const CLEAR_ANIMATION_DURATION: f32 = 0.8;
+pub(super) const CLEAR_ANIMATION_DURATION: f32 = 2.4;
 // Wings reinit animation duration in secs
 pub(super) const WINGS_REINIT_ANIMATION_DURATION: f32 = 1.3;
 // The factor by which the animation speed can vary
@@ -25,12 +25,12 @@ pub(super) const COLOR_GRADIENT_ELLIPSE_RATIO: f32 = 1.2;
 pub(super) const COLOR_DWELL: f32 = 0.6;
 
 // The minimum and maximum element radii in pixels
-pub(super) const MIN_ELEMENT_RADIUS: f32 = 50.0;
-pub(super) const MAX_ELEMENT_RADIUS: f32 = 100.0;
+pub const MIN_ELEMENT_RADIUS: f32 = 50.0;
+pub const MAX_ELEMENT_RADIUS: f32 = 100.0;
 
 // The minimum and maximum formation radii in pixels
-pub(super) const MIN_FORMATION_RADIUS: f32 = 450.0;
-pub(super) const MAX_FORMATION_RADIUS: f32 = 750.0;
+pub const MIN_FORMATION_RADIUS: f32 = 450.0;
+pub const MAX_FORMATION_RADIUS: f32 = 750.0;
 
 pub(super) const LIQUID_BASE_DISTANCE: f32 = 20.0;
 pub(super) const LIQUID_DISTANCE_VARIATION: f32 = 0.2;

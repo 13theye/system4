@@ -14,6 +14,12 @@ use nannou::prelude::Vec2;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormationType {
+    WindCircle,
+    DoubleCircle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandSource {
     Terminal,
     OSC,
@@ -167,9 +173,10 @@ pub enum CompositeCommand {
         voice_id: VoiceId,
         config: RhythmConfig,
     },
-    NewCircle {
+    NewFormation {
         voice_id: VoiceId,
         circle_config: DroneConfig,
+        formation_type: FormationType,
     },
     Clear {
         voice_id: VoiceId,
@@ -203,8 +210,12 @@ impl Command {
                 CompositeCommand::ModifyRhythm { voice_id, .. } => {
                     format!("ModifyRhythm_{:?}", voice_id)
                 }
-                CompositeCommand::NewCircle { voice_id, .. } => {
-                    format!("NewCircle_{:?}", voice_id)
+                CompositeCommand::NewFormation {
+                    voice_id,
+                    formation_type,
+                    ..
+                } => {
+                    format!("NewFormation_{:?}_{:?}", voice_id, formation_type)
                 }
                 CompositeCommand::Clear { voice_id, .. } => {
                     format!("Clear_{:?}", voice_id)

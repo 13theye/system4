@@ -1,37 +1,40 @@
-//! src/forces2/wind_circle.rs
+//! src/forces/wind_circle.rs
 //!
 //! WindCircle implementation for Forces v2
 
-use crate::{forces::wind::Wind, groups::VoiceId};
+use crate::{
+    forces::wind::{CircleFormation, Wind},
+    groups::VoiceId,
+};
 use nannou::prelude::*;
 
 /// Maximum wind angle deviation in radians (90 degrees)
-const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
+pub const MAX_WIND_ANGLE_DEVIATION: f32 = std::f32::consts::PI;
 
 /// A circular wind force that affects particles within a donut-shaped region
 #[derive(Clone)]
 pub struct WindCircle {
-    pub id: usize,
-    pub parent_voice: VoiceId,
+    id: usize,
+    parent_voice: VoiceId,
     params: WindCircleParams, // Params of the circle
 }
 
-#[allow(clippy::too_many_arguments)]
 impl WindCircle {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: usize,
         parent_voice: VoiceId,
         center: Vec2,
-        radius: f32,
-        width: f32,
+        outer_radius: f32,
+        inner_radius: f32,
         strength: f32,
         center_bias: f32,
         noise: f32,
     ) -> Self {
         let config = WindCircleParams {
             center,
-            outer_radius: radius,
-            inner_radius: width,
+            outer_radius,
+            inner_radius,
             force: strength,
             gravity: center_bias,
             noise,
@@ -42,9 +45,19 @@ impl WindCircle {
             params: config,
         }
     }
+}
+
+impl CircleFormation for WindCircle {
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn parent_voice(&self) -> VoiceId {
+        self.parent_voice
+    }
 
     /// Calculate the Wind force for a given location, if any
-    pub fn wind_for_position(&self, position: Vec2, noise_factor: f64) -> Option<Wind> {
+    fn wind_for_position(&self, position: Vec2, noise_factor: f64) -> Option<Wind> {
         let params = &self.params;
         let distance_to_center = (position - params.center).length();
         let inner_radius = params.inner_radius;
@@ -77,28 +90,82 @@ impl WindCircle {
     }
 
     /// Returns a bounding Rect in screen coordinates that encompasses the entire WindCircle
-    pub fn rect(&self) -> Rect {
+    fn rect(&self) -> Rect {
         let center = self.params.center;
         let outer_radius = self.params.outer_radius;
 
         Rect::from_x_y_w_h(center.x, center.y, outer_radius * 2.0, outer_radius * 2.0)
     }
 
+    fn label(&self) -> &'static str {
+        "WindCircle"
+    }
+
     /******************* Methods to change circle properties *******************/
+    fn params(&self) -> WindCircleParams {
+        self.params
+    }
+
+    /// Set the center of the WindCircle
+    fn set_center(&mut self, center: Vec2) {
+        if self.params.center != center {
+            self.params.center = center;
+        }
+    }
+
+    fn set_center_x(&mut self, x: f32) {
+        if self.params.center.x != x {
+            self.params.center.x = x;
+        }
+    }
+
+    fn set_center_y(&mut self, y: f32) {
+        if self.params.center.y != y {
+            self.params.center.y = y;
+        }
+    }
+
+    /// Set the OR of the WindCircle
+    fn set_outer_radius(&mut self, radius: f32) {
+        if self.params.outer_radius != radius {
+            self.params.outer_radius = radius;
+        }
+    }
+
+    /// Set the IR of the WindCircle
+    fn set_inner_radius(&mut self, radius: f32) {
+        if self.params.inner_radius != radius {
+            self.params.inner_radius = radius;
+        }
+    }
+
+    /// Set the strength of the WindCircle
+    fn set_force(&mut self, force: f32) {
+        if self.params.force != force {
+            self.params.force = force;
+        }
+    }
+
+    /// Set the center bias of the WindCircle
+    fn set_gravity(&mut self, gravity: f32) {
+        if self.params.gravity != gravity {
+            self.params.gravity = gravity;
+        }
+    }
+
+    /// Set the angle variation of the WindCircle
+    fn set_noise(&mut self, noise: f32) {
+        let clamped_noise = noise.clamp(0.0, 1.0);
+        if self.params.noise != clamped_noise {
+            self.params.noise = clamped_noise;
+        }
+    }
+
+    /******************* Drawing ***************************************** */
     // These functions require scale parameters because they are meant to be drawn in the performer window.
 
-    /// Return a reference to the WindCircleParams
-    pub fn params(&self) -> &WindCircleParams {
-        &self.params
-    }
-
-    /// Return a mutable reference to the WindCircleParams
-    pub fn params_mut(&mut self) -> &mut WindCircleParams {
-        &mut self.params
-    }
-
     /// Draw the center of the WindCircle
-    pub fn draw_center(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+    fn draw_center(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         let center = self.params.center * vec2(scale_x, scale_y);
         draw.ellipse()
             .xy(center)
@@ -107,7 +174,7 @@ impl WindCircle {
     }
 
     /// Draw the WindCircle with outer and inner radius circles
-    pub fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
+    fn draw(&self, draw: &Draw, scale_x: f32, scale_y: f32) {
         let center = self.params.center * vec2(scale_x, scale_y);
         let outer_radius = self.params.outer_radius;
         let inner_radius = self.params.inner_radius;
@@ -137,7 +204,7 @@ impl WindCircle {
 /// - Force: The strength of the wind applied within the circle
 /// - Gravity: 0.0 is tangential, 1.0 is radial inward, 2.0 is tangential in the opposite direction
 /// - Noise: Amount of random angle variation (0.0-1.0, where 1.0 = �90� deviation)
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct WindCircleParams {
     /// center of the circle in the ParticleSystem space
     pub center: Vec2,
@@ -162,63 +229,6 @@ impl Default for WindCircleParams {
             force: 0.0,
             gravity: 0.0,
             noise: 0.0,
-        }
-    }
-}
-
-impl WindCircleParams {
-    /// Set the center of the WindCircle
-    pub fn set_center(&mut self, center: Vec2) {
-        if self.center != center {
-            self.center = center;
-        }
-    }
-
-    pub fn set_center_x(&mut self, x: f32) {
-        if self.center.x != x {
-            self.center.x = x;
-        }
-    }
-
-    pub fn set_center_y(&mut self, y: f32) {
-        if self.center.y != y {
-            self.center.y = y;
-        }
-    }
-
-    /// Set the OR of the WindCircle
-    pub fn set_outer_radius(&mut self, radius: f32) {
-        if self.outer_radius != radius {
-            self.outer_radius = radius;
-        }
-    }
-
-    /// Set the IR of the WindCircle
-    pub fn set_inner_radius(&mut self, radius: f32) {
-        if self.inner_radius != radius {
-            self.inner_radius = radius;
-        }
-    }
-
-    /// Set the strength of the WindCircle
-    pub fn set_force(&mut self, force: f32) {
-        if self.force != force {
-            self.force = force;
-        }
-    }
-
-    /// Set the center bias of the WindCircle
-    pub fn set_gravity(&mut self, gravity: f32) {
-        if self.gravity != gravity {
-            self.gravity = gravity;
-        }
-    }
-
-    /// Set the angle variation of the WindCircle
-    pub fn set_noise(&mut self, noise: f32) {
-        let clamped_noise = noise.clamp(0.0, 1.0);
-        if self.noise != clamped_noise {
-            self.noise = clamped_noise;
         }
     }
 }

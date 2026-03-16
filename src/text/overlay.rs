@@ -171,13 +171,19 @@ impl TextOverlay {
     }
 
     /// Push AI status text into Voice2's history (not live text) when it changes.
-    pub fn push_ai_status_history_if_changed(&mut self, text: Option<&str>, now: Instant) {
+    pub fn push_ai_status_history_if_changed(
+        &mut self,
+        text: Option<&str>,
+        do_fade: bool,
+        now: Instant,
+    ) {
         let Some(text) = text else {
             self.last_ai_status_text = None;
             self.last_ai_status_lines.clear();
             return;
         };
 
+        // Text hasn't changed, so do nothing
         if self.last_ai_status_text.as_deref() == Some(text) {
             return;
         }
@@ -206,7 +212,11 @@ impl TextOverlay {
         // any wrapped lines whose text didn't change compared to the previous wrap.
         let block = TextBlock::new(text)
             .style(TextStyle::Ai)
-            .fade(TextFadeMode::Fade)
+            .fade(if do_fade {
+                TextFadeMode::Fade
+            } else {
+                TextFadeMode::NoFade
+            })
             .wrap(WrapPolicy::WordWrap);
 
         let freshly_wrapped: Vec<TextLine> = line_breaker::break_block(&block, now, max_chars);

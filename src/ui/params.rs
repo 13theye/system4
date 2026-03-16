@@ -1,7 +1,7 @@
 // Parameter extraction for UI rendering
 // These structs hold pre-extracted parameter values to avoid borrow checker conflicts
 
-use crate::forces::wind_circle::WindCircleParams;
+use crate::forces::wind::wind_circle::WindCircleParams;
 use crate::groups::{DroneParams, VoiceId};
 use crate::model::Model;
 
@@ -10,8 +10,8 @@ use crate::model::Model;
 #[derive(Clone, Debug)]
 pub struct DroneVoiceParams {
     pub voice_id: VoiceId,
-    /// List of (circle_id, circle_params) tuples
-    pub circles: Vec<(usize, WindCircleParams)>,
+    /// List of (circle_id, label, circle_params) tuples
+    pub circles: Vec<(usize, &'static str, WindCircleParams)>,
     /// Voice-level parameters (contains alpha, volume, feedback, vibration, emitter_position, etc.)
     pub voice_params: DroneParams,
 }
@@ -19,15 +19,14 @@ pub struct DroneVoiceParams {
 impl DroneVoiceParams {
     /// Extract all parameters for a drone voice from the model
     pub fn extract(model: &Model, voice_id: VoiceId) -> Self {
-        let circle_ids = model.get_wind_circle_ids(voice_id);
+        let circle_ids = model.get_formation_ids(voice_id);
 
-        let circles: Vec<(usize, WindCircleParams)> = circle_ids
+        let circles: Vec<(usize, &'static str, WindCircleParams)> = circle_ids
             .iter()
             .filter_map(|&id| {
-                model
-                    .get_wind_circle_params(voice_id, id)
-                    .cloned()
-                    .map(|params| (id, params))
+                let label = model.get_formation_label(voice_id, id)?;
+                let params = model.get_formation_params(voice_id, id)?;
+                Some((id, label, params))
             })
             .collect();
 

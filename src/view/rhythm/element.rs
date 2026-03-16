@@ -95,9 +95,9 @@ impl Default for RhythmElementParams {
             // Dark teal
             color: rgba(0.247, 0.349, 0.353, 1.0),
             // Red
-            gradient_color_1: rgba(0.847, 0.137, 0.161, 1.0),
+            gradient_color_1: rgba(1.0, 0.162, 0.190, 1.0),
             // Light teal
-            gradient_color_2: rgba(0.486, 0.706, 0.702, 1.0),
+            gradient_color_2: rgba(0.689, 1.0, 0.995, 1.0),
         }
     }
 }
@@ -110,10 +110,13 @@ impl RhythmElementParams {
 }
 
 impl RhythmElement {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         initial_position: Vec2,
         min_position: Vec2,
         max_position: Vec2,
+        min_radius: f32,
+        max_radius: f32,
         movement_duration: f32,
         slot_params: RhythmSlotParams,
         now: Instant,
@@ -122,6 +125,8 @@ impl RhythmElement {
             current_position: initial_position,
             min_position,
             max_position,
+            min_radius,
+            max_radius,
             slot: slot_params,
             ..Default::default()
         };
@@ -201,14 +206,16 @@ impl RhythmElement {
         matches!(self.clear_state, RhythmElementClearState::ToClear)
     }
 
+    /// Set the visual position of the wing based on the slot's length parameter
     pub fn wing_position(&self) -> Vec2 {
         self.params
             .min_position
-            .lerp(self.params.max_position, self.params.slot.velocity)
+            .lerp(self.params.max_position, self.params.slot.length)
     }
 
+    /// Sets the wing radius based on the slot's velocity parameter
     pub fn wing_radius(&self) -> f32 {
-        (self.params.slot.length * (self.params.max_radius - self.params.min_radius))
+        (self.params.slot.velocity * (self.params.max_radius - self.params.min_radius))
             + self.params.min_radius
     }
 

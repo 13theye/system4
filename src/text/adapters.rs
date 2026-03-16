@@ -183,9 +183,14 @@ fn format_composite(cmd: &CompositeCommand) -> Option<(VoiceId, String)> {
             *voice_id,
             format!("modifyDrone(voice {})", voice_id.to_i32()),
         )),
-        CompositeCommand::NewCircle { voice_id, .. } => {
-            Some((*voice_id, format!("newCircle(voice {})", voice_id.to_i32())))
-        }
+        CompositeCommand::NewFormation {
+            voice_id,
+            formation_type,
+            ..
+        } => Some((
+            *voice_id,
+            format!("new{:?}(voice {})", formation_type, voice_id.to_i32()),
+        )),
         CompositeCommand::Clear { voice_id } => {
             Some((*voice_id, format!("clear(voice {})", voice_id.to_i32())))
         }

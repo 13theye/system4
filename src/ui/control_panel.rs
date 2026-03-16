@@ -81,6 +81,12 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                         ui.add_space(20.0);
                         ui.horizontal(|ui| {
                             if ui
+                                .selectable_label(model.ui_state.active_tab == UIActiveTab::View, UIActiveTab::View.display_text())
+                                .clicked()
+                            {
+                                model.ui_state.active_tab = UIActiveTab::View;
+                            }
+                            if ui
                                 .selectable_label(model.ui_state.active_tab == UIActiveTab::Debug, UIActiveTab::Debug.display_text())
                                 .clicked()
                             {
@@ -340,144 +346,6 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                         // Keep existing AI controls + Examples below.
                                         ui.horizontal(|ui| {
 
-                                            // Column: mask controls
-                                            ui.vertical(|ui| {
-                                                ui.set_width(260.0);
-                                                ui.set_min_height(height * 0.35);
-                                                ui.heading("Mask Controls");
-                                                ui.add_space(8.0);
-
-                                                // Voice 0 mask buttons
-                                                ui.horizontal(|ui| {
-                                                    ui.label("Voice0:");
-                                                    if ui.button("Small").clicked() {
-                                                        let mask_preset = MaskPreset::Small(VoiceId::Voice0);
-                                                        let Some(mask_size) = presets::mask_size(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        
-
-                                                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
-                                                            voice_id: VoiceId::Voice0,
-                                                            new_origin: mask_origin,
-                                                            new_size: mask_size,
-                                                            duration: Duration::from_secs(3),
-                                                        });
-
-                                                        command_queue.push(Command::new(command, CommandSource::UI));
-                                                    }
-
-                                                    if ui.button("Half").clicked() {
-                                                        let mask_preset = MaskPreset::Halfscreen(VoiceId::Voice0);
-                                                        let Some(mask_size) = presets::mask_size(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        
-
-                                                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
-                                                            voice_id: VoiceId::Voice0,
-                                                            new_origin: mask_origin,
-                                                            new_size: mask_size,
-                                                            duration: Duration::from_secs(3),
-                                                        });
-
-                                                        command_queue.push(Command::new(command, CommandSource::UI));
-                                                    }
-
-                                                    if ui.button("Full").clicked() {
-                                                        let mask_preset = MaskPreset::Fullscreen(VoiceId::Voice0);
-                                                        let Some(mask_size) = presets::mask_size(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        
-
-                                                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
-                                                            voice_id: VoiceId::Voice0,
-                                                            new_origin: mask_origin,
-                                                            new_size: mask_size,
-                                                            duration: Duration::from_secs(3),
-                                                        });
-
-                                                        command_queue.push(Command::new(command, CommandSource::UI));
-                                                    }
-                                                }); // voice 0 mask buttons
-
-                                                // Voice 3 mask buttons
-                                                ui.horizontal(|ui| {
-                                                    ui.label("Voice3:");
-                                                    if ui.button("Small").clicked() {
-                                                        let mask_preset = MaskPreset::Small(VoiceId::Voice3);
-                                                        let Some(mask_size) = presets::mask_size(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        
-
-                                                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
-                                                            voice_id: VoiceId::Voice3,
-                                                            new_origin: mask_origin,
-                                                            new_size: mask_size,
-                                                            duration: Duration::from_secs(3),
-                                                        });
-
-                                                        command_queue.push(Command::new(command, CommandSource::UI));
-                                                    }
-
-                                                    if ui.button("Half").clicked() {
-                                                        let mask_preset = MaskPreset::Halfscreen(VoiceId::Voice3);
-                                                        let Some(mask_size) = presets::mask_size(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        
-
-                                                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
-                                                            voice_id: VoiceId::Voice3,
-                                                            new_origin: mask_origin,
-                                                            new_size: mask_size,
-                                                            duration: Duration::from_secs(3),
-                                                        });
-
-                                                        command_queue.push(Command::new(command, CommandSource::UI));
-                                                    }
-
-                                                    if ui.button("Full").clicked() {
-                                                        let mask_preset = MaskPreset::Fullscreen(VoiceId::Voice3);
-                                                        let Some(mask_size) = presets::mask_size(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
-                                                            return;
-                                                        };
-                                                        
-
-                                                        let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
-                                                            voice_id: VoiceId::Voice3,
-                                                            new_origin: mask_origin,
-                                                            new_size: mask_size,
-                                                            duration: Duration::from_secs(3),
-                                                        });
-
-                                                        command_queue.push(Command::new(command, CommandSource::UI));
-                                                    }
-                                                }); // voice 3 mask buttons
-                                            }); // mask buttons column
-
-                                            ui.separator();
-
                                             // Column: AI controls
                                             ui.vertical(|ui| {
                                                 ui.set_width(260.0);
@@ -535,6 +403,227 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             });
                                         });
                                     });
+                                }
+
+                                UIActiveTab::View => {
+                                    ui.horizontal_top(|ui| {
+                                    ui.vertical(|ui| {
+                                        ui.heading("Mask Controls");
+                                        ui.add_space(8.0);
+
+                                        // Voice 0 mask buttons
+                                        ui.horizontal(|ui| {
+                                            ui.label("Voice0:");
+                                            if ui.button("Small").clicked() {
+                                                let mask_preset = MaskPreset::Small(VoiceId::Voice0);
+                                                let Some(mask_size) = presets::mask_size(&mask_preset) else {
+                                                    return;
+                                                };
+                                                let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
+                                                    return;
+                                                };
+
+                                                let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                                                    voice_id: VoiceId::Voice0,
+                                                    new_origin: mask_origin,
+                                                    new_size: mask_size,
+                                                    duration: Duration::from_secs(3),
+                                                });
+
+                                                command_queue.push(Command::new(command, CommandSource::UI));
+                                            }
+
+                                            if ui.button("Half").clicked() {
+                                                let mask_preset = MaskPreset::Halfscreen(VoiceId::Voice0);
+                                                let Some(mask_size) = presets::mask_size(&mask_preset) else {
+                                                    return;
+                                                };
+                                                let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
+                                                    return;
+                                                };
+
+                                                let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                                                    voice_id: VoiceId::Voice0,
+                                                    new_origin: mask_origin,
+                                                    new_size: mask_size,
+                                                    duration: Duration::from_secs(3),
+                                                });
+
+                                                command_queue.push(Command::new(command, CommandSource::UI));
+                                            }
+
+                                            if ui.button("Full").clicked() {
+                                                let mask_preset = MaskPreset::Fullscreen(VoiceId::Voice0);
+                                                let Some(mask_size) = presets::mask_size(&mask_preset) else {
+                                                    return;
+                                                };
+                                                let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
+                                                    return;
+                                                };
+
+                                                let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                                                    voice_id: VoiceId::Voice0,
+                                                    new_origin: mask_origin,
+                                                    new_size: mask_size,
+                                                    duration: Duration::from_secs(3),
+                                                });
+
+                                                command_queue.push(Command::new(command, CommandSource::UI));
+                                            }
+                                        }); // voice 0 mask buttons
+
+                                        // Voice 3 mask buttons
+                                        ui.horizontal(|ui| {
+                                            ui.label("Voice3:");
+                                            if ui.button("Small").clicked() {
+                                                let mask_preset = MaskPreset::Small(VoiceId::Voice3);
+                                                let Some(mask_size) = presets::mask_size(&mask_preset) else {
+                                                    return;
+                                                };
+                                                let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
+                                                    return;
+                                                };
+
+                                                let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                                                    voice_id: VoiceId::Voice3,
+                                                    new_origin: mask_origin,
+                                                    new_size: mask_size,
+                                                    duration: Duration::from_secs(3),
+                                                });
+
+                                                command_queue.push(Command::new(command, CommandSource::UI));
+                                            }
+
+                                            if ui.button("Half").clicked() {
+                                                let mask_preset = MaskPreset::Halfscreen(VoiceId::Voice3);
+                                                let Some(mask_size) = presets::mask_size(&mask_preset) else {
+                                                    return;
+                                                };
+                                                let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
+                                                    return;
+                                                };
+
+                                                let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                                                    voice_id: VoiceId::Voice3,
+                                                    new_origin: mask_origin,
+                                                    new_size: mask_size,
+                                                    duration: Duration::from_secs(3),
+                                                });
+
+                                                command_queue.push(Command::new(command, CommandSource::UI));
+                                            }
+
+                                            if ui.button("Full").clicked() {
+                                                let mask_preset = MaskPreset::Fullscreen(VoiceId::Voice3);
+                                                let Some(mask_size) = presets::mask_size(&mask_preset) else {
+                                                    return;
+                                                };
+                                                let Some(mask_origin) = presets::mask_origin(&mask_preset) else {
+                                                    return;
+                                                };
+
+                                                let command = CommandInner::Simple(SimpleCommand::MaskAnimation {
+                                                    voice_id: VoiceId::Voice3,
+                                                    new_origin: mask_origin,
+                                                    new_size: mask_size,
+                                                    duration: Duration::from_secs(3),
+                                                });
+
+                                                command_queue.push(Command::new(command, CommandSource::UI));
+                                            }
+                                        }); // voice 3 mask buttons
+
+                                        ui.add_space(12.0);
+
+                                        ui.heading("Display");
+                                        ui.add_space(8.0);
+                                        ui.checkbox(&mut model.ui_state.hide_terminal_text, "Hide Terminal Text");
+
+                                        ui.add_space(4.0);
+
+                                        let centerline_changed = ui
+                                            .checkbox(&mut model.ui_state.hide_centerline, "Hide Centerline")
+                                            .changed();
+
+                                        if centerline_changed {
+                                            if model.ui_state.hide_centerline {
+                                                model.center_line.trigger_hide();
+                                            } else {
+                                                model.center_line.trigger_show();
+                                            }
+                                        }
+
+                                        ui.add_space(4.0);
+
+                                        {
+                                            let mut secs = model.center_line.animation_duration.as_secs_f32();
+                                            ui.horizontal(|ui| {
+                                                ui.label("Centerline anim (s):");
+                                                ui.add(egui::Slider::new(&mut secs, 0.1..=10.0).step_by(0.1));
+                                            });
+                                            model.center_line.animation_duration = Duration::from_secs_f32(secs);
+                                        }
+                                    }); // end first column
+
+                                    ui.separator();
+
+                                    ui.vertical(|ui| {
+                                        ui.heading("Rhythm Vis");
+                                        ui.add_space(8.0);
+
+                                        ui.label("Formation Radius");
+                                        ui.add_space(4.0);
+
+                                        let form_min_changed = ui.horizontal(|ui| {
+                                            ui.label("min:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.min_formation_radius,
+                                                1.0..=2000.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        let form_max_changed = ui.horizontal(|ui| {
+                                            ui.label("max:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.max_formation_radius,
+                                                1.0..=2000.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        if form_min_changed || form_max_changed {
+                                            let min = model.rhythm_view.min_formation_radius;
+                                            let max = model.rhythm_view.max_formation_radius;
+                                            model.rhythm_view.update_formation_radii(min, max, Instant::now());
+                                        }
+
+                                        ui.add_space(8.0);
+                                        ui.label("Element Radius");
+                                        ui.add_space(4.0);
+
+                                        let elem_min_changed = ui.horizontal(|ui| {
+                                            ui.label("min:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.min_element_radius,
+                                                1.0..=1000.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        let elem_max_changed = ui.horizontal(|ui| {
+                                            ui.label("max:");
+                                            ui.add(egui::Slider::new(
+                                                &mut model.rhythm_view.max_element_radius,
+                                                1.0..=2000.0,
+                                            ).step_by(1.0))
+                                        }).inner.changed();
+
+                                        if elem_min_changed || elem_max_changed {
+                                            let min = model.rhythm_view.min_element_radius;
+                                            let max = model.rhythm_view.max_element_radius;
+                                            model.rhythm_view.update_element_radii(min, max, Instant::now());
+                                        }
+                                    }); // end Rhythm Vis column
+
+                                    }); // end horizontal_top
                                 }
 
                                 // Debug UI panel

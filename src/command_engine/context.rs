@@ -1,6 +1,6 @@
 use super::commands::Command;
 use crate::{
-    forces::wind_field::WindField,
+    forces::wind::WindField,
     groups::{Drone, Rhythm, Voice, VoiceId},
     osc::OscSender,
     sequencer::SequencerService,

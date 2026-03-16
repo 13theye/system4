@@ -35,6 +35,12 @@ pub struct UiState {
     /// When enabled, automatically trigger AI rhythm generation for Voice2
     /// whenever the rhythm for Voice1 is created or modified.
     pub auto_ai_from_voice1: bool,
+
+    /// When enabled, the terminal text overlay is not rendered in the audience window.
+    pub hide_terminal_text: bool,
+
+    /// Tracks the checkbox state for the centerline hide toggle.
+    pub hide_centerline: bool,
 }
 
 impl UiState {
@@ -55,6 +61,8 @@ impl UiState {
             text_overlay: RefCell::new(text_overlay),
             active_tab: UIActiveTab::Terminal,
             auto_ai_from_voice1: false,
+            hide_terminal_text: false,
+            hide_centerline: false,
         }
     }
 
@@ -73,6 +81,7 @@ impl UiState {
 pub enum UIActiveTab {
     Terminal,
     Drones,
+    View,
     Debug,
 }
 
@@ -81,6 +90,7 @@ impl UIActiveTab {
         match self {
             UIActiveTab::Terminal => "Terminal",
             UIActiveTab::Drones => "Drones",
+            UIActiveTab::View => "View",
             UIActiveTab::Debug => "Debug",
         }
     }

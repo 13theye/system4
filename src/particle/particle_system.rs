@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::time::{Duration, Instant};
 
 use crate::{
-    forces::{field::ForceFields, wind_circle::WindCircle},
+    forces::{force_field::ForceFields, wind::CircleFormation},
     groups::{Voice, VoiceId},
     particle::{to_segment_gpu, ParticleCore, ParticleFeedback},
 };
@@ -148,7 +148,7 @@ impl ParticleSystem {
             perlin_gen: Perlin::new(),
 
             // Starting mode is separate
-            mode: ParticleSystemMode::Separate,
+            mode: ParticleSystemMode::Combined,
 
             last_update: Instant::now(),
         }
@@ -169,6 +169,7 @@ impl ParticleSystem {
         now: Instant,
         perlin_seed: u32,
         engine_debug: bool,
+        wall_split: Option<f32>,
     ) {
         self.frame_state.frame_start = Instant::now();
 
@@ -244,16 +245,21 @@ impl ParticleSystem {
             // Retrieve a mutable reference to the feedback array for this voice
             let feedback_array = self.particle_feedback.get_mut(voice_id).unwrap();
 
-            // Collect WindCircles. If combined mode, collect all circles from all drones.
-            // Otherwise, collect only circles from this voice
-            let circles_vec: Vec<&WindCircle> = if should_combine {
+            // Collect WindCircleFormations. If combined mode, collect all formations from all drones.
+            // Otherwise, collect only the formations from this voice
+            let formations: Vec<&dyn CircleFormation> = if should_combine {
                 voices
                     .values()
                     .filter_map(|v| v.as_drone())
-                    .flat_map(|d| d.wind_circles.values())
+                    .flat_map(|d| d.wind_circle_formations.values())
+                    .map(|f| f.as_ref())
                     .collect()
             } else {
-                drone.wind_circles.values().collect()
+                drone
+                    .wind_circle_formations
+                    .values()
+                    .map(|f| f.as_ref())
+                    .collect()
             };
 
             // Physics update for each particle
@@ -275,7 +281,7 @@ impl ParticleSystem {
                     // These changes are "staged" as velocity/acceleration parameter updates.
                     self.force_fields.apply_unified_forces_to_particle(
                         core,
-                        &circles_vec,
+                        &formations,
                         mass_variation_factor,
                         noise_factor,
                     );
@@ -283,6 +289,21 @@ impl ParticleSystem {
                     // Apply forces to the particle position.
                     // Apply particle-level color change.
                     core.update(color, alpha_limit, framerate_factor);
+
+                    // Hard bounce off center line wall.
+                    // Detect x = 0 crossing, check if y is in the drawn wall region, then reflect vx.
+                    if let Some(split) = wall_split {
+                        let prev_x = core.position.x - core.velocity.x * framerate_factor;
+                        let curr_x = core.position.x;
+                        if prev_x * curr_x < 0.0 {
+                            let half_h = bounds_rect.h() / 2.0;
+                            let gap_half = split * half_h;
+                            if core.position.y.abs() >= gap_half {
+                                core.velocity.x = -core.velocity.x;
+                                core.position.x = -core.position.x;
+                            }
+                        }
+                    }
 
                     // Calculate the "vibration" position offset
                     let position_offset = if vibration > 0.0 && core.velocity.length_squared() > 0.0
@@ -724,11 +745,12 @@ impl ParticleSystem {
         scale_x: f32,
         scale_y: f32,
     ) {
-        // Collect all WindCircles across all voices
-        let circles_vec: Vec<&WindCircle> = voices
+        // Collect all CircleFormations across all voices
+        let formations: Vec<&dyn CircleFormation> = voices
             .values()
             .filter_map(|v| v.as_drone())
-            .flat_map(|d| d.wind_circles.values())
+            .flat_map(|d| d.wind_circle_formations.values())
+            .map(|f| f.as_ref())
             .collect();
 
         // Draw the origin of the ParticleSystem
@@ -736,7 +758,7 @@ impl ParticleSystem {
 
         // Draw representative vectors of the WindField
         self.force_fields.wind_field.draw(
-            &circles_vec,
+            &formations,
             draw,
             scale_x,
             scale_y,
@@ -747,10 +769,10 @@ impl ParticleSystem {
         // Draw all voices' emitters
         self.draw_emitters(voices, draw, scale_x, scale_y);
 
-        // Draw the circles themselves
-        circles_vec.iter().for_each(|circle| {
-            circle.draw_center(draw, scale_x, scale_y);
-            circle.draw(draw, scale_x, scale_y);
+        // Draw the formations themselves
+        formations.iter().for_each(|formation| {
+            formation.draw_center(draw, scale_x, scale_y);
+            formation.draw(draw, scale_x, scale_y);
         });
     }
 

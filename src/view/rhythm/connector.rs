@@ -89,7 +89,7 @@ pub fn draw_connectors(
     draw: &Draw,
     elements: &ElementMap,
     capacity: usize,
-    show_debug_geometry: bool,
+    debug_draw: Option<&Draw>,
 ) {
     // Collect valid (non-clearing) element indices
     let mut indices: Vec<usize> = elements
@@ -153,23 +153,108 @@ pub fn draw_connectors(
             None
         };
 
-        draw_connector(draw, e1, e2, bend_c1, bend_c2, show_debug_geometry);
+        draw_connector(draw, e1, e2, bend_c1, bend_c2, debug_draw, true, 1.0, 1.0);
+    }
+}
+
+/// Draw only the debug geometry (no connector polygons) for all connectors.
+pub fn draw_connectors_debug(
+    debug_draw: &Draw,
+    elements: &ElementMap,
+    capacity: usize,
+    scale_x: f32,
+    scale_y: f32,
+) {
+    let mut indices: Vec<usize> = elements
+        .keys()
+        .copied()
+        .filter(|i| {
+            *i < capacity && !matches!(elements[i].movement, RhythmElementMovement::Clearing { .. })
+        })
+        .collect();
+    indices.sort();
+
+    if indices.len() < 2 {
+        return;
+    }
+
+    let dirs: Vec<Vec2> = indices
+        .windows(2)
+        .map(|pair| {
+            let c1 = elements[&pair[0]].params.get_position();
+            let c2 = elements[&pair[1]].params.get_position();
+            let d = c2 - c1;
+            let len = d.length();
+            if len < 1e-6 {
+                Vec2::ZERO
+            } else {
+                d / len
+            }
+        })
+        .collect();
+
+    let num_connectors = dirs.len();
+    for (i, pair) in indices.windows(2).enumerate() {
+        let e1 = &elements[&pair[0]];
+        let e2 = &elements[&pair[1]];
+
+        let bend_c1 = if i > 0 {
+            let prev_dir = dirs[i - 1];
+            let curr_dir = dirs[i];
+            let dot = prev_dir.dot(curr_dir).clamp(-1.0, 1.0);
+            Some(BendInfo {
+                angle: dot.acos(),
+                cross: prev_dir.x * curr_dir.y - prev_dir.y * curr_dir.x,
+            })
+        } else {
+            None
+        };
+
+        let bend_c2 = if i + 1 < num_connectors {
+            let curr_dir = dirs[i];
+            let next_dir = dirs[i + 1];
+            let dot = curr_dir.dot(next_dir).clamp(-1.0, 1.0);
+            Some(BendInfo {
+                angle: dot.acos(),
+                cross: curr_dir.x * next_dir.y - curr_dir.y * next_dir.x,
+            })
+        } else {
+            None
+        };
+
+        // Pass debug_draw as the main draw (unused for polygon), debug geometry goes to debug_draw
+        draw_connector(
+            debug_draw,
+            e1,
+            e2,
+            bend_c1,
+            bend_c2,
+            Some(debug_draw),
+            false,
+            scale_x,
+            scale_y,
+        );
     }
 }
 
 /// Draw a single Bezier-based connector between two adjacent elements.
+#[allow(clippy::too_many_arguments)]
 fn draw_connector(
     draw: &Draw,
     e1: &RhythmElement,
     e2: &RhythmElement,
     bend_c1: Option<BendInfo>,
     bend_c2: Option<BendInfo>,
-    show_debug_geometry: bool,
+    debug_draw: Option<&Draw>,
+    draw_polygon: bool,
+    scale_x: f32,
+    scale_y: f32,
 ) {
-    let c1 = e1.params.get_position();
-    let c2 = e2.params.get_position();
-    let r1 = e1.params.current_radius;
-    let r2 = e2.params.current_radius;
+    let scale = vec2(scale_x, scale_y);
+    let c1 = e1.params.get_position() * scale;
+    let c2 = e2.params.get_position() * scale;
+    let r1 = e1.params.current_radius * scale_x;
+    let r2 = e2.params.current_radius * scale_x;
     let r_min = r1.min(r2);
     let r_max = r1.max(r2);
 
@@ -225,12 +310,18 @@ fn draw_connector(
     points.extend(side_b.iter().rev());
 
     // Draw the connector polygon with full opacity - alpha will be applied during composite
-    draw.polygon().points(points).color(e1.params.color);
+    if draw_polygon {
+        draw.polygon().points(points).color(e1.params.color);
+    }
 
     // Debug drawing
-    if show_debug_geometry || SHOW_DEBUG_GEOMETRY {
+    if let Some(dbg) = debug_draw.or(if SHOW_DEBUG_GEOMETRY {
+        Some(draw)
+    } else {
+        None
+    }) {
         draw_debug_info(
-            draw,
+            dbg,
             c1,
             c2,
             r1,

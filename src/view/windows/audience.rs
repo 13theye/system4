@@ -162,10 +162,10 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             eprintln!("Error executing effects pipeline: {}", e);
         }
 
-        // Draw rhythm formations to rhythm_alpha texture
+        // Draw rhythm formations to rhythm_alpha texture (no debug geometry here)
         model
             .rhythm_view
-            .draw_alpha_elements(&rendering.draw, model.ui_state.show_debug_geometry);
+            .draw_alpha_elements(&rendering.draw, None);
 
         rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_alpha");
 
@@ -178,21 +178,23 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             let mut overlay = model.ui_state.text_overlay.borrow_mut();
 
             // Always route AI status text into Voice2's history (not live text).
-            overlay.push_ai_status_history_if_changed(
-                model.voice_manager.current_ai_status_text(),
-                now,
-            );
+            let (ai_status_text, do_fade) = model.voice_manager.current_ai_status_text();
+            overlay.push_ai_status_history_if_changed(ai_status_text, do_fade, now);
 
-            overlay.update_and_draw_all(&rendering.draw, now);
+            if !model.ui_state.hide_terminal_text {
+                overlay.update_and_draw_all(&rendering.draw, now);
+            }
 
             // Draw the central dividing line
-            rendering
-                .draw
-                .line()
-                .start(vec2(0.0, rendering.output_texture.height() as f32 / 2.0))
-                .end(vec2(0.0, rendering.output_texture.height() as f32 / -2.0))
-                .color(rgba(1.0, 1.0, 1.0, 1.0))
-                .stroke_weight(2.0);
+            model.center_line.draw(
+                &rendering.draw,
+                rendering.output_texture.height() as f32,
+            );
+        }
+
+        // Draw debug geometry into the top composite layer
+        if model.ui_state.show_debug_geometry {
+            model.rhythm_view.draw_debug_geometry(&rendering.draw, 1.0, 1.0);
         }
 
         // Encode text overlay to terminal texture

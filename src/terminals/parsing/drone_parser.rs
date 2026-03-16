@@ -1,9 +1,12 @@
 // src/terminals/parsing/drone_parser.rs
 
 use super::{errors::ParseError, parameter::ParameterValue, utils::ParsingUtils};
-use crate::terminals::{
-    commands::{drone::DroneBuilder, TerminalCommand, TerminalCommandBuilder},
-    tokens::Token,
+use crate::{
+    command_engine::commands::FormationType,
+    terminals::{
+        commands::{drone::DroneBuilder, TerminalCommand, TerminalCommandBuilder},
+        tokens::Token,
+    },
 };
 
 pub struct DroneParser;
@@ -74,9 +77,10 @@ impl DroneParser {
 
         // Return appropriate command based on the type of operation
         if is_new_circle {
-            Ok(TerminalCommand::NewCircle {
+            Ok(TerminalCommand::NewFormation {
                 voice_id,
                 config: builder.build(),
+                formation_type: FormationType::WindCircle,
             })
         } else if let Some(circle) = circle_id {
             Ok(TerminalCommand::ModifyVoiceCircle {

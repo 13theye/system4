@@ -21,8 +21,9 @@ use crate::{
     terminals::commands::rhythm::RhythmParamModification,
     ui::UiState,
     utils::IdGenerator,
-    view::rhythm::RhythmView,
+    view::{center_line::CenterLine, rhythm::RhythmView},
 };
+
 
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
@@ -31,6 +32,7 @@ pub struct Model {
     // Visual systems
     pub particle_system: ParticleSystem,
     pub rhythm_view: RhythmView,
+    pub center_line: CenterLine,
 
     // State managers
     pub voice_manager: VoiceManager,
@@ -190,7 +192,7 @@ impl ExecutionContext for Model {
     }
 
     // Wind field access
-    fn wind_field(&mut self) -> &mut crate::forces::wind_field::WindField {
+    fn wind_field(&mut self) -> &mut crate::forces::wind::WindField {
         &mut self.particle_system.force_fields.wind_field
     }
 
@@ -332,7 +334,7 @@ fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
             CompositeCommand::CreateRhythm { config } => Some(config.voice),
             CompositeCommand::ModifyDrone { voice_id, .. }
             | CompositeCommand::ModifyRhythm { voice_id, .. }
-            | CompositeCommand::NewCircle { voice_id, .. }
+            | CompositeCommand::NewFormation { voice_id, .. }
             | CompositeCommand::Clear { voice_id } => Some(*voice_id),
         },
     }

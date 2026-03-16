@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use system4::{
     groups::VoiceId, managers::VoiceManager, model::Model, ui::control_panel::update_control_ui,
-    utils::IdGenerator, view::rhythm::RhythmView,
+    utils::IdGenerator, view::center_line::CenterLine, view::rhythm::RhythmView,
 };
 
 fn model(app: &App) -> Model {
@@ -34,6 +34,9 @@ fn model(app: &App) -> Model {
 
     // Create RhythmView
     let rhythm_view = RhythmView::new();
+
+    // Create CenterLine
+    let center_line = CenterLine::default();
 
     let window_ids = init::windows::create_windows(app, &settings);
 
@@ -56,6 +59,7 @@ fn model(app: &App) -> Model {
         particle_system,
         voice_manager: VoiceManager::init(&settings),
         rhythm_view,
+        center_line,
         clock,
         sequencer_service,
         osc,
@@ -159,10 +163,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         now,
         app.duration.since_start.as_millis() as u32,
         model.engine_debug,
+        model.center_line.split_progress(),
     );
 
     // Update masks animations
     model.voice_manager.update_drone_masks(now);
+
+    // Update centerline animation
+    model.center_line.update(now);
 }
 
 /// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.

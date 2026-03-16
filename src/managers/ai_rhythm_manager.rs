@@ -53,15 +53,16 @@ impl AIRhythmManager {
     /// When a request is pending but no reasoning text has arrived yet,
     /// this returns "AI is thinking..." so the performer has immediate
     /// feedback that the system is waiting on the model.
-    pub fn current_ai_status_text(&self) -> Option<&str> {
+    /// Also returns TRUE if the ai status text should fade out as normal.
+    pub fn current_ai_status_text(&self) -> (Option<&str>, bool) {
         if self.ai_rhythm.is_request_pending() {
             if let Some(text) = self.ai_rhythm.current_reasoning_text() {
-                Some(text)
+                (Some(text), true)
             } else {
-                Some("AI is generating a rhythmic response...")
+                (Some("The AI is generating a rhythmic response..."), false)
             }
         } else {
-            self.ai_rhythm.current_reasoning_text()
+            (self.ai_rhythm.current_reasoning_text(), true)
         }
     }
 }
