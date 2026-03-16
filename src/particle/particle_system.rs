@@ -148,7 +148,7 @@ impl ParticleSystem {
             perlin_gen: Perlin::new(),
 
             // Starting mode is separate
-            mode: ParticleSystemMode::Separate,
+            mode: ParticleSystemMode::Combined,
 
             last_update: Instant::now(),
         }

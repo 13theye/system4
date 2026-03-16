@@ -604,7 +604,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.label("min:");
                                             ui.add(egui::Slider::new(
                                                 &mut model.rhythm_view.min_element_radius,
-                                                1.0..=500.0,
+                                                1.0..=1000.0,
                                             ).step_by(1.0))
                                         }).inner.changed();
 
@@ -612,7 +612,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             ui.label("max:");
                                             ui.add(egui::Slider::new(
                                                 &mut model.rhythm_view.max_element_radius,
-                                                1.0..=500.0,
+                                                1.0..=2000.0,
                                             ).step_by(1.0))
                                         }).inner.changed();
 
