@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::openai::types::response::{MessageContent, OutputItem, ResponseObject};
 
 pub type ResponseStream = std::pin::Pin<
-    Box<dyn futures::Stream<Item = Result<StreamEvent, async_openai::error::OpenAIError>> + Send>,
+    Box<
+        dyn futures_util::Stream<Item = Result<StreamEvent, async_openai::error::OpenAIError>>
+            + Send,
+    >,
 >;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

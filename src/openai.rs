@@ -19,7 +19,7 @@ use crate::{
 };
 
 use async_openai::{config::OpenAIConfig, types::responses, Client};
-use futures::StreamExt;
+use futures_util::StreamExt;
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
 

@@ -3647,7 +3647,7 @@ dependencies = [
  "config",
  "egui",
  "fps",
- "futures",
+ "futures-util",
  "nannou",
  "nannou_egui",
  "nannou_osc",

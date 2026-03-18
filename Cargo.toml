@@ -8,7 +8,7 @@ edition = "2021"
 async-openai = { version = "0.31", features = ["byot", "responses"] }
 config = "0.15"
 egui = "0.23"
-futures = "0.3"
+futures-util = "0.3"
 
 nannou = "0.19"
 nannou_osc = "0.19"
