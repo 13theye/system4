@@ -232,19 +232,18 @@ impl TerminalCommandBuilder for RhythmBuilder {
     }
 }
 
-/// Parse relative modification symbols (+, ++, +++, -, --, ---)
+/// Parse relative modification symbols (any number of '+' or '-' characters)
 fn parse_relative_modification(s: String) -> Result<RhythmParamModification, ParseError> {
-    match s.as_str() {
-        "+" => Ok(RhythmParamModification::Relative(0.1)),
-        "++" => Ok(RhythmParamModification::Relative(0.2)),
-        "+++" => Ok(RhythmParamModification::Relative(0.3)),
-        "-" => Ok(RhythmParamModification::Relative(-0.1)),
-        "--" => Ok(RhythmParamModification::Relative(-0.2)),
-        "---" => Ok(RhythmParamModification::Relative(-0.3)),
-        _ => Err(ParseError::UnexpectedToken {
-            expected: "+, ++, +++, -, --, ---, or range size (xs, s, m, l, xl)".to_string(),
+    let count = s.len();
+    if count >= 1 && s.chars().all(|c| c == '+') {
+        Ok(RhythmParamModification::Relative(count as f32 * 0.1))
+    } else if count >= 1 && s.chars().all(|c| c == '-') {
+        Ok(RhythmParamModification::Relative(-(count as f32 * 0.1)))
+    } else {
+        Err(ParseError::UnexpectedToken {
+            expected: "'+' or '-' characters, or range size (xs, s, m, l, xl)".to_string(),
             found: s,
-        }),
+        })
     }
 }
 
