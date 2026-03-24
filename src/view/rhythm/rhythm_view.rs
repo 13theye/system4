@@ -141,6 +141,15 @@ impl RhythmView {
         }
     }
 
+    /// Reposition elements in only one voice's formation using the stored formation radii.
+    pub fn update_voice_formation_radii(&mut self, voice_id: VoiceId, now: Instant) {
+        let min = self.min_formation_radius;
+        let max = self.max_formation_radius;
+        if let Some(formation) = self.formations.get_mut(&voice_id) {
+            formation.reposition_elements(min, max, now);
+        }
+    }
+
     /// Update the stored element radii and animate sizing on only one voice's formation.
     pub fn update_voice_element_radii(&mut self, voice_id: VoiceId, now: Instant) {
         let min = self.min_element_radius;

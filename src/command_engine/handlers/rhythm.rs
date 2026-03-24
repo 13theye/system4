@@ -2,7 +2,9 @@ use crate::{
     command_engine::{commands::CommandSource, context::ExecutionContext, RhythmCommandBuilder},
     groups::{Rhythm, Voice, VoiceId},
     terminals::commands::rhythm::{RangeSize, RhythmConfig, RhythmParamModification},
-    view::rhythm::{MAX_ELEMENT_RADIUS, MIN_ELEMENT_RADIUS},
+    view::rhythm::{
+        MAX_ELEMENT_RADIUS, MAX_FORMATION_RADIUS, MIN_ELEMENT_RADIUS, MIN_FORMATION_RADIUS,
+    },
 };
 use std::time::Instant;
 
@@ -391,10 +393,14 @@ impl RhythmCommandHandler {
             RhythmParamModification::Randomize(_) => return,
         };
         let new_scale = new_scale.clamp(0.1, 10.0);
+        let formation_multiplier = 1.0 + 0.5 * new_scale.log2();
         let view = ctx.rhythm_view_mut();
         view.size_scale = new_scale;
         view.min_element_radius = MIN_ELEMENT_RADIUS * new_scale;
         view.max_element_radius = MAX_ELEMENT_RADIUS * new_scale;
+        view.min_formation_radius = MIN_FORMATION_RADIUS * formation_multiplier;
+        view.max_formation_radius = MAX_FORMATION_RADIUS * formation_multiplier;
         view.update_voice_element_radii(voice_id, now);
+        view.update_voice_formation_radii(voice_id, now);
     }
 }

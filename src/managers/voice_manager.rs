@@ -344,6 +344,7 @@ impl VoiceManager {
             rhythm.update_sequencer(sequencer_service);
             rhythm_view.reinitialize_formation(voice_id, rhythm.get_params(), now);
             rhythm_view.update_voice_element_radii(voice_id, now);
+            rhythm_view.update_voice_formation_radii(voice_id, now);
 
             // Schedule the target voice to start when Voice1 hits slot 0 on the
             // next whole-note boundary. This keeps both voices time- and
