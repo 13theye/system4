@@ -418,6 +418,11 @@ impl RhythmFormation {
             element.params.min_radius = min_radius;
             element.params.max_radius = max_radius;
 
+            // Don't interfere with the shrink animation of dissipating elements
+            if matches!(element.movement, RhythmElementMovement::Clearing { .. }) {
+                continue;
+            }
+
             let target_radius = if element.is_wing {
                 element.wing_radius()
             } else {
