@@ -149,6 +149,10 @@ pub enum SimpleCommand {
         voice_id: VoiceId,
         modification: RhythmParamModification,
     },
+    RhythmSizeScale {
+        voice_id: VoiceId,
+        modification: RhythmParamModification,
+    },
     MaskAnimation {
         voice_id: VoiceId,
         new_origin: Vec2,
@@ -305,6 +309,9 @@ impl Command {
                 }
                 SimpleCommand::RhythmModifyCutoff { voice_id, .. } => {
                     format!("RhythmModifyCutoff_{:?}", voice_id)
+                }
+                SimpleCommand::RhythmSizeScale { voice_id, .. } => {
+                    format!("RhythmSizeScale_{:?}", voice_id)
                 }
                 SimpleCommand::MaskAnimation { voice_id, .. } => {
                     format!("MaskAnimation_{:?}", voice_id)

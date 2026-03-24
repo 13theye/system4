@@ -29,6 +29,7 @@ pub struct RhythmView {
     pub max_formation_radius: f32,
     pub min_element_radius: f32,
     pub max_element_radius: f32,
+    pub size_scale: f32,
 }
 
 impl Default for RhythmView {
@@ -45,6 +46,7 @@ impl RhythmView {
             max_formation_radius: MAX_FORMATION_RADIUS,
             min_element_radius: MIN_ELEMENT_RADIUS,
             max_element_radius: MAX_ELEMENT_RADIUS,
+            size_scale: 1.0,
         }
     }
 
@@ -136,6 +138,15 @@ impl RhythmView {
         self.max_formation_radius = max_radius;
         for formation in self.formations.values_mut() {
             formation.reposition_elements(min_radius, max_radius, now);
+        }
+    }
+
+    /// Update the stored element radii and animate sizing on only one voice's formation.
+    pub fn update_voice_element_radii(&mut self, voice_id: VoiceId, now: Instant) {
+        let min = self.min_element_radius;
+        let max = self.max_element_radius;
+        if let Some(formation) = self.formations.get_mut(&voice_id) {
+            formation.update_element_radii(min, max, now);
         }
     }
 

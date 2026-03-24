@@ -327,6 +327,7 @@ fn voice_id_for_command(command: &Command) -> Option<VoiceId> {
             | SimpleCommand::RhythmModifyLength { voice_id, .. }
             | SimpleCommand::RhythmModifyVelocity { voice_id, .. }
             | SimpleCommand::RhythmModifyCutoff { voice_id, .. }
+            | SimpleCommand::RhythmSizeScale { voice_id, .. }
             | SimpleCommand::MaskAnimation { voice_id, .. } => Some(*voice_id),
         },
         CommandInner::Composite(comp) => match comp {
@@ -357,6 +358,7 @@ fn is_rhythm_shape_or_param_command(command: &Command) -> bool {
                 | SimpleCommand::RhythmModifyLength { .. }
                 | SimpleCommand::RhythmModifyVelocity { .. }
                 | SimpleCommand::RhythmModifyCutoff { .. }
+                | SimpleCommand::RhythmSizeScale { .. }
                 | SimpleCommand::AddWings { .. }
                 | SimpleCommand::RemoveWings { .. }
         ),

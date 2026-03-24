@@ -69,6 +69,7 @@ pub struct RhythmBuilder {
     pub length_modification: Option<RhythmParamModification>,
     pub velocity_modification: Option<RhythmParamModification>,
     pub cutoff_modification: Option<RhythmParamModification>,
+    pub size_scale_modification: Option<RhythmParamModification>,
     pub parameters: HashMap<String, ParameterValue>,
 }
 
@@ -84,6 +85,7 @@ pub struct RhythmConfig {
     pub length_modification: Option<RhythmParamModification>,
     pub velocity_modification: Option<RhythmParamModification>,
     pub cutoff_modification: Option<RhythmParamModification>,
+    pub size_scale_modification: Option<RhythmParamModification>,
     pub additional_parameters: HashMap<String, ParameterValue>,
 }
 
@@ -102,6 +104,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
             length_modification: None,
             velocity_modification: None,
             cutoff_modification: None,
+            size_scale_modification: None,
             parameters: HashMap::new(),
         }
     }
@@ -206,6 +209,14 @@ impl TerminalCommandBuilder for RhythmBuilder {
                     }
                 }
             }
+            "size" => match value {
+                ParameterValue::Number(n) => {
+                    self.size_scale_modification = Some(RhythmParamModification::Absolute(n));
+                }
+                ParameterValue::String(s) => {
+                    self.size_scale_modification = Some(parse_relative_modification(s)?);
+                }
+            },
 
             _ => {
                 // Store unknown parameters for future extensibility
@@ -227,6 +238,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
             length_modification: self.length_modification,
             velocity_modification: self.velocity_modification,
             cutoff_modification: self.cutoff_modification,
+            size_scale_modification: self.size_scale_modification,
             additional_parameters: self.parameters,
         }
     }
@@ -315,6 +327,7 @@ impl RhythmConfig {
             length_modification: None,
             velocity_modification: None,
             cutoff_modification: None,
+            size_scale_modification: None,
             additional_parameters: HashMap::new(),
         }
     }
@@ -334,6 +347,7 @@ impl RhythmConfig {
             length_modification: self.length_modification,
             velocity_modification: self.velocity_modification,
             cutoff_modification: self.cutoff_modification,
+            size_scale_modification: self.size_scale_modification,
             additional_parameters: self.additional_parameters.clone(),
         }
     }

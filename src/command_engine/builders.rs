@@ -445,6 +445,16 @@ impl RhythmCommandBuilder {
             ));
         }
 
+        if let Some(modification) = config.size_scale_modification {
+            commands.push(Command::new(
+                CommandInner::Simple(SimpleCommand::RhythmSizeScale {
+                    voice_id,
+                    modification,
+                }),
+                source,
+            ));
+        }
+
         commands
     }
 }

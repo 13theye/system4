@@ -280,6 +280,13 @@ impl CommandEngine {
                 self.rhythm_handler
                     .modify_cutoff(ctx, voice_id, modification, now);
             }
+            RhythmSizeScale {
+                voice_id,
+                modification,
+            } => {
+                self.rhythm_handler
+                    .modify_size_scale(ctx, voice_id, modification, now);
+            }
 
             // Mask Animation
             MaskAnimation {
