@@ -59,6 +59,13 @@ impl VoiceParser {
                         sub_command,
                         VoiceType::Rhythm,
                     ),
+                    Some(ParameterCategory::Both) => Self::parse_voice_parameter_modification(
+                        tokens,
+                        position,
+                        voice_id,
+                        sub_command,
+                        VoiceType::Both,
+                    ),
                     None => Err(ParseError::UnexpectedToken {
                         expected: "makeDrone, makeRhythm, or valid parameter name".to_string(),
                         found: sub_command,
@@ -255,10 +262,18 @@ impl VoiceParser {
             VoiceType::Rhythm => {
                 rhythm_builder.set_parameter(&first_param, parameter_value)?;
             }
+            VoiceType::Both => {
+                // Try drone (only succeeds for numeric values; strings are fine to ignore)
+                let _ = drone_builder.set_parameter(&first_param, parameter_value.clone());
+                // Always apply to rhythm
+                rhythm_builder.set_parameter(&first_param, parameter_value)?;
+            }
         }
 
-        let mut has_drone_params = param_type == VoiceType::Drone;
-        let mut has_rhythm_params = param_type == VoiceType::Rhythm;
+        let mut has_drone_params = param_type == VoiceType::Drone
+            || (param_type == VoiceType::Both && drone_builder.volume.is_some());
+        let mut has_rhythm_params =
+            param_type == VoiceType::Rhythm || param_type == VoiceType::Both;
         let mut saw_make_rhythm = false;
         let mut saw_make_drone = false;
 
@@ -299,6 +314,13 @@ impl VoiceParser {
                         has_drone_params = true;
                     }
                     Some(ParameterCategory::Rhythm) => {
+                        rhythm_builder.set_parameter(&method_name, parameter)?;
+                        has_rhythm_params = true;
+                    }
+                    Some(ParameterCategory::Both) => {
+                        if drone_builder.set_parameter(&method_name, parameter.clone()).is_ok() {
+                            has_drone_params = true;
+                        }
                         rhythm_builder.set_parameter(&method_name, parameter)?;
                         has_rhythm_params = true;
                     }

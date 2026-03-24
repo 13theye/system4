@@ -171,7 +171,7 @@ impl TerminalCommandBuilder for RhythmBuilder {
                     }
                 }
             }
-            "velocity" => {
+            "velocity" | "volume" => {
                 match value {
                     ParameterValue::Number(n) => {
                         // Absolute value: .velocity(0.5)

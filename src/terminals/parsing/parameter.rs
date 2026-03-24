@@ -7,6 +7,7 @@ use std::fmt;
 pub enum VoiceType {
     Drone,
     Rhythm,
+    Both,
 }
 
 /// Parameter categories for validation
@@ -14,6 +15,7 @@ pub enum VoiceType {
 pub enum ParameterCategory {
     Drone,
     Rhythm,
+    Both,
 }
 
 /// Parameter::Value pair
@@ -36,12 +38,14 @@ impl fmt::Display for ParameterValue {
 pub fn categorize_parameter(param_name: &str) -> Option<ParameterCategory> {
     match param_name {
         // Drone parameters
-        "brightness" | "volume" | "feedback" | "vibration" | "gravity" | "force"
+        "brightness" | "feedback" | "vibration" | "gravity" | "force"
         | "outerRadius" | "innerRadius" | "noise" | "centerX" | "centerY" | "newCircle"
         | "removeCircle" => Some(ParameterCategory::Drone),
         // Rhythm parameters
         "capacity" | "wings" | "sub" | "addWings" | "removeWings" | "length" | "velocity"
         | "cutoff" | "size" => Some(ParameterCategory::Rhythm),
+        // Both drone and rhythm
+        "volume" => Some(ParameterCategory::Both),
         // Voice parameter (used in both contexts)
         "voice" => None, // Special case - not categorized
         // Unknown parameter
