@@ -3,6 +3,7 @@
 pub mod command_engine;
 pub mod forces;
 pub mod groups;
+pub mod intro;
 pub mod managers;
 pub mod model;
 pub mod openai;

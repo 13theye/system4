@@ -31,6 +31,11 @@ pub struct RenderConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct PathConfig {
+    pub intro_image: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ParticleConfig {
     pub per_voice_limit: u32,
 }

@@ -42,6 +42,10 @@ system_prompt = "## Rhythm Game System Prompt\n\n---\n\n### Overview\n\nWe are p
 # initial beats per minute (float i.e. 120.0)
 bpm = 125.0
 
+[path]
+# Name of intro image file within the `assets` directory
+intro_image = "intro.png"
+
 [rendering]
 # The size of the texture. Whole numbers only, i.e. 3840
 texture_width = 3840

@@ -73,6 +73,13 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                         .changed() {
                             model.particle_system.mode.toggle();
                         }
+
+                    ui.add_space(10.0);
+                    let mut intro_visible = model.intro_image.is_visible();
+                    if ui.checkbox(&mut intro_visible, "Intro Image").changed() {
+                        model.intro_image.toggle_visible();
+                    }
+
                     ui.add_space(30.0);
 
                     // Push tab selector to bottom with expanding space
@@ -111,6 +118,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                     });
                 });
 
+                if !model.intro_image.is_visible() {
                 ui.separator();
 
                 // Everything to the right of the status column should be vertically scrollable.
@@ -659,6 +667,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                             }
                         }); // end top-aligned layout
                     });
+                } // end if !intro_image.is_visible()
             }); // end main horizontal layout
         });
 

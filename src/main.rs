@@ -14,8 +14,9 @@ use thread_priority::*;
 use std::time::Instant;
 
 use system4::{
-    groups::VoiceId, managers::VoiceManager, model::Model, ui::control_panel::update_control_ui,
-    utils::IdGenerator, view::center_line::CenterLine, view::rhythm::RhythmView,
+    groups::VoiceId, intro::IntroImage, managers::VoiceManager, model::Model,
+    ui::control_panel::update_control_ui, utils::IdGenerator, view::center_line::CenterLine,
+    view::rhythm::RhythmView,
 };
 
 fn model(app: &App) -> Model {
@@ -55,6 +56,9 @@ fn model(app: &App) -> Model {
         terminal_font,
     );
 
+    let mut intro_image = IntroImage::new(&settings.path.intro_image);
+    intro_image.load(app);
+
     Model {
         particle_system,
         voice_manager: VoiceManager::init(&settings),
@@ -71,6 +75,7 @@ fn model(app: &App) -> Model {
         rng,
         command_queue: Vec::new(),
         auto_ai_pending_for_voice1: false,
+        intro_image,
         engine_debug: false,
     }
 }

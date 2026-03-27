@@ -15,6 +15,7 @@ pub struct Settings {
     pub osc_receive: OscReceiveConfig,
     pub particles: ParticleConfig,
     pub performer_window: PerformerWindowConfig,
+    pub path: PathConfig,
     pub rendering: RenderConfig,
     pub tempo: TempoConfig,
 }

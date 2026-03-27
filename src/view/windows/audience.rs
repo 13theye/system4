@@ -12,6 +12,16 @@ use std::time::Instant;
 
 /// Draw the audience view window's contents
 pub fn audience_view(app: &App, model: &Model, frame: Frame) {
+    if model.intro_image.is_visible() {
+        let window_rect = app
+            .window(model.render_state.audience_window_id)
+            .unwrap()
+            .rect();
+        model.intro_image.draw(&model.render_state.audience_draw, window_rect);
+        let _ = model.render_state.audience_draw.to_frame(app, &frame);
+        return;
+    }
+
     // Begin Rendering context
     {
         let mut rendering = model.render_state.render_engine.borrow_mut();
@@ -30,7 +40,7 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
         //rendering.draw.background().color(BLACK);
         rendering.encode_clear_all_textures(&mut encoder, wgpu::Color::TRANSPARENT);
 
-        // Encode Nannou Draw
+        // Encode any Nannou Draw in queue
         rendering.encode_draw_commands(device, &mut encoder);
 
         /************ Particle and segment drawing ************* */
@@ -163,9 +173,7 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
         }
 
         // Draw rhythm formations to rhythm_alpha texture (no debug geometry here)
-        model
-            .rhythm_view
-            .draw_alpha_elements(&rendering.draw, None);
+        model.rhythm_view.draw_alpha_elements(&rendering.draw, None);
 
         rendering.encode_draw_commands_into(device, &mut encoder, "rhythm_alpha");
 
@@ -186,15 +194,16 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
             }
 
             // Draw the central dividing line
-            model.center_line.draw(
-                &rendering.draw,
-                rendering.output_texture.height() as f32,
-            );
+            model
+                .center_line
+                .draw(&rendering.draw, rendering.output_texture.height() as f32);
         }
 
         // Draw debug geometry into the top composite layer
         if model.ui_state.show_debug_geometry {
-            model.rhythm_view.draw_debug_geometry(&rendering.draw, 1.0, 1.0);
+            model
+                .rhythm_view
+                .draw_debug_geometry(&rendering.draw, 1.0, 1.0);
         }
 
         // Encode text overlay to terminal texture

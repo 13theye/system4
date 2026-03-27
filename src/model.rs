@@ -13,6 +13,7 @@ use crate::{
         SimpleCommand,
     },
     groups::{Drone, Rhythm, Voice, VoiceId},
+    intro::IntroImage,
     managers::VoiceManager,
     osc::{OscController, OscSender},
     particle::ParticleSystem,
@@ -23,7 +24,6 @@ use crate::{
     utils::IdGenerator,
     view::{center_line::CenterLine, rhythm::RhythmView},
 };
-
 
 use prat::clockservice::ClockService;
 use rand::rngs::ThreadRng;
@@ -65,6 +65,9 @@ pub struct Model {
     // and, if auto-AI is enabled, we should trigger a single AI rhythm
     // request after all commands have been applied.
     pub auto_ai_pending_for_voice1: bool,
+
+    // Intro image
+    pub intro_image: IntroImage,
 
     // Debug flag for performance timing output
     pub engine_debug: bool,
