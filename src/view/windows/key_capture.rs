@@ -103,3 +103,10 @@ pub fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::ev
     // Note: Text input is now handled directly by egui TextEdit widget
     // through the TextBuffer trait implementation
 }
+
+/// Key pressed handler for Performer window
+pub fn performer_key_pressed(_app: &App, model: &mut Model, key: nannou::prelude::Key) {
+    if key == nannou::prelude::Key::I {
+        model.intro_image.toggle_visible();
+    }
+}

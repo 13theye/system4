@@ -31,6 +31,7 @@ pub fn create_windows(app: &App, settings: &Settings) -> WindowIds {
             settings.performer_window.height,
         )
         .msaa_samples(1)
+        .key_pressed(system4::view::windows::key_capture::performer_key_pressed)
         .view(system4::view::windows::performer::performer_view)
         .build()
         .unwrap();
