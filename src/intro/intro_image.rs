@@ -51,8 +51,6 @@ impl IntroImage {
         if !self.is_visible {
             return;
         }
-        // Draw black background
-        draw.background().color(BLACK);
 
         // Draw the image if loaded
         if let Some(texture) = &self.texture {

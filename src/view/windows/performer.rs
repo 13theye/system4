@@ -4,16 +4,6 @@ use crate::model::Model;
 
 /// Draw the performer window's contents
 pub fn performer_view(app: &App, model: &Model, frame: Frame) {
-    if model.intro_image.is_visible() {
-        let window_rect = app
-            .window(model.render_state.performer_window_id)
-            .unwrap()
-            .rect();
-        model.intro_image.draw(&model.render_state.performer_draw, window_rect);
-        let _ = model.render_state.performer_draw.to_frame(app, &frame);
-        return;
-    }
-
     let rendering = model.render_state.render_engine.borrow_mut();
 
     // Get the raw scene texture view
@@ -22,6 +12,16 @@ pub fn performer_view(app: &App, model: &Model, frame: Frame) {
     // Draw game content to the frame
     rendering.draw_to_frame(&model.render_state.performer_reshaper, &frame);
 
+    // Mirror intro image overlay onto performer window
+    if model.intro_image.is_visible() {
+        let performer_rect = app
+            .window(model.render_state.performer_window_id)
+            .unwrap()
+            .rect();
+        model
+            .intro_image
+            .draw(&model.render_state.performer_draw, performer_rect);
+    }
     // Show force vectors if enabled
     if model.ui_state.show_forces {
         let performer_rect = app

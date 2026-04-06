@@ -12,16 +12,6 @@ use std::time::Instant;
 
 /// Draw the audience view window's contents
 pub fn audience_view(app: &App, model: &Model, frame: Frame) {
-    if model.intro_image.is_visible() {
-        let window_rect = app
-            .window(model.render_state.audience_window_id)
-            .unwrap()
-            .rect();
-        model.intro_image.draw(&model.render_state.audience_draw, window_rect);
-        let _ = model.render_state.audience_draw.to_frame(app, &frame);
-        return;
-    }
-
     // Begin Rendering context
     {
         let mut rendering = model.render_state.render_engine.borrow_mut();
@@ -239,8 +229,21 @@ pub fn audience_view(app: &App, model: &Model, frame: Frame) {
         draw_bounds(app, model);
     }
 
-    // Draw over the texture
-    let _ = model.render_state.audience_draw.to_frame(app, &frame);
+    // Draw intro image on top of GPU output if visible
+    if model.intro_image.is_visible() {
+        let window_rect = app
+            .window(model.render_state.audience_window_id)
+            .unwrap()
+            .rect();
+        model
+            .intro_image
+            .draw(&model.render_state.audience_draw, window_rect);
+    }
+
+    // Only flush audience_draw if something was queued — an empty to_frame() clears the GPU output
+    if model.intro_image.is_visible() || model.ui_state.show_bounds {
+        let _ = model.render_state.audience_draw.to_frame(app, &frame);
+    }
 }
 
 // ************************ Debug display  *************************************
