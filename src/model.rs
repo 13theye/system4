@@ -97,12 +97,6 @@ impl ExecutionContext for Model {
         // Prefer the unified text overlay system.
         let now = std::time::Instant::now();
 
-        // If we receive OSC param updates for a voice that doesn't exist, ignore.
-        // (Prevents params slot noise when no voice is active.)
-        let should_ignore_osc_params_for_voice = |voice_id: VoiceId, source: CommandSource| {
-            source == CommandSource::OSC && !self.voice_manager.validate_voice_exists(voice_id)
-        };
-
         // Track per-frame auto-AI triggers for Voice1 rhythms.
         if let Some(voice_id) = voice_id_for_command(command) {
             if voice_id == VoiceId::Voice1 && is_rhythm_shape_or_param_command(command) {
@@ -110,7 +104,7 @@ impl ExecutionContext for Model {
             }
         }
 
-        // Clear pinned params when a voice is cleared.
+        // Clear pinned params and AI status text when a voice is cleared.
         if let Some(voice_id) = voice_id_for_command(command) {
             if matches!(
                 command.command,
@@ -122,8 +116,15 @@ impl ExecutionContext for Model {
                     .text_overlay
                     .borrow_mut()
                     .clear_params_dashboard(voice_id);
+                self.voice_manager.clear_ai_status_for_voice(voice_id);
             }
         }
+
+        // If we receive OSC param updates for a voice that doesn't exist, ignore.
+        // (Prevents params slot noise when no voice is active.)
+        let should_ignore_osc_params_for_voice = |voice_id: VoiceId, source: CommandSource| {
+            source == CommandSource::OSC && !self.voice_manager.validate_voice_exists(voice_id)
+        };
 
         // Parameter updates go to the pinned params slot.
         for (voice_id, key, value) in crate::text::adapters::param_updates_for_command(command) {

@@ -39,6 +39,11 @@ impl AIRhythmManager {
         self.ai_rhythm.is_request_pending()
     }
 
+    /// Clear AI state for the given voice (reasoning text + in-flight request).
+    pub fn clear_ai_status_for_voice(&mut self, voice_id: VoiceId) {
+        self.ai_rhythm.clear_status_for_voice(voice_id);
+    }
+
     /// Expose current AI reasoning text for UI rendering.
     ///
     /// Prefer using `current_ai_status_text` for user-facing display, which

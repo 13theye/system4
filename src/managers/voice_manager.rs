@@ -263,6 +263,10 @@ impl VoiceManager {
         self.ai_rhythm_manager.is_ai_request_pending()
     }
 
+    pub fn clear_ai_status_for_voice(&mut self, voice_id: VoiceId) {
+        self.ai_rhythm_manager.clear_ai_status_for_voice(voice_id);
+    }
+
     pub fn request_ai_rhythm_from(&mut self, sample_voice_id: VoiceId) {
         let Some(sample_rhythm) = self.get_rhythm(sample_voice_id) else {
             return;

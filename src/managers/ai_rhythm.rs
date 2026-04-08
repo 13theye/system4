@@ -275,12 +275,7 @@ impl AIRhythm {
     pub fn clear_status_for_voice(&mut self, voice_id: VoiceId) {
         // Always update the reasoning text so the UI shows a clear message
         // instead of any previous AI-generated content.
-        if voice_id == VoiceId::Voice2 {
-            // Use the exact copy requested for Voice2.
-            self.reasoning_text = Some("Voice2 cleared".to_string());
-        } else {
-            self.reasoning_text = Some(format!("Voice {} cleared", voice_id.to_i32()));
-        }
+        self.reasoning_text = Some("".to_string());
 
         // If this voice had an in-flight request, also clear the pending flag
         // so that further stream events are ignored.
