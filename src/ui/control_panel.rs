@@ -4,6 +4,7 @@ use crate::command_engine::{Command, CommandInner, CommandSource, SimpleCommand}
 use crate::groups::VoiceId;
 use crate::model::Model;
 use crate::terminals::{command_input::CommandInput, commands::TerminalCommand};
+use egui::TextBuffer;
 use crate::text::{TextBlock, TextFadeMode, TextPaneId, TextSlot, TextStyle, WrapPolicy};
 use crate::ui::UIActiveTab;
 use crate::view::mask::{presets, MaskPreset};
@@ -236,6 +237,29 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                         ),
                                                                 );
 
+                                                                let up_pressed = response.has_focus()
+                                                                    && ui.input(|i| {
+                                                                        i.key_pressed(egui::Key::ArrowUp)
+                                                                            && i.modifiers.command
+                                                                    });
+                                                                let down_pressed = response.has_focus()
+                                                                    && ui.input(|i| {
+                                                                        i.key_pressed(egui::Key::ArrowDown)
+                                                                            && i.modifiers.command
+                                                                    });
+                                                                if up_pressed {
+                                                                    if let Some(text) =
+                                                                        input.recall_prev().map(|s| s.to_string())
+                                                                    {
+                                                                        input.replace(&text);
+                                                                    }
+                                                                } else if down_pressed {
+                                                                    match input.recall_next().map(|s| s.to_string()) {
+                                                                        Some(text) => input.replace(&text),
+                                                                        None => input.clear(),
+                                                                    }
+                                                                }
+
                                                                 let should_execute = response.has_focus()
                                                                     && ui.input(|i| {
                                                                         i.key_pressed(egui::Key::Enter)
@@ -264,7 +288,7 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                                                         );
                                                                 }
 
-                                                                (response.changed(), display, executed)
+                                                                (response.changed() || up_pressed || down_pressed, display, executed)
                                                             };
 
                                                             // Live overlay update.

@@ -18,6 +18,10 @@ pub struct CommandInput {
     pending_command: Option<TerminalCommand>,
     /// Last successful command execution message
     last_success: Option<String>,
+    /// Executed command history, oldest to newest
+    history: Vec<String>,
+    /// Current position while browsing history (None = not browsing)
+    history_cursor: Option<usize>,
 }
 
 impl Default for CommandInput {
@@ -34,6 +38,8 @@ impl CommandInput {
             last_error: None,
             pending_command: None,
             last_success: None,
+            history: Vec::new(),
+            history_cursor: None,
         };
         instance.update_display();
         instance
@@ -79,6 +85,8 @@ impl CommandInput {
 
         match Terminal::parse_command(&prefixed) {
             Ok(command) => {
+                self.history.push(self.raw_text.trim().to_string());
+                self.history_cursor = None;
                 self.last_error = None;
                 self.last_success = Some(format!("Command executed: {:?}", command));
                 self.pending_command = Some(command.clone());
@@ -91,6 +99,38 @@ impl CommandInput {
                 self.pending_command = None;
                 self.update_display();
                 None
+            }
+        }
+    }
+
+    /// Step back through command history. Returns the recalled text, or None if history is empty.
+    pub fn recall_prev(&mut self) -> Option<&str> {
+        if self.history.is_empty() {
+            return None;
+        }
+        let next_cursor = match self.history_cursor {
+            None => 0,
+            Some(n) if n + 1 < self.history.len() => n + 1,
+            Some(n) => n,
+        };
+        self.history_cursor = Some(next_cursor);
+        let idx = self.history.len() - 1 - next_cursor;
+        Some(&self.history[idx])
+    }
+
+    /// Step forward through command history. Returns the recalled text, or None when past the newest entry (clear input).
+    pub fn recall_next(&mut self) -> Option<&str> {
+        match self.history_cursor {
+            None => None,
+            Some(0) => {
+                self.history_cursor = None;
+                None
+            }
+            Some(n) => {
+                let next_cursor = n - 1;
+                self.history_cursor = Some(next_cursor);
+                let idx = self.history.len() - 1 - next_cursor;
+                Some(&self.history[idx])
             }
         }
     }
@@ -130,6 +170,7 @@ impl CommandInput {
         self.last_error = None;
         self.last_success = None;
         self.pending_command = None;
+        self.history_cursor = None;
     }
 
     /// Get the formatted display string
@@ -253,6 +294,7 @@ impl egui::TextBuffer for CommandInput {
         self.last_error = None;
         self.last_success = None;
         self.pending_command = None;
+        self.history_cursor = None;
     }
 
     fn replace(&mut self, text: &str) {
