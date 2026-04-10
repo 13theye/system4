@@ -3,6 +3,7 @@ use super::params::DroneVoiceParams;
 use crate::command_engine::{Command, CommandInner, CommandSource, SimpleCommand};
 use crate::groups::VoiceId;
 use crate::model::Model;
+use crate::settings::{RhythmColorConfig, Settings};
 use crate::terminals::{command_input::CommandInput, commands::TerminalCommand};
 use egui::TextBuffer;
 use crate::text::{TextBlock, TextFadeMode, TextPaneId, TextSlot, TextStyle, WrapPolicy};
@@ -654,6 +655,86 @@ pub fn update_control_ui(app: &App, model: &mut Model) {
                                             model.rhythm_view.update_element_radii(min, max, Instant::now());
                                         }
                                     }); // end Rhythm Vis column
+
+                                    ui.separator();
+
+                                    ui.vertical(|ui| {
+                                        ui.heading("Rhythm Colors");
+                                        ui.add_space(8.0);
+
+                                        let mut colors_changed = false;
+
+                                        ui.label("Base Color");
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.base_color[0], 0.0..=1.0).text("R").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.base_color[1], 0.0..=1.0).text("G").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.base_color[2], 0.0..=1.0).text("B").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.base_color[3], 0.0..=1.0).text("A").fixed_decimals(3)).changed();
+
+                                        ui.add_space(6.0);
+                                        ui.label("Gradient 1");
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_1[0], 0.0..=1.0).text("R").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_1[1], 0.0..=1.0).text("G").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_1[2], 0.0..=1.0).text("B").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_1[3], 0.0..=1.0).text("A").fixed_decimals(3)).changed();
+
+                                        ui.add_space(6.0);
+                                        ui.label("Gradient 2");
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_2[0], 0.0..=1.0).text("R").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_2[1], 0.0..=1.0).text("G").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_2[2], 0.0..=1.0).text("B").fixed_decimals(3)).changed();
+                                        colors_changed |= ui.add(egui::Slider::new(&mut model.rhythm_view.gradient_color_2[3], 0.0..=1.0).text("A").fixed_decimals(3)).changed();
+
+                                        if colors_changed {
+                                            model.rhythm_view.update_element_colors();
+                                            model.rhythm_view.rhythm_color_save_status = Some("Unsaved changes...".to_string());
+                                        }
+
+                                        ui.add_space(8.0);
+                                        ui.horizontal(|ui| {
+                                            if ui.button("Save").clicked() {
+                                                let base = RhythmColorConfig {
+                                                    r: model.rhythm_view.base_color[0],
+                                                    g: model.rhythm_view.base_color[1],
+                                                    b: model.rhythm_view.base_color[2],
+                                                    a: model.rhythm_view.base_color[3],
+                                                };
+                                                let grad1 = RhythmColorConfig {
+                                                    r: model.rhythm_view.gradient_color_1[0],
+                                                    g: model.rhythm_view.gradient_color_1[1],
+                                                    b: model.rhythm_view.gradient_color_1[2],
+                                                    a: model.rhythm_view.gradient_color_1[3],
+                                                };
+                                                let grad2 = RhythmColorConfig {
+                                                    r: model.rhythm_view.gradient_color_2[0],
+                                                    g: model.rhythm_view.gradient_color_2[1],
+                                                    b: model.rhythm_view.gradient_color_2[2],
+                                                    a: model.rhythm_view.gradient_color_2[3],
+                                                };
+                                                match Settings::save_rhythm_vis_colors(&base, &grad1, &grad2) {
+                                                    Ok(()) => model.rhythm_view.rhythm_color_save_status = Some("Saved.".to_string()),
+                                                    Err(e) => model.rhythm_view.rhythm_color_save_status = Some(format!("Error: {}", e)),
+                                                }
+                                            }
+                                            if ui.button("Revert").clicked() {
+                                                match Settings::load() {
+                                                    Ok(s) => {
+                                                        if let Some(rv) = &s.rhythm_vis {
+                                                            model.rhythm_view.base_color = rv.base_color.to_array();
+                                                            model.rhythm_view.gradient_color_1 = rv.gradient_1.to_array();
+                                                            model.rhythm_view.gradient_color_2 = rv.gradient_2.to_array();
+                                                        }
+                                                        model.rhythm_view.update_element_colors();
+                                                        model.rhythm_view.rhythm_color_save_status = Some("Reverted.".to_string());
+                                                    }
+                                                    Err(e) => model.rhythm_view.rhythm_color_save_status = Some(format!("Error: {}", e)),
+                                                }
+                                            }
+                                        });
+
+                                        if let Some(status) = &model.rhythm_view.rhythm_color_save_status {
+                                            ui.label(status.as_str());
+                                        }
+                                    }); // end Rhythm Colors column
 
                                     }); // end horizontal_top
                                 }

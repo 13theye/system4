@@ -40,7 +40,7 @@ system_prompt = "## Rhythm Game System Prompt\n\n---\n\n### Overview\n\nWe are p
 
 [tempo]
 # initial beats per minute (float i.e. 120.0)
-bpm = 125.0
+bpm = 160.0
 
 [path]
 # Name of intro image file within the `assets` directory
@@ -77,6 +77,24 @@ height = 270
 [particles]
 # Maximum number of particles per voice. Whole numbers only.
 per_voice_limit = 15000
+
+[rhythm_vis.base_color]
+r = 0.247
+g = 0.349
+b = 0.353
+a = 1.000
+
+[rhythm_vis.gradient_1]
+r = 1.000
+g = 0.162
+b = 0.190
+a = 1.000
+
+[rhythm_vis.gradient_2]
+r = 0.689
+g = 1.000
+b = 0.995
+a = 1.000
 
 
 

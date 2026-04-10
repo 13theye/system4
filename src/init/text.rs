@@ -98,8 +98,8 @@ pub fn init_text_overlay(render_size: Vec2, font: &Font) -> TextOverlay {
     let mut text_overlay = TextOverlay::new();
 
     // Arrange voice panes as four columns across the full render width.
-    let gutter_x = 50.0;
-    let gutter_y = 50.0;
+    let gutter_x = 100.0;
+    let gutter_y = 100.0;
     let columns = 4.0;
 
     let col_w = render_size.x / columns;
@@ -119,7 +119,12 @@ pub fn init_text_overlay(render_size: Vec2, font: &Font) -> TextOverlay {
 
 fn add_voice_pane(text_overlay: &mut TextOverlay, font: &Font, config: VoicePaneConfig) {
     let params_line_count = params_dashboard::default_tracked_keys().len();
-    let num_lines = config.num_lines.max(params_line_count + 1);
+    let command_input_budget = 3;
+    let ai_stream_budget = 2;
+    // Ensure the pane has room for params + AiStream + CommandInput + ≥1 history slot.
+    let num_lines = config
+        .num_lines
+        .max(params_line_count + ai_stream_budget + command_input_budget + 1);
 
     let line_spacing = 5.0;
     let line_height = config.font_size as f32 + line_spacing * 2.0;
@@ -147,8 +152,8 @@ fn add_voice_pane(text_overlay: &mut TextOverlay, font: &Font, config: VoicePane
 
     let mut pane = TextPane::new(num_lines);
     pane.set_slot_line_budget(TextSlot::Params, params_line_count);
-    pane.set_slot_line_budget(TextSlot::CommandInput, 1);
-    pane.set_slot_line_budget(TextSlot::AiStream, 2);
+    pane.set_slot_line_budget(TextSlot::CommandInput, command_input_budget);
+    pane.set_slot_line_budget(TextSlot::AiStream, ai_stream_budget);
 
     text_overlay.insert_pane(TextPaneId::Voice(config.voice), pane, view);
 }

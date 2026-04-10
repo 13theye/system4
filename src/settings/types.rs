@@ -2,7 +2,7 @@
 //
 // Config types for the app
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct OscSendConfig {
@@ -61,6 +61,27 @@ pub struct PerformerWindowConfig {
 pub struct ControlWindowConfig {
     pub width: u32,
     pub height: u32,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub struct RhythmColorConfig {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+impl RhythmColorConfig {
+    pub fn to_array(self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RhythmVisConfig {
+    pub base_color: RhythmColorConfig,
+    pub gradient_1: RhythmColorConfig,
+    pub gradient_2: RhythmColorConfig,
 }
 
 #[derive(Debug, Deserialize)]

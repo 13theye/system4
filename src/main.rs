@@ -34,7 +34,7 @@ fn model(app: &App) -> Model {
     let particle_system = init::particles::init_particle_system(render_size, particle_limit);
 
     // Create RhythmView
-    let rhythm_view = RhythmView::new();
+    let rhythm_view = RhythmView::new_from_settings(&settings);
 
     // Create CenterLine
     let center_line = CenterLine::default();

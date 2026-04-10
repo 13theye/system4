@@ -439,6 +439,15 @@ impl RhythmFormation {
         }
     }
 
+    /// Set base colors on all elements in this formation.
+    pub fn set_element_colors(&mut self, color: Rgba, gradient_1: Rgba, gradient_2: Rgba) {
+        for element in self.elements.values_mut() {
+            element.params.color = color;
+            element.params.gradient_color_1 = gradient_1;
+            element.params.gradient_color_2 = gradient_2;
+        }
+    }
+
     pub fn update(&mut self, update_params: &RhythmViewUpdateParams, now: Instant) {
         // Update elements
         self.elements.iter_mut().for_each(|(i, element)| {

@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::{
     groups::{RhythmParams, VoiceId},
+    settings::Settings,
     view::rhythm::{
         animation::{
             MIN_FORMATION_RADIUS, MAX_FORMATION_RADIUS,
@@ -30,6 +31,11 @@ pub struct RhythmView {
     pub min_element_radius: f32,
     pub max_element_radius: f32,
     pub size_scale: f32,
+    // Canonical base colors for all rhythm elements (edited via UI, persisted to config)
+    pub base_color: [f32; 4],
+    pub gradient_color_1: [f32; 4],
+    pub gradient_color_2: [f32; 4],
+    pub rhythm_color_save_status: Option<String>,
 }
 
 impl Default for RhythmView {
@@ -47,6 +53,33 @@ impl RhythmView {
             min_element_radius: MIN_ELEMENT_RADIUS,
             max_element_radius: MAX_ELEMENT_RADIUS,
             size_scale: 1.0,
+            base_color: [0.247, 0.349, 0.353, 1.0],
+            gradient_color_1: [1.0, 0.162, 0.190, 1.0],
+            gradient_color_2: [0.689, 1.0, 0.995, 1.0],
+            rhythm_color_save_status: None,
+        }
+    }
+
+    pub fn new_from_settings(settings: &Settings) -> Self {
+        let mut view = Self::new();
+        if let Some(rv) = &settings.rhythm_vis {
+            view.base_color = rv.base_color.to_array();
+            view.gradient_color_1 = rv.gradient_1.to_array();
+            view.gradient_color_2 = rv.gradient_2.to_array();
+        }
+        view
+    }
+
+    /// Propagate the current canonical colors to all elements in all formations.
+    pub fn update_element_colors(&mut self) {
+        let c = self.base_color;
+        let g1 = self.gradient_color_1;
+        let g2 = self.gradient_color_2;
+        let color = rgba(c[0], c[1], c[2], c[3]);
+        let grad1 = rgba(g1[0], g1[1], g1[2], g1[3]);
+        let grad2 = rgba(g2[0], g2[1], g2[2], g2[3]);
+        for formation in self.formations.values_mut() {
+            formation.set_element_colors(color, grad1, grad2);
         }
     }
 
