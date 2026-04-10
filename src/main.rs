@@ -66,6 +66,7 @@ fn model(app: &App) -> Model {
         center_line,
         clock,
         sequencer_service,
+        original_tempo: settings.tempo.bpm,
         osc,
         osc_send,
         osc_loop,
@@ -105,6 +106,13 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update FPS counter
     model.ui_state.fps.update();
+
+    {
+        let target_bpm = model.original_tempo as f64;
+        if (model.clock.tempo() - target_bpm).abs() > 0.1 {
+            let _ = model.clock.set_tempo(target_bpm);
+        }
+    }
 
     // Update control UI
     update_control_ui(app, model);

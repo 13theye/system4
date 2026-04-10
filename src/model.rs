@@ -40,6 +40,7 @@ pub struct Model {
     // Clock and Sequencers
     pub clock: ClockService,
     pub sequencer_service: SequencerService,
+    pub original_tempo: f32,
 
     // OSC
     pub osc: OscController,
