@@ -116,7 +116,10 @@ impl ExecutionContext for Model {
                     .text_overlay
                     .borrow_mut()
                     .clear_params_dashboard(voice_id);
-                self.voice_manager.clear_ai_status_for_voice(voice_id);
+
+                if matches!(voice_id, VoiceId::Voice2) {
+                    self.voice_manager.clear_ai_status_for_voice(voice_id);
+                }
             }
         }
 
