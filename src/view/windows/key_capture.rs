@@ -105,8 +105,20 @@ pub fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::ev
 }
 
 /// Key pressed handler for Performer window
-pub fn performer_key_pressed(_app: &App, model: &mut Model, key: nannou::prelude::Key) {
-    if key == nannou::prelude::Key::I {
-        model.intro_image.toggle_visible();
+pub fn performer_key_pressed(_app: &App, model: &mut Model, key: Key) {
+    match key {
+        Key::T => {
+            // check the tempo
+            let target_bpm = model.original_tempo as f64;
+            let current_bpm = model.clock.tempo();
+            if (target_bpm - current_bpm).abs() > 0.5 {
+                println!("Set tempo from {} to {}", current_bpm, target_bpm);
+                let _ = model.clock.set_tempo(target_bpm);
+            }
+        }
+        Key::I => {
+            model.intro_image.toggle_visible();
+        }
+        _ => {}
     }
 }

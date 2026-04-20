@@ -21,6 +21,10 @@ pub fn init_clock_and_sequencer(settings: &Settings) -> (ClockService, Sequencer
         .start_clock()
         .expect("System4: fatal error: Failed to start clock");
 
+    println!("System4: Waiting for Link Session to start...");
+
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
     match clock.set_tempo(settings.tempo.bpm as f64) {
         Ok(_) => {
             println!("System4: Tempo set to {} bpm", settings.tempo.bpm);
