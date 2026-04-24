@@ -14,7 +14,6 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
-use thread_priority::*;
 use tokio::sync::broadcast;
 
 /// A Euclidian-like sequencer that sends OSC beat messages based on an internal pattern.
@@ -679,7 +678,6 @@ pub struct SequencerState {
 pub struct SequencerServiceBuilder<'a> {
     clock: &'a ClockService,
     osc_config: &'a OscSendConfig,
-    thread_priority: u8,
     debug: bool,
 }
 
@@ -688,7 +686,6 @@ impl<'a> SequencerServiceBuilder<'a> {
         Self {
             clock,
             osc_config,
-            thread_priority: 31,
             debug: false,
         }
     }
@@ -696,12 +693,6 @@ impl<'a> SequencerServiceBuilder<'a> {
     /// The Sequencer will be synchronized to this clock.
     pub fn clock(mut self, clock: &'a ClockService) -> Self {
         self.clock = clock;
-        self
-    }
-
-    /// Set the thread priority. 31 is default on macOS. Highest allowed is 47.
-    pub fn thread_priority(mut self, thread_priority: u8) -> Self {
-        self.thread_priority = thread_priority;
         self
     }
 
@@ -743,16 +734,17 @@ impl<'a> SequencerServiceBuilder<'a> {
             debug: self.debug,
         };
 
-        let sequencer_thread_handle = ThreadBuilder::default()
+        let debug = self.debug;
+        let sequencer_thread_handle = std::thread::Builder::new()
             .name("sequencer_thread".to_string())
-            .priority(ThreadPriority::Crossplatform(
-                ThreadPriorityValue::try_from(self.thread_priority).unwrap(),
-            ))
-            .spawn(move |result| {
-                if self.debug {
-                    println!("SequencerThread: Starting thread loop: {:?}", result);
+            .spawn(move || {
+                let _rt_handle =
+                    audio_thread_priority::promote_current_thread_to_real_time(256, 48000)
+                        .map_err(|e| eprintln!("SequencerThread: real-time promotion failed: {e}"))
+                        .ok();
+                if debug {
+                    println!("SequencerThread: started (RT: {})", _rt_handle.is_some());
                 }
-                assert!(result.is_ok());
                 sequencer_thread.run();
             })
             .unwrap();

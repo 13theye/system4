@@ -14,7 +14,9 @@ nannou = "0.19"
 nannou_osc = "0.19"
 nannou_egui = "0.19"
 
+objc2 = "0.6"
 objc2-app-kit = "0.3"
+objc2-foundation = { version = "0.3", features = ["NSProcessInfo", "NSString"] }
 rand = "0.9"
 rand_distr = "0.5"
 rayon = "1.10"
@@ -22,7 +24,7 @@ schemars = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
-thread-priority = "2"
+audio_thread_priority = "0.33"
 
 fps = { path = "../13thlib/fps" }
 nnpipe = { path = "../13thlib/nnpipe" }

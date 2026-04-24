@@ -9,7 +9,6 @@ pub fn init_clock_and_sequencer(settings: &Settings) -> (ClockService, Sequencer
         .quantum(4.0)
         .ppqn(24)
         .enable_ticks()
-        .thread_priority(47)
         .build();
 
     // Start the clock thread or quit game if it fails

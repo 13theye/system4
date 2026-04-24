@@ -9,7 +9,6 @@ mod init;
 
 use nannou::prelude::*;
 use rand::rngs::ThreadRng;
-use thread_priority::*;
 
 use std::time::Instant;
 
@@ -78,22 +77,23 @@ fn model(app: &App) -> Model {
         auto_ai_pending_for_voice1: false,
         intro_image,
         engine_debug: false,
+
+        #[cfg(target_os = "macos")]
+        app_nap_token: acquire_app_nap_token(),
     }
 }
 
-fn main() {
-    // Set main thread to high priority to prevent animation interruptions
-    let thread_priority = ThreadPriority::Max;
-    let result = set_current_thread_priority(thread_priority);
+#[cfg(target_os = "macos")]
+fn acquire_app_nap_token() -> objc2::rc::Retained<
+    objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>
+> {
+    use objc2_foundation::{ns_string, NSActivityOptions, NSProcessInfo};
+    let options = NSActivityOptions::Background | NSActivityOptions::LatencyCritical;
+    NSProcessInfo::processInfo()
+        .beginActivityWithOptions_reason(options, ns_string!("Real-time OSC sequencer"))
+}
 
-    if let Err(e) = result {
-        println!("Warning: Failed to set main thread priority: {:?}", e);
-    } else {
-        println!(
-            "Main thread priority set to {:?}: {:?}",
-            thread_priority, result
-        );
-    }
+fn main() {
     nannou::app(model)
         .loop_mode(nannou::LoopMode::rate_fps(60.0)) // Run at __fps regardless of display refresh rate
         .update(update)
@@ -177,34 +177,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update centerline animation
     model.center_line.update(now);
-}
-
-/// Set macOS window behaviors so that Spaces and Mission Control doesn't interrupt rendering.
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-fn set_macos_window_behavior(window: &Window) {
-    use nannou::winit::platform::macos::WindowExtMacOS;
-    // removed the NSUInteger type below because it's just an alias for usize.
-    // this allowed for the removal of objc2_foundation as a dependency.
-    // use objc2_foundation::NSUInteger;
-
-    let ns_window = window.winit_window().ns_window();
-
-    // Combine behaviors
-    const NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES: usize = 1 << 0;
-    const NS_WINDOW_COLLECTION_BEHAVIOR_STATIONARY: usize = 1 << 4;
-    const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY: usize = 1 << 7;
-
-    let behavior = NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES
-        | NS_WINDOW_COLLECTION_BEHAVIOR_STATIONARY
-        | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY;
-
-    unsafe {
-        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-        let ns_window = ns_window as *mut NSWindow;
-        (*ns_window)
-            .setCollectionBehavior(NSWindowCollectionBehavior::from_bits_truncate(behavior));
-    }
 }
 
 fn read_feedback_ui_sliders(model: &Model) -> (f32, f32) {

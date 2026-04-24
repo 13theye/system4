@@ -72,6 +72,12 @@ pub struct Model {
 
     // Debug flag for performance timing output
     pub engine_debug: bool,
+
+    #[cfg(target_os = "macos")]
+    #[allow(dead_code)]
+    pub app_nap_token: objc2::rc::Retained<
+        objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>
+    >,
 }
 
 impl Drop for Model {
